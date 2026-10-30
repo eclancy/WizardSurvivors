@@ -8,7 +8,7 @@ using WizardSurvivors.scripts;
 // that runs from him rather than at him.
 //
 // SEES. From two chunks out the moss carries hoofprints and the bracken is bent over, all of it pointing
-// one way (its FarTell, FaceSite): toward the clearing's edge where a hart of warm light stands. It is the
+// one way (its FarTell, LeanToward): toward the clearing's edge where a hart of warm light stands. It is the
 // near tell - "the only warm thing that moves and is not you" - so the seen mark is taken from wherever
 // the hart is (TellPosition).
 //
@@ -83,7 +83,7 @@ public partial class PaleHart : SecretVault
 		PeakPerChunk = 46,
 		NearShare = 0.7f,
 		FootFromBottom = 4f,
-		FaceSite = true,
+		LeanToward = true,
 	};
 
 	public override SecretFarTell FarTell => Tell;

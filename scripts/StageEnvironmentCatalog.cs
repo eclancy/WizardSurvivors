@@ -437,7 +437,19 @@ public static class StageEnvironmentCatalog
 			},
 			48f)
 		{
-			HasLandmarks = true,
+			// THE CAVERNS (.ai/endgame-castle.md 7.3, piece V2): its own rock (tools/art/cave_walls.py) on
+			// the caverns' walls, and a stone pool's water in the chambers. A cold, close haze with damp
+			// drifting through it, nothing warm: the only light is the one you brought.
+			HazeTint = new Color(0.08f, 0.12f, 0.20f, 0.12f),
+			GlowTint = new Color(0.12f, 0.20f, 0.30f, 0.05f),
+			WeatherTint = new Color(0.16f, 0.24f, 0.34f, 0.026f),
+			WeatherOffset = new Vector2(-60f, 90f),
+			IntroTint = new Color(0.86f, 0.92f, 1.0f, 1.0f),
+			WaterStyle = "pool",
+			WallSet = "cave_wall",
+			// No flower pen. It needs 24 x 18 tiles clear of walls, which a cavern almost never has, and
+			// where one fitted it would fill a chamber with a fence; nothing grows down here anyway.
+			HasLandmarks = false,
 		}
 		,
 		// THE FALLOW FIELDS (stage_9, .ai/campaign.md section 5): stubble, ploughed earth and hedge

@@ -1678,6 +1678,13 @@ public static class RegressionChecks
 					+ "Something in LevelGenerator draws from an order-dependent RNG instead of a hash of the tile.");
 		}
 
+		// Every walled topology in a partial file (the Ruins' broken walls, the Cave's caverns, and whatever is
+		// built after them) is held to "connected by construction" too: ExplorePlacer and
+		// Node2DGame.IsExploreGroundClear skip the walk-away test on walled ground because of it.
+		foreach (StageEnvironmentKind kind in seamKinds)
+			if (generator.Describe(kind).Walled)
+				ValidateNoSealedPockets(generator, kind, seed, warnings);
+
 		LevelLayout maze = generator.Describe(StageEnvironmentKind.Castle);
 		if (maze.Topology != StageTopology.Maze)
 			return;
@@ -1715,6 +1722,87 @@ public static class RegressionChecks
 		if (!open[c, c] || reached < total * 0.9f)
 			warnings.Add($"Terrain: the maze round the start reaches only {reached} of {total} floor cells across nine chunks; "
 				+ "corridors are not connecting across chunk borders (LevelGenerator.DoorMask).");
+	}
+
+	// Nine chunks round the start of a walled topology, flooded over every cell a body can stand on (not wall,
+	// not water). A pocket is a piece of that ground which neither holds the start nor reaches the edge of the
+	// nine: whatever is placed in it - an enemy, a chest, a secret - could never walk out, and nothing on
+	// walled ground checks, because the ground is meant to be connected by construction
+	// (LevelGenerator.Caverns.cs says why it is). The start must be standing ground as well. With the user
+	// argument --terrain-stats it also prints how much of the nine is wall and water, for tuning.
+	private static void ValidateNoSealedPockets(LevelGenerator generator, StageEnvironmentKind kind, ulong seed, List<string> warnings)
+	{
+		const int c = TerrainStreamer.ChunkTiles;
+		const int m = TerrainStreamer.Margin;
+		const int span = 3 * c;
+		var walk = new bool[span, span];
+		int walls = 0, water = 0;
+		for (int cy = -1; cy <= 1; cy++)
+		{
+			for (int cx = -1; cx <= 1; cx++)
+			{
+				string[,] g = generator.GenerateChunk(kind, seed, cx, cy, c, m);
+				for (int x = 0; x < c; x++)
+				{
+					for (int y = 0; y < c; y++)
+					{
+						string t = g[x + m, y + m];
+						walls += t == LevelGenerator.WallTerrain ? 1 : 0;
+						water += t == "water" ? 1 : 0;
+						walk[(cx + 1) * c + x, (cy + 1) * c + y] = t != LevelGenerator.WallTerrain && t != "water";
+					}
+				}
+			}
+		}
+		if (OS.GetCmdlineUserArgs().Contains("--terrain-stats"))
+			GD.Print($"Terrain stats: {kind} nine chunks round the start, seed {seed}: "
+				+ $"wall {100f * walls / (span * span):0.0}%, water {100f * water / (span * span):0.0}%");
+
+		if (!walk[c, c])
+			warnings.Add($"Terrain: {kind}'s start (world tile 0, 0) is not standing ground; the run would begin in a wall or water.");
+
+		var label = new int[span, span];
+		var stack = new Stack<(int, int)>();
+		int pocketCells = 0, pockets = 0;
+		(int, int)? firstPocket = null;
+		int next = 0;
+		for (int sx = 0; sx < span; sx++)
+		{
+			for (int sy = 0; sy < span; sy++)
+			{
+				if (!walk[sx, sy] || label[sx, sy] != 0)
+					continue;
+				next++;
+				label[sx, sy] = next;
+				stack.Push((sx, sy));
+				int size = 0;
+				bool edge = false, start = false;
+				while (stack.Count > 0)
+				{
+					(int x, int y) = stack.Pop();
+					size++;
+					edge |= x == 0 || y == 0 || x == span - 1 || y == span - 1;
+					start |= x == c && y == c;
+					foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+					{
+						int nx = x + dx, ny = y + dy;
+						if (nx < 0 || ny < 0 || nx >= span || ny >= span || label[nx, ny] != 0 || !walk[nx, ny]) continue;
+						label[nx, ny] = next;
+						stack.Push((nx, ny));
+					}
+				}
+				if (!edge && !start)
+				{
+					pockets++;
+					pocketCells += size;
+					firstPocket ??= (sx - c, sy - c);
+				}
+			}
+		}
+		if (pockets > 0)
+			warnings.Add($"Terrain: {kind} has {pockets} sealed pocket(s), {pocketCells} cells of standing ground walled or "
+				+ $"watered in, round the start (first near world tile {firstPocket}). Its topology claims to be connected "
+				+ "by construction, and nothing on walled ground checks: whatever is placed in one cannot walk out.");
 	}
 
 	// The input map lives in project.godot as a wall of serialised event objects, which is the one

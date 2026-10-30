@@ -9,7 +9,7 @@
                                          breath), standing, running (four), facing right; then the same
                                          seven facing left
     world/fields/hurdle-broken-1.png,-2  its far tell: broken hurdles - woven fence panels, split and
-    world/fields/pawprints-1.png, -2     fallen - and a dog's prints, drawn pointing right (FaceSite)
+    world/fields/pawprints-1.png, -2     fallen - and a dog's prints, drawn pointing right (LeanToward)
     tools/art/_secret_fields_preview.png (gitignored) on the stubble, for looking at
 
 "A walled stone pound with a barred gate. Behind the bars a hound of warm light lies with its head on its

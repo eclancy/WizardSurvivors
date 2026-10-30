@@ -7,7 +7,7 @@ using WizardSurvivors.scripts;
 // Familiar: a stray the Hayward impounded and nobody came for, learned by letting it out.
 //
 // SEES. From two chunks out, broken hurdles in the stubble and a dog's prints, all pointing one way (its
-// FarTell, FaceSite) - toward a walled stone pound with a barred gate. Behind the bars a hound of warm
+// FarTell, LeanToward) - toward a walled stone pound with a barred gate. Behind the bars a hound of warm
 // light lies with its head on its paws, breathing: the near tell, the only warm thing in the field.
 //
 // DOES. Guarded. Coming within WakeRadius wakes two of the Fields' own - the Tithe-Reeve's men, a Rick
@@ -79,7 +79,7 @@ public partial class Pinfold : SecretVault
 		PeakPerChunk = 40,
 		NearShare = 0.75f,
 		FootFromBottom = 4f,
-		FaceSite = true,
+		LeanToward = true,
 	};
 
 	public override SecretFarTell FarTell => Tell;

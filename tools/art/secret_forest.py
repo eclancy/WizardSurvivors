@@ -11,7 +11,7 @@
     world/forest/high-seat.png             the hunter's high seat it leads to, two frames: with its bow of
                                            light hanging from the front post, and with only the peg
     world/forest/hoofprints-1.png, -2.png  its far tell: cloven prints pressed into the moss, and bracken bent
-    world/forest/bracken-bent-1.png, -2.png  over, both drawn pointing right (SecretFarTell.FaceSite turns them)
+    world/forest/bracken-bent-1.png, -2.png  over, both drawn pointing right (SecretFarTell.LeanToward turns them)
     tools/art/_secret_forest_preview.png   (gitignored) on the forest's turf, for looking at
 
 THE FIRST TREE WAS DRAWN IN CODE, AND OFF THE CONTRACT. Until the secrets' pixel-art pass (2026-10-30,
@@ -486,7 +486,7 @@ def high_seat(with_bow):
 
 
 # The far tell: hoofprints pressed into the moss, and bracken bent one way - both drawn facing RIGHT,
-# which SecretFarTell turns toward the site (FaceSite): the prints walk to the clearing, the bracken was
+# which SecretFarTell turns toward the site (LeanToward): the prints walk to the clearing, the bracken was
 # pushed over by what went that way.
 def hoofprints(k):
     c = raster.Canvas(28, 12, None)

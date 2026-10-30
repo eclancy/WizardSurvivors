@@ -41,12 +41,11 @@ public sealed class SecretFarTell
 	/// <summary>Texture pixels from the bottom edge up to the contact shadow's middle: where it stands.</summary>
 	public float FootFromBottom { get; init; } = 10f;
 	/// <summary>
-	/// True for pieces drawn pointing RIGHT that should point at the site - hoofprints walking to the Pale
-	/// Hart's clearing, bracken bent over by what went that way: each is flipped to face it, instead of by
-	/// its rolled coin. The coin is still rolled, so nothing after it moves (added by the vaults' agent,
-	/// 2026-10-30; false keeps every tell before it exactly as it was).
+	/// The pieces lean toward the site (the Swallow-Hole's reeds, 8.6): every texture is authored leaning
+	/// to +x, and a piece east of the site is flipped so it leans back west. Off: flipped at random, as
+	/// before. The roll is drawn either way, so turning it on moves no piece.
 	/// </summary>
-	public bool FaceSite { get; init; }
+	public bool LeanToward { get; init; }
 
 	private Texture2D[] far;
 	private Texture2D[] near;
@@ -99,7 +98,7 @@ public sealed class SecretFarTell
 				Position = at.Round(),
 				Offset = new Vector2(0f, -texture.GetHeight() * 0.5f + FootFromBottom),
 				Scale = new Vector2(scale, scale),
-				FlipH = FaceSite ? site.X < at.X : flip,
+				FlipH = LeanToward ? at.X > site.X : flip,
 			};
 			sprite.AddToGroup(cracked ? GroupNear : Group);
 			parent.AddChild(sprite);
