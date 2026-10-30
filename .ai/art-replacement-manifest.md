@@ -1268,6 +1268,13 @@ Hallowed Ground + Titan's Maul, Aftershock + Hammerfall, Riposte + Celestial Gre
 Thousand Cuts (every card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched
 Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
 
+**2026-10-30** (`.ai/spell-roster.md` 2f, "the feel pass after 0.9.2"): one new sheet,
+`spirit-dagger.png` - Twin Blades' dagger, the sword's make on the 32 cell, 32 headings, grip 8.5 art px
+behind the centre and head 7.5 ahead (`tools/art/spirit_weapons.py --only=dagger`). The hover is whole art
+pixels (three up and down, one side to side, a heading cell of rock), so nothing new is drawn smooth. The
+Twin Blades and Deflection (Riposte's id) icons were redrawn: a sword and a smaller dagger, and a bolt
+broken on the blade with its pieces thrown aside rather than struck back.
+
 ### Molten Shard
 
 Audited as Riptide was: the base spell and level 8 with all six pairings (Slag Trail, Splitting Shard or

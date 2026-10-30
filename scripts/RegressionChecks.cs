@@ -885,7 +885,8 @@ public static class RegressionChecks
 		if (!assigned)
 			warnings.Add("Spiritual Weapon: player.tscn does not assign SpiritualWeaponScene; no spell would fire at all (Player stops the fire loop without it).");
 
-		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96) })
+		// The dagger is Twin Blades' (2026-10-30), on the projectile cell.
+		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96), ("dagger", 32) })
 		{
 			string path = $"res://assets/bonelight/effects/spirit-{name}.png";
 			if (!ResourceLoader.Exists(path) || GD.Load<Texture2D>(path) is not Texture2D sheet)
@@ -896,6 +897,8 @@ public static class RegressionChecks
 			if (sheet.GetWidth() != cell * 32 || sheet.GetHeight() % cell != 0)
 				warnings.Add($"Spiritual Weapon: {path} is {sheet.GetWidth()}x{sheet.GetHeight()}; SpiritualWeapon draws 32 headings of a {cell} cell a row.");
 		}
+		foreach (string problem in SpiritualWeapon.CutProblems())
+			warnings.Add($"Spiritual Weapon: {problem}");
 
 		SpellData template = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "spiritual_weapon");
 		if (template == null)
