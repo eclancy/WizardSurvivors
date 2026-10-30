@@ -284,8 +284,13 @@ public static class StageEnvironmentCatalog
 			IntroTint = new Color(0.98f, 0.90f, 0.80f, 1.0f),
 			// Spike plates only: old traps set in the stones fit ruins, but an iron floor grate breathing
 			// fire under the open sky does not (Eric, 2026-10-28: "there shouldn't be fire vents outside").
+			// On the broken walls they stand where the Dungeon's do, in hallway rows (Node2DGame.HazardPlanFor).
 			HazardSpikes = true,
+			// The flower pen fits where the ruin opens into a court (thirty tiles of floor inside a broken
+			// wall), and a walled garden among old walls is the right place for one.
 			HasLandmarks = true,
+			// Its own broken walls (tools/art/ruin_walls.py), drawn on the Ruin topology's wall cells.
+			WallSet = "ruin_wall",
 		}
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(

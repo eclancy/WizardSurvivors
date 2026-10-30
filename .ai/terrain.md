@@ -182,8 +182,9 @@ off the contract can appear. Per biome (`LevelTilePainter.WaterStyle`): a **fore
 blue-teal under the turf with the canopy's lichen in it and reeds and lilies; the **swamp** is
 grey-green murk darker than its mud, with duckweed; the **frozen** water of the Frozen Waste is
 black-blue with a pale ice shelf for a shore and frost for a bank; and anything else is a near-black
-stone **pool** (no other chapter has water today). The Cave has no water - it uses the Ruins'
-palette - and none was added: adding water to a stage changes where you can walk.
+stone **pool**. The Cave had no water (it used the Ruins' palette) until its caverns (section 11),
+whose chambers hold stone pools - placed by the topology, never as a blob, and only with a walkway of
+three tiles all round, because adding water to a stage changes where you can walk.
 
 ### Three renders that were thrown away (the tile era), and two more
 
@@ -312,7 +313,8 @@ so the same art used as floor elsewhere stays walkable.
 
 ## 6. The maze (Cursed Dungeon)
 
-The only maze stage. Reported after a playtest as "enemies trapped in other corridors most of the
+The first walled stage, and the only true maze (the Ruins' broken walls and the Cave's caverns are
+built on its graph and play by its rules: section 11). Reported after a playtest as "enemies trapped in other corridors most of the
 time" and "hard to read". Three causes, three fixes, all measured with
 `scenes/_MazeProbe.tscn` (headless, fixed maze seed, immortal player standing still or roaming):
 
@@ -477,7 +479,7 @@ half a corridor - 144 px - from every wall it can see, and a trap is never on a 
 What did not change, and what had to:
 
 - **Same rolls, same density.** `Node2DGame.HazardPlanFor` draws the same rolls in the same order as
-  the scatter it replaced, so an open stage (the Ruins, the Emberdeep - no other stage has walls)
+  the scatter it replaced, so an open stage (the Emberdeep; the Ruins until its walls, section 11)
   places exactly what it did. A snapped point outside its own chunk is dropped, so a cell centre on a
   chunk border belongs to one chunk. Measured on seed 4242, stage 1, four minutes:
   4.91 hazards a painted chunk centred, 4.86 with the old scatter (the closest two were 92 px apart
@@ -554,7 +556,7 @@ flame vent is an iron grate set in a floor, so:
 | chapter | placed traps | ground hazards (section 2) |
 |---|---|---|
 | Cursed Dungeon (Castle) | spike plates and flame vents, in hallway rows | pits |
-| Ruins | spike plates only - old traps in the stones; its vents (0.18) went | pits (collapsed floor) |
+| Ruins | spike plates only - old traps in the stones; its vents (0.18) went. On its broken walls (section 11) they stand in hallway rows as the Dungeon's do | none since the walls: its pits came out ruler-cut along the lattice (section 11) |
 | Emberdeep (Volcanic) | none - it had vents and nothing else, iron grates on open basalt | lava, pits |
 | every other chapter | none | none |
 
