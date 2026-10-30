@@ -224,6 +224,15 @@ id, and `ValidateUnlockCatalog` requires that **every spell's source is `Starter
   secrets a price list. A hint for a hidden achievement could be sold (decision 10), but is not
   recommended for the first version.
 
+**Built (A3, 2026-10-30, `wip/shop-no-spells`).** The shop is one menu, Powers: Power, Survival,
+Fortune and Level-ups, then **Boons** (Quicksilver Bead, Deepwater Pearl, Saltbound Chain), last
+whether or not one is left to buy, so nothing moves under the selection when the last is bought. The
+title menu's row is Powers and Achievements, half each, as before the 2026-10-28 split; Spells & Boons and
+its button are gone. In code: `MainMenu.Shop.cs` lost `ShopMode` and the spell shelf, `MainMenu`'s
+`UpgradeDefinition` lost `IsSpellUnlock`/`SpellId` (a boon is the one thing sold once), and
+`UnlockCatalog.PurchasableSpells` is retired. No price moved, and a bought spell stays bought.
+Layout, inks and the pad walk are recorded in `.ai/level-up-screen.md` 4f.
+
 ### 2.5 The final chapter's gate (decided: wizards, not spells)
 
 Today the Emberdeep opens on **every spell and every wizard**, live. Under the new rule nine spells
@@ -767,8 +776,8 @@ own plan; the two meet only at `SecretCatalog`'s castle files and the achievemen
 | piece | what | files it owns | depends on |
 |---|---|---|---|
 | **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it. **Also touched, section 11:** `SecretCatalog.cs` (additive), `WorldMap.cs`, `_UiShot.cs`, `_BalanceHarness.cs` | **built** (`wip/achievements-core`, section 11) |
-| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them) |
-| **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods) | A1 |
+| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them); **built** on `wip/achievements-page`, over A1 - the secret's steps (4.4) wait for A4's `SecretRunState` |
+| **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods). **Also touched:** `UnlockCatalog.cs` (`PurchasableSpells` retired) | A1; **built** on `wip/shop-no-spells` (2.4, "Built") |
 | **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | A1 |
 | **A5-A13 One chapter's secrets each** | that chapter's rows of section 8: its vault first, then the rest; art in `tools/art/secret_<chapter>.py` | its own `SecretCatalog.<Chapter>.cs`, its own secret scripts and generator | A4 |
 | **A14 Sounds** | the shimmer (seen) and found stings `.ai/stage-secrets.md` 7.7 asked for, and the crystal's shatter | `tools/audio/`, `SfxCatalog.cs` | none |
@@ -835,7 +844,7 @@ shop (A3) or the vaults in the world (A4 and the chapter agents) is built.
 | deed ids | a side event's deed is `event_<site id>` (`AchievementDefinitions.EventDeedId`), a secret's `secret_<secret id>` (`SecretDeedId`), made from the id so neither can drift or collide with a hand-written deed. The Collection deed is `grimoire_restored` |
 | derived event deeds | `AchievementDefinitions.SideEventDeeds`: one per site in `SideEventDirector.ForStage`, its reward read from `UnlockCatalog.ForDiscoverySite`, its words from `SideEventWords` (the one hand-written part; `ValidateAchievements` ties them together both ways) |
 | derived secret deeds | `SecretCatalog.AsAchievement`, one per secret in `SecretCatalog.Defined`. Hidden, `CompletesInRun`, measured by `SaveData.FoundSecretIds` |
-| the unlocks | `UnlockCatalog`: every spell is `Starter` or `Achievement`. A side event's unlock is `Achievement`-sourced from its event deed and keeps the site on **`UnlockDefinition.SiteId`**. `UnlockSource.Discovery` is still in the enum and nothing uses it; `ValidateUnlockCatalog` refuses it. `PurchasableSpells` is empty (the shop's shelf draws nothing until A3 removes it) |
+| the unlocks | `UnlockCatalog`: every spell is `Starter` or `Achievement`. A side event's unlock is `Achievement`-sourced from its event deed and keeps the site on **`UnlockDefinition.SiteId`**. `UnlockSource.Discovery` is still in the enum and nothing uses it; `ValidateUnlockCatalog` refuses it. `PurchasableSpells` is empty (the shop's shelf draws nothing until A3 removes it; A3 retired it, 2.4) |
 | in-run completion | `AchievementManager.CompleteNow(saveManager, id)` (complete, grant, save, named entries) over `Complete(save, id)` (records the deed **and the fact it measures** - the event won, the secret found - so the two can never disagree; pays its Arcane Energy only the first time; grants what is not owned). `DiscoveryRewards.GrantSite` is a call to it now, with an in-memory overload the validators use |
 | reconciling | `AchievementManager.Reconcile(save)`: every recorded deed's current spell, boon or wizard, if not owned. Never currency. Runs in the schema 19 step and at the end of every `ApplyRunAchievements` |
 | the gate | `StageGate.PreviousBossAndWizards` (it replaced `CampaignComplete`) on the Emberdeep. `GlobalStatsManager.GateWizardIds(gate)` / `CountsTowardGate(wizard, gate)` / `IsGateMet(save, gate)` / `RemainingGateWizardCount`. `StageCatalog.GateChapter` (the first), `GateChapters` (all), `IsBossGated` |

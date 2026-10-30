@@ -15,15 +15,22 @@ using WizardSurvivors.scripts;
 //
 // It is the level-up screen's book now, because a level bought here is the same kind of thing as a
 // level taken there:
-//   - a SPELL FOR SALE is a new spell's torn page (the only thing written like a new spell is one),
 //   - a PERMANENT UPGRADE is the upgrade's rubricated page with its level pips,
 //   - a MASTERED upgrade is that page GILDED, with a gold seal pressed on it and no price,
+//   - a BOON FOR SALE is a new spell's torn page, bought once (an unlock, written like one),
 // grouped into sections by what they do, one entry per card, laid out top to bottom as name, what
 // it gives now and at the next level, what one level gives, then the pips and the price.
 //
+// ONE MENU, POWERS, SINCE 2026-10-30. The shop stopped selling spells: every spell that is not a
+// starter is earned through an achievement now, and the Achievements page is where a player finds
+// them (.ai/achievements-and-secrets.md 2.4, decision 2). What was left of the second menu, Spells &
+// Boons, was three boons, so they were folded into Powers as its last section and the title menu's
+// button went (decision 5). A spell anybody bought stays bought - it is in UnlockedSpellIds, and
+// schema 19 takes nothing away.
+//
 // THE BEHAVIOUR IS THE OLD SHOP'S, exactly: the same definitions (BuildUpgradeDefinitions), the
 // same prices and ceilings (GetShopItemCost / GetShopItemMaxLevel), the same purchase - spend,
-// write the level or unlock the spell, save - and the same refreshes after it.
+// write the level or unlock the boon, save - and the same refreshes after it.
 public partial class MainMenu
 {
 	// --- what is on a card ----------------------------------------------------------------------
@@ -53,8 +60,8 @@ public partial class MainMenu
 	}
 
 	private readonly Dictionary<string, ShopRow> shopRows = new();
-	// Each section's "2 of 7 mastered", re-counted after every purchase.
-	private readonly List<(Label Tally, string[] Ids, bool Spells)> shopTallies = new();
+	// Each section's "2 of 7 mastered" (or "1 of 3 owned"), re-counted after every purchase.
+	private readonly List<(Label Tally, string[] Ids, bool Boons)> shopTallies = new();
 	private ScrollContainer upgradeScroll = null!;
 	private int shopColumnsBuilt;
 
@@ -73,17 +80,18 @@ public partial class MainMenu
 			new[] { "rerolls", "bans", GlobalStatsManager.CurationUpgradeId }),
 	};
 
-	private const string SpellSectionTitle = "New spells";
-	private const string SpellSectionNote = "Bought once, then offered at your level-ups for good.";
-	private const string BoonSectionTitle = "New boons";
-	private const string BoonSectionNote = "Buy one once and it can be offered at your level-ups from then on.";
-	// The shop is two menus over one panel (MainMenu.OpenShop): the permanent buffs, and the spells and
-	// boons for sale. BuildShop builds the one that is open.
-	private enum ShopMode { Powers, Unlocks }
-	private ShopMode shopMode = ShopMode.Powers;
+	// The boons for sale (UnlockCatalog.PurchasableBoons), the last section of Powers whether or not
+	// any is left to buy: decision 5 put them there, and a section that moved to the top while
+	// something in it was for sale would move the selection with it the moment the last was bought.
+	private const string BoonSectionTitle = "Boons";
+	private const string BoonSectionNote = "Each is bought once, and from then on your level-ups can offer it.";
+	private const string BoonSectionDoneNote = "All bought - every one can turn up at a level-up.";
 
-	private const string PowersIntro = "Permanent buffs to every run. Each level you buy is kept for good.";
-	private const string UnlocksIntro = "Bought once and kept: each joins what your level-ups can offer.";
+	// The heading the panel wears (the scene's still says Arcane Upgrades) and the line under it, which
+	// names both kinds of thing on the shelf now that the boons are on it. No "level-ups" in it: on a
+	// phone the line broke at that hyphen, "level-" on one line and "ups" on the next.
+	private const string ShopHeading = "Powers";
+	private const string PowersIntro = "Permanent buffs to every run, and new boons. Everything you buy is kept for good.";
 
 	// --- the inks, and where each is measured ----------------------------------------------------
 	// Every one is COPIED into tools/art/ui_contrast.py ("Arcane Upgrades shop"): change one, change
@@ -125,9 +133,11 @@ public partial class MainMenu
 
 	// The frames, built once per menu. INSTANCE fields: a StyleBox held in a static outlives the
 	// engine's reference and trips gchandle.is_released() at teardown (BonelightSkin's remarks).
+	// A boon for sale wears the new spell's torn page (SpellPagePath): it is an unlock, bought once,
+	// and that page is how the book writes one.
 	private StyleBoxTexture shopUpgradeFrame, shopUpgradeFrameLit;
 	private StyleBoxTexture shopMasteredFrame, shopMasteredFrameLit;
-	private StyleBoxTexture shopSpellFrame, shopSpellFrameLit;
+	private StyleBoxTexture shopBoonFrame, shopBoonFrameLit;
 
 	private Control shopPurse;
 	private Tween purseTween;
@@ -163,6 +173,7 @@ public partial class MainMenu
 		if (title != null)
 		{
 			title.Reparent(row);
+			title.Text = ShopHeading;
 			title.HorizontalAlignment = HorizontalAlignment.Left;
 			title.VerticalAlignment = VerticalAlignment.Center;
 			title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -274,8 +285,8 @@ public partial class MainMenu
 		shopUpgradeFrameLit ??= CardFamilyArt.Frame(CardFamily.Upgrade, true, 0);
 		shopMasteredFrame ??= TiledPage(MasteredPagePath);
 		shopMasteredFrameLit ??= TiledPage(MasteredPageLitPath);
-		shopSpellFrame ??= TiledPage(SpellPagePath);
-		shopSpellFrameLit ??= TiledPage(SpellPageLitPath);
+		shopBoonFrame ??= TiledPage(SpellPagePath);
+		shopBoonFrameLit ??= TiledPage(SpellPageLitPath);
 	}
 
 	// A torn page tiles, never stretches: a stretched deckle smears into one long taper
@@ -294,14 +305,14 @@ public partial class MainMenu
 	}
 
 	/// <summary>
-	/// Builds the whole shop: the intro, then the sections in the order that is right now.
+	/// Builds the whole shop: the intro, the upgrades by what they do, then the boons.
 	/// </summary>
 	/// <remarks>
-	/// Order is by what the player can act on (the codex's rule, .ai/level-up-screen.md 4c): while any
-	/// spell is still for sale its section leads - there are nine, each changes how a run plays, and
-	/// they were the least findable thing in the old grid, at its foot; once all nine are owned it
-	/// goes last and quiet. Within the upgrades a maxed card stays where it is: an entry that jumped
-	/// to the end the moment it was finished would take the selection with it.
+	/// The order never changes with what is bought. Within the upgrades a maxed card stays where it
+	/// is, and the boons stay last when the last of them is bought: an entry or a section that jumped
+	/// the moment it was finished would take the selection with it. (While the shop sold spells, their
+	/// section led until all nine were owned - they were the least findable thing in the old grid. The
+	/// spells are earned now, on the Achievements page, and the boons are three cheap buys at the foot.)
 	/// </remarks>
 	private void BuildShop()
 	{
@@ -314,27 +325,7 @@ public partial class MainMenu
 		shopColumnsBuilt = CodexRows.ColumnsFor(this);
 		bool narrow = ResponsiveLayout.IsNarrow(this);
 
-		upgradeList.AddChild(CodexRows.BuildSummary(shopMode == ShopMode.Powers ? PowersIntro : UnlocksIntro, CodexRows.Stone));
-
-		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-		var spells = upgradeDefinitions.Values.Where(d => d.IsSpellUnlock && !d.IsBoon).ToList();
-		bool spellsForSale = spells.Any(d => !GlobalStatsManager.IsSpellUnlockedForLevelUp(data, d.SpellId));
-		var boons = upgradeDefinitions.Values.Where(d => d.IsBoon).ToList();
-		bool boonsForSale = boons.Any(d => !GlobalStatsManager.IsBoonUnlocked(data, d.BoonId));
-
-		if (shopMode == ShopMode.Unlocks)
-		{
-			if (spells.Count > 0 && spellsForSale)
-				AddShopSection(SpellSectionTitle, SpellSectionNote, spells, narrow, spellSection: true);
-			if (boons.Count > 0 && boonsForSale)
-				AddShopSection(BoonSectionTitle, BoonSectionNote, boons, narrow, spellSection: true);
-			if (spells.Count > 0 && !spellsForSale)
-				AddShopSection(SpellSectionTitle, "All bought - every one is in your book.", spells, narrow, spellSection: true);
-			if (boons.Count > 0 && !boonsForSale)
-				AddShopSection(BoonSectionTitle, "All bought - every one can turn up at a level-up.", boons, narrow, spellSection: true);
-			RefreshUpgradeControls();
-			return;
-		}
+		upgradeList.AddChild(CodexRows.BuildSummary(PowersIntro, CodexRows.Stone));
 
 		var placed = new HashSet<string>();
 		foreach ((string title, string note, string[] ids) in UpgradeSections)
@@ -342,25 +333,33 @@ public partial class MainMenu
 			var defs = ids.Where(upgradeDefinitions.ContainsKey).Select(id => upgradeDefinitions[id]).ToList();
 			placed.UnionWith(defs.Select(d => d.Id));
 			if (defs.Count > 0)
-				AddShopSection(title, note, defs, narrow, spellSection: false);
+				AddShopSection(title, note, defs, narrow, boonSection: false);
 		}
-		var stray = upgradeDefinitions.Values.Where(d => !d.IsSpellUnlock && !placed.Contains(d.Id)).ToList();
+		var stray = upgradeDefinitions.Values.Where(d => !d.IsBoon && !placed.Contains(d.Id)).ToList();
 		if (stray.Count > 0)
 		{
 			GD.PushWarning($"MainMenu: Arcane Upgrades has no section for {string.Join(", ", stray.Select(d => d.Id))}; listed under More (MainMenu.Shop.cs, UpgradeSections).");
-			AddShopSection("More", string.Empty, stray, narrow, spellSection: false);
+			AddShopSection("More", string.Empty, stray, narrow, boonSection: false);
+		}
+
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		var boons = upgradeDefinitions.Values.Where(d => d.IsBoon).ToList();
+		if (boons.Count > 0)
+		{
+			bool boonsForSale = boons.Any(d => !GlobalStatsManager.IsBoonUnlocked(data, d.BoonId));
+			AddShopSection(BoonSectionTitle, boonsForSale ? BoonSectionNote : BoonSectionDoneNote, boons, narrow, boonSection: true);
 		}
 
 		RefreshUpgradeControls();
 	}
 
-	private void AddShopSection(string title, string note, List<UpgradeDefinition> defs, bool narrow, bool spellSection)
+	private void AddShopSection(string title, string note, List<UpgradeDefinition> defs, bool narrow, bool boonSection)
 	{
 		var cards = defs.Select(d => (Control)BuildShopCard(d, narrow)).ToList();
 		VBoxContainer section = CodexRows.AddSection(upgradeList, title, " ", CodexRows.Stone, shopColumnsBuilt, cards);
 		// The tally CodexRows put in the heading row, filled in by RefreshUpgradeControls.
 		if (section.GetChild(0) is HBoxContainer head && head.GetChildCount() > 1 && head.GetChild(1) is Label tally)
-			shopTallies.Add((tally, defs.Select(d => d.Id).ToArray(), spellSection));
+			shopTallies.Add((tally, defs.Select(d => d.Id).ToArray(), boonSection));
 		if (!string.IsNullOrEmpty(note))
 		{
 			Label line = CodexRows.MakeText(note, ResponsiveLayout.TextRole.Label, CodexRows.Stone.InkSoft);
@@ -374,18 +373,16 @@ public partial class MainMenu
 	// and so the selection never leaves it.
 	private ArcaneShopCard BuildShopCard(UpgradeDefinition def, bool narrow)
 	{
-		bool spell = def.IsSpellUnlock;
-		SpellbookEntry entry = def.IsBoon ? BoonShopEntry(def.BoonId)
-			: spell ? spellbookEntries.FirstOrDefault(e => e.Id.Equals(def.SpellId, StringComparison.OrdinalIgnoreCase))
-			: null;
+		bool boon = def.IsBoon;
+		SpellbookEntry entry = boon ? BoonShopEntry(def.BoonId) : null;
 		var row = new ShopRow { Def = def };
 
 		var card = new ArcaneShopCard
 		{
 			Name = "ShopCard_" + def.Id.Replace(":", "_"),
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			RestingFrame = spell ? shopSpellFrame : shopUpgradeFrame,
-			LitFrame = spell ? shopSpellFrameLit : shopUpgradeFrameLit,
+			RestingFrame = boon ? shopBoonFrame : shopUpgradeFrame,
+			LitFrame = boon ? shopBoonFrameLit : shopUpgradeFrameLit,
 		};
 		row.Card = card;
 
@@ -416,14 +413,14 @@ public partial class MainMenu
 		padding.AddThemeConstantOverride("margin_top", 18);
 		// The foot of a page (.ai/level-up-screen.md 2e): the frame's inner border plus the air a card
 		// has over its head, so the plate never sits on the rule.
-		padding.AddThemeConstantOverride("margin_bottom", CardFamilyArt.FootInset(spell ? CardFamily.NewSpell : CardFamily.Upgrade));
+		padding.AddThemeConstantOverride("margin_bottom", CardFamilyArt.FootInset(boon ? CardFamily.NewSpell : CardFamily.Upgrade));
 		card.AddChild(padding);
 
 		var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		line.AddThemeConstantOverride("separation", 16);
 		padding.AddChild(line);
 
-		row.IconBox = spell ? BuildSpellIconBox(entry) : BuildSocket(def.Id, card);
+		row.IconBox = boon ? BuildBoonIconBox(entry) : BuildSocket(def.Id, card);
 		line.AddChild(row.IconBox);
 
 		var column = new VBoxContainer
@@ -435,20 +432,20 @@ public partial class MainMenu
 		line.AddChild(column);
 
 		// The name: what the player is choosing, in the heading face.
-		Label name = CodexRows.MakeText(spell ? (entry?.DisplayName ?? def.SpellId) : def.DisplayName,
+		Label name = CodexRows.MakeText(boon ? (entry?.DisplayName ?? def.DisplayName) : def.DisplayName,
 			ResponsiveLayout.TextRole.Title, ShopInk);
 		column.AddChild(name);
 
 		var footer = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		footer.AddThemeConstantOverride("separation", 10);
-		if (spell)
+		if (boon)
 		{
 			// What it does - the whole reason to buy it - in the strongest ink, then its tags. The Label
 			// size, as a codex row's line is: at the Body size a PC card ran to four lines of it.
 			Label what = CodexRows.MakeText(entry?.Description ?? string.Empty, ResponsiveLayout.TextRole.Label, ShopInk);
 			if (entry?.GlyphKey is string glyphKey && StatIcons.Load(glyphKey) is Texture2D effectGlyph)
 			{
-				// A boon's effect, led by the glyph of the stat it moves, as an upgrade's line is.
+				// The effect, led by the glyph of the stat it moves, as an upgrade's line is.
 				var effectLine = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 				effectLine.AddThemeConstantOverride("separation", 8);
 				TextureRect mark = Glyph(effectGlyph);
@@ -533,8 +530,8 @@ public partial class MainMenu
 		column.AddChild(footer);
 		// The price at the right of the card's foot, on both canvases. A column of its own at the
 		// card's right was tried on a PC, to save the height a foot row costs, and it cost the words
-		// their width instead: half of every stat line and the spells' descriptions wrapped, which made
-		// the cards taller than the foot row had.
+		// their width instead: half of every stat line and the descriptions of what was for sale
+		// wrapped, which made the cards taller than the foot row had.
 		footer.AddChild(BuildPlateSlot(row, narrow));
 
 		card.Plate = row.Plate;
@@ -544,7 +541,7 @@ public partial class MainMenu
 			row.Pips.AlsoLitBy = row.Plate;
 		}
 
-		if (!spell)
+		if (!boon)
 		{
 			row.Seal = new MasterySeal { Name = "MasterySeal", Visible = false };
 			card.AddChild(row.Seal);
@@ -594,9 +591,7 @@ public partial class MainMenu
 		return box;
 	}
 
-	// A spell's own icon, bare on its page as the level-up cards draw it, in a box the socket's size
-	// so the names of both kinds of card start on the same line.
-	// A boon on an unlock card reads as a spell's does: its name, what it does, its tags and its icon
+	// A boon for sale reads as a new spell's page did: its name, what it does, its tags and its icon
 	// (BoonDefinition.IconPath, drawn by tools/art/boon_icons.py). What it does comes FIRST and in
 	// plain words with its number (BoonCatalog.ExplainEffect), led by its stat glyph; the flavour is a
 	// quieter line under it. It was one sentence, flavour then effect, and three boons gave no number.
@@ -622,7 +617,9 @@ public partial class MainMenu
 		return entry;
 	}
 
-	private static Control BuildSpellIconBox(SpellbookEntry entry)
+	// The boon's own icon, bare on its page as the level-up cards draw a new thing's, in a box the
+	// socket's size so the names of both kinds of card start on the same line.
+	private static Control BuildBoonIconBox(SpellbookEntry entry)
 	{
 		var box = new CenterContainer
 		{
@@ -707,7 +704,7 @@ public partial class MainMenu
 		TextureRect tick = Glyph(StatIcons.Load("done"));
 		tick.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		done.AddChild(tick);
-		Label doneText = NoWrap(row.Def.IsSpellUnlock ? "Owned" : "Mastered", ResponsiveLayout.TextRole.Body, ShopInkGold);
+		Label doneText = NoWrap(row.Def.IsBoon ? "Owned" : "Mastered", ResponsiveLayout.TextRole.Body, ShopInkGold);
 		doneText.Name = "DoneText";
 		doneText.VerticalAlignment = VerticalAlignment.Center;
 		done.AddChild(doneText);
@@ -761,7 +758,7 @@ public partial class MainMenu
 		if (def.HasPoolScaledMaxLevel && maxLevel <= 0)
 			return ShopRowState.NotYetOpen;
 		if (level >= maxLevel)
-			return def.IsSpellUnlock ? ShopRowState.Owned : ShopRowState.Mastered;
+			return def.IsBoon ? ShopRowState.Owned : ShopRowState.Mastered;
 		return saveManager.Data.TotalCurrency < GetShopItemCost(def, level) ? ShopRowState.TooDear : ShopRowState.Buyable;
 	}
 
@@ -797,14 +794,14 @@ public partial class MainMenu
 			row.PlateCost.AddThemeColorOverride("font_color", buyable ? PlateCostInk : PlateDimInk);
 			row.PlateGlyph.Modulate = buyable ? Colors.White : new Color(1f, 1f, 1f, 0.55f);
 			row.PlateAction.Text = buyable
-				? (def.IsSpellUnlock ? "Unlock" : "Buy")
+				? (def.IsBoon ? "Unlock" : "Buy")
 				: $"Need {FormatEnergy(Math.Max(0, cost - total))} more";
 			row.PlateAction.AddThemeColorOverride("font_color", buyable ? PlateActionInk : PlateDimInk);
 			row.DoneMark.Visible = finished;
 			row.Notice.Visible = state == ShopRowState.NotYetOpen;
 			row.NoticeText.Text = "Locked";
 
-			if (!def.IsSpellUnlock)
+			if (!def.IsBoon)
 			{
 				int shownLevel = Math.Clamp(level, 0, Math.Max(0, maxLevel));
 				(_, string now) = UpgradeStat(def.Id, shownLevel);
@@ -834,10 +831,10 @@ public partial class MainMenu
 			}
 		}
 
-		foreach ((Label tally, string[] ids, bool spells) in shopTallies)
+		foreach ((Label tally, string[] ids, bool boons) in shopTallies)
 		{
 			int done = ids.Count(id => shopRows.TryGetValue(id, out ShopRow r) && r.State is ShopRowState.Mastered or ShopRowState.Owned);
-			tally.Text = spells ? $"{done} of {ids.Length} owned" : $"{done} of {ids.Length} mastered";
+			tally.Text = boons ? $"{done} of {ids.Length} owned" : $"{done} of {ids.Length} mastered";
 		}
 	}
 
@@ -912,21 +909,14 @@ public partial class MainMenu
 
 		saveManager.Data.TotalCurrency -= cost;
 		if (def.IsBoon)
-		{
 			GlobalStatsManager.UnlockBoon(saveManager.Data, def.BoonId);
-		}
-		else if (def.IsSpellUnlock)
-		{
-			GlobalStatsManager.UnlockSpell(saveManager.Data, def.SpellId);
-		}
 		else
-		{
 			saveManager.Data.ArcaneUpgradeLevels[upgradeId] = currentLevel + 1;
-		}
 		saveManager.SaveGame();
 
 		RefreshArcaneEnergy();
 		RefreshUpgradeControls();
+		// A level of Redaction bought here is a slot the Spell Index's set-aside controls can spend.
 		RefreshSpellbookCards();
 		return true;
 	}
