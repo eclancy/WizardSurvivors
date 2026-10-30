@@ -224,6 +224,15 @@ id, and `ValidateUnlockCatalog` requires that **every spell's source is `Starter
   secrets a price list. A hint for a hidden achievement could be sold (decision 10), but is not
   recommended for the first version.
 
+**Built (A3, 2026-10-30, `wip/shop-no-spells`).** The shop is one menu, Powers: Power, Survival,
+Fortune and Level-ups, then **Boons** (Quicksilver Bead, Deepwater Pearl, Saltbound Chain), last
+whether or not one is left to buy, so nothing moves under the selection when the last is bought. The
+title menu's row is Powers and Unlocks, half each, as before the 2026-10-28 split; Spells & Boons and
+its button are gone. In code: `MainMenu.Shop.cs` lost `ShopMode` and the spell shelf, `MainMenu`'s
+`UpgradeDefinition` lost `IsSpellUnlock`/`SpellId` (a boon is the one thing sold once), and
+`UnlockCatalog.PurchasableSpells` is retired. No price moved, and a bought spell stays bought.
+Layout, inks and the pad walk are recorded in `.ai/level-up-screen.md` 4f.
+
 ### 2.5 The final chapter's gate (decided: wizards, not spells)
 
 Today the Emberdeep opens on **every spell and every wizard**, live. Under the new rule nine spells

@@ -84,13 +84,14 @@ public partial class MainMenu
 	// any is left to buy: decision 5 put them there, and a section that moved to the top while
 	// something in it was for sale would move the selection with it the moment the last was bought.
 	private const string BoonSectionTitle = "Boons";
-	private const string BoonSectionNote = "Bought once and kept: from then on your level-ups can offer it.";
+	private const string BoonSectionNote = "Each is bought once, and from then on your level-ups can offer it.";
 	private const string BoonSectionDoneNote = "All bought - every one can turn up at a level-up.";
 
 	// The heading the panel wears (the scene's still says Arcane Upgrades) and the line under it, which
-	// names both kinds of thing on the shelf now that the boons are on it.
+	// names both kinds of thing on the shelf now that the boons are on it. No "level-ups" in it: on a
+	// phone the line broke at that hyphen, "level-" on one line and "ups" on the next.
 	private const string ShopHeading = "Powers";
-	private const string PowersIntro = "Permanent buffs to every run, and boons for your level-ups. All of it is kept for good.";
+	private const string PowersIntro = "Permanent buffs to every run, and new boons. Everything you buy is kept for good.";
 
 	// --- the inks, and where each is measured ----------------------------------------------------
 	// Every one is COPIED into tools/art/ui_contrast.py ("Arcane Upgrades shop"): change one, change
