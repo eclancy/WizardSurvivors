@@ -16,9 +16,9 @@ public static class ChapterRulesCatalog
 	/// <summary>A new rules object for one run of the chapter, or null for a chapter with none.</summary>
 	public static Func<ChapterRules> ForStage(string stageId) => stageId switch
 	{
-		// The Last Bridge (piece C1): becomes () => new BridgeRules() - the collapsing front, the spawns on
-		// the band, the Constable at the gate, the gate as the way home, the strip under the timer.
-		"stage_11" => null,
+		// The Last Bridge (piece C1): the collapsing front, the spawns on the band, the Constable at the
+		// gate, the gate as the way home, the strip under the timer (BridgeRules.cs).
+		"stage_11" => () => new BridgeRules(),
 		// (the Court's line is below; leave this one as it is)
 		// The Court (piece C3): its rooms, the boss in a room near the player, the throne room doors as the
 		// way home (CourtRules.cs).

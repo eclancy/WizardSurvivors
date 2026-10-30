@@ -284,8 +284,13 @@ public static class StageEnvironmentCatalog
 			IntroTint = new Color(0.98f, 0.90f, 0.80f, 1.0f),
 			// Spike plates only: old traps set in the stones fit ruins, but an iron floor grate breathing
 			// fire under the open sky does not (Eric, 2026-10-28: "there shouldn't be fire vents outside").
+			// On the broken walls they stand where the Dungeon's do, in hallway rows (Node2DGame.HazardPlanFor).
 			HazardSpikes = true,
+			// The flower pen fits where the ruin opens into a court (thirty tiles of floor inside a broken
+			// wall), and a walled garden among old walls is the right place for one.
 			HasLandmarks = true,
+			// Its own broken walls (tools/art/ruin_walls.py), drawn on the Ruin topology's wall cells.
+			WallSet = "ruin_wall",
 		}
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(
@@ -536,13 +541,17 @@ public static class StageEnvironmentCatalog
 		// sets no hazard: the castle's traps are its own (murder-holes, ovens, chandeliers) and are placed
 		// by its ChapterRules, not scattered here.
 
-		// THE LAST BRIDGE (stage_11), stand-in: the Ruins' stone under a cold sea wind. C1 gives it the
-		// deck (terrain_bridge.py) and the `abyss` water style (water.py) for the drop.
+		// THE LAST BRIDGE (stage_11, piece C1, .ai/endgame-castle.md 3): a deck of laid setts
+		// (terrain_bridge.py) over the abyss - the sea far below, near-black, with mist moving on it
+		// (water.py's `abyss`, the drop either side of the band). A cold sea wind: a blue-grey wash and mist
+		// drifting across from the north-west, the way the wind comes off the water. No placed traps: the
+		// bridge's hazards are the front, the murder-holes and the gaps, all BridgeRules'. Its furniture -
+		// parapets, gatehouse towers, the castle wall - is BridgeRules' too, so the shared decor counts are 0.
 		[StageEnvironmentKind.Bridge] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Bridge,
 			"bridge",
 			"Bridge",
-			"res://assets/bonelight/tiles/floor_graystone_0.png",
+			"res://assets/bonelight/tiles/deck_fill.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
@@ -555,16 +564,18 @@ public static class StageEnvironmentCatalog
 			0,
 			0,
 			0,
-			new[] { "res://assets/bonelight/tiles/floor_graystone_0.png" },
+			new[] { "res://assets/bonelight/tiles/deck_fill.png" },
 			48f,
-			propCount: 16)
+			// No scattered props either (the palette names no theme): anything standing on the deck would
+			// stand on in the drop once the front had passed it.
+			propCount: 0)
 		{
 			HazeTint = new Color(0.12f, 0.16f, 0.24f, 0.10f),
 			GlowTint = new Color(0.20f, 0.24f, 0.34f, 0.05f),
-			WeatherTint = new Color(0.70f, 0.78f, 0.90f, 0.026f),
+			WeatherTint = new Color(0.70f, 0.78f, 0.90f, 0.03f),
 			WeatherOffset = new Vector2(-140f, -100f),
 			IntroTint = new Color(0.90f, 0.94f, 1.0f, 1.0f),
-			WaterStyle = "pool",
+			WaterStyle = "abyss",
 		}
 		,
 

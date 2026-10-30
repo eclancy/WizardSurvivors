@@ -149,7 +149,7 @@ public sealed partial class LevelGenerator
 		cave.StandPools(cells, chunk.SafeRadius);
 
 		// 4. The palette's floor between the rock, and the chunk's middle handed back.
-		LayFloorBetweenWalls(grid, chunk, cells, ext, hazardClearance: 0);
+		LayFloorBetweenWalls(grid, chunk, cells, ext);
 	}
 
 	/// <summary>
@@ -530,12 +530,13 @@ public sealed partial class LevelGenerator
 
 	/// <summary>
 	/// The floor of a walled topology: the palette's blobs laid as on open ground, walls and water written
-	/// over them, any hazard blob kept <paramref name="hazardClearance"/> tiles clear of a wall (so a pit is
-	/// never the whole width of a passage), the blobs cleaned round the walls, and the chunk's padded grid
-	/// copied out of the middle. <paramref name="cells"/> is the extended grid, <paramref name="ext"/> tiles
-	/// past the padded one on every side.
+	/// over them, the blobs cleaned round the walls, and the chunk's padded grid copied out of the middle.
+	/// <paramref name="cells"/> is the extended grid, <paramref name="ext"/> tiles past the padded one on
+	/// every side. A palette laid this way should not stamp a hazard blob: cut by walls into the lattice's
+	/// straight lines it comes out a ruler-cut hole, and one across a passage closes it (the Ruins lost
+	/// their pits for both reasons, LevelGenerator.Ruin.cs).
 	/// </summary>
-	private static void LayFloorBetweenWalls(string[,] grid, in TopologyChunk chunk, sbyte[,] cells, int ext, int hazardClearance)
+	private static void LayFloorBetweenWalls(string[,] grid, in TopologyChunk chunk, sbyte[,] cells, int ext)
 	{
 		int size = cells.GetLength(0);
 		string[,] floor = walledFloor is { } f && f.GetLength(0) == size ? f : walledFloor = new string[size, size];
@@ -554,28 +555,6 @@ public sealed partial class LevelGenerator
 			}
 		}
 
-		if (hazardClearance > 0)
-		{
-			Array.Copy(floor, read, floor.Length);
-			for (int x = 0; x < size; x++)
-			{
-				for (int y = 0; y < size; y++)
-				{
-					if (!HazardBlobs.Contains(read[x, y]))
-						continue;
-					bool nearWall = false;
-					for (int dx = -hazardClearance; dx <= hazardClearance && !nearWall; dx++)
-						for (int dy = -hazardClearance; dy <= hazardClearance && !nearWall; dy++)
-						{
-							int nx = x + dx, ny = y + dy;
-							nearWall = nx >= 0 && ny >= 0 && nx < size && ny < size && cells[nx, ny] == CellWall;
-						}
-					if (nearWall)
-						floor[x, y] = BaseSentinel;
-				}
-			}
-		}
-
 		CleanBlobsBetweenWalls(floor, read);
 
 		int inner = chunk.Size;
@@ -583,8 +562,6 @@ public sealed partial class LevelGenerator
 			for (int y = 0; y < inner; y++)
 				grid[x, y] = floor[x + ext, y + ext];
 	}
-
-	private static readonly HashSet<string> HazardBlobs = new() { "pit", "lava" };
 
 	// TerrainAutotiler.CleanupGrid's two rules, for the blob terrains only: a floor cell hemmed in on three
 	// sides by one blob terrain joins it, and a blob cell with fewer than two of its own beside it goes.

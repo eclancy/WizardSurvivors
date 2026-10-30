@@ -26,6 +26,8 @@ public partial class _UiShot
 	{
 		SwallowHole => new SwallowHoleWalk { Director = director, Hero = hero },
 		BrokenWard => new BrokenWardWalk { Director = director, Hero = hero },
+		BuriedRunes => new BuriedRunesWalk { Director = director, Hero = hero },
+		Fulgurite => new FulguriteWalk { Director = director, Hero = hero },
 		_ => new VaultProbe { Director = director, Hero = hero },
 	};
 
@@ -644,6 +646,269 @@ public partial class _UiShot
 						return false;
 					Check("the ward broke after its time", ward.WardBroken);
 					Shot("the ward breaks: its light goes to him");
+					return true;
+			}
+			return false;
+		}
+	}
+
+	// THE BURIED RUNES (8.8): nothing shows while he keeps moving; a short stop grows the calm but shows
+	// nothing, and walking on lets the wind back; two seconds still near the middle shows all three stones;
+	// he walks onto each in turn and digs it; the third sends the light to him.
+	private partial class BuriedRunesWalk : VaultWalk
+	{
+		private BuriedRunes runes;
+		private int sub;
+		private float mark;
+		private int digging;
+
+		protected override bool ExpectSolid => false;
+		protected override float WorkLimit => 60f;
+
+		protected override bool Work(float delta, float seconds)
+		{
+			runes ??= Vault as BuriedRunes;
+			if (runes == null)
+			{
+				Check("the vault is a BuriedRunes", false);
+				Finish();
+				return false;
+			}
+			Vector2 c = runes.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+					Check($"no stone shows on arrival ({runes.Shown} shown)", runes.Shown == 0);
+					mark = seconds;
+					sub = 1;
+					return false;
+				case 1:
+				{
+					// Keep walking, round the middle, for three seconds.
+					float a = (seconds - mark) * 1.6f;
+					SteerTo(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 220f, 1f);
+					if (seconds - mark < 3f)
+						return false;
+					Check($"walking through the field shows nothing ({runes.Shown} shown, settled {runes.Settled:0.00})", runes.Shown == 0);
+					Steering = false;
+					Pin = Hero.GlobalPosition;
+					mark = seconds;
+					sub = 2;
+					return false;
+				}
+				case 2:
+					// A short stop: the calm grows, nothing shows yet.
+					if (seconds - mark < 1.3f)
+						return false;
+					Check($"a short stop starts the snow settling ({runes.Settled:0.00}) and shows nothing yet ({runes.Shown})", runes.Settled > 0.2f && runes.Shown == 0);
+					Shot("standing still: the wind drops round him");
+					mark = seconds;
+					sub = 3;
+					return false;
+				case 3:
+					// Walk on: the wind comes back.
+					if (!SteerTo(c, 12f) && seconds - mark < 4f)
+						return false;
+					Check($"walking on, it stops settling ({runes.Settled:0.00}) and nothing shows ({runes.Shown})", runes.Settled == 0f && runes.Shown == 0);
+					mark = seconds;
+					sub = 4;
+					return false;
+				case 4:
+					// Now stand at the middle and hold.
+					if (seconds - mark < StillCheckEarly)
+						return false;
+					Check($"before two seconds still, nothing shows ({Hero.StillSeconds:0.0} s, {runes.Shown} shown)", runes.Shown == 0);
+					sub = 5;
+					return false;
+				case 5:
+					if (seconds - mark < 2.6f)
+						return false;
+					Check($"two seconds still at the middle: all three stones show ({runes.Shown})", runes.Shown == BuriedRunes.RuneCount);
+					Shot("the snow has settled: the stones show");
+					mark = seconds;
+					sub = 6;
+					return false;
+				case 6:
+				{
+					// Walk onto each in turn.
+					if (!SteerTo(runes.RuneAt(digging), 10f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 7;
+					return false;
+				}
+				case 7:
+					if (seconds - mark < 0.3f)
+						return false;
+					Check($"stone {digging + 1} dug ({runes.Dug} dug)", runes.IsDug(digging) && runes.Dug == digging + 1);
+					if (digging == 1)
+						Shot("two dug");
+					digging++;
+					mark = seconds;
+					if (digging < BuriedRunes.RuneCount)
+					{
+						sub = 6;
+						return false;
+					}
+					return true;
+			}
+			return false;
+		}
+
+		private const float StillCheckEarly = 1.5f;
+	}
+
+	// THE FULGURITE (8.9): solid at its foot; nothing happens until the storm comes round on the pace clock;
+	// the cloud gathers for its ten seconds; the bolts come down telegraphed, and those that land on a body
+	// hit it; he holds the circle through them, stepping out from under any called at his feet; the last is
+	// drawn into the glass, which rings, and the light goes to him.
+	private partial class FulguriteWalk : VaultWalk
+	{
+		private Fulgurite glass;
+		private int sub;
+		private float mark;
+		private bool hooked;
+		private bool gatherShot;
+		private bool boltShot;
+		private int boltFrame;
+		private int called;
+		private int landedOnBodies;
+		private int bodiesHit;
+		private Vector2? dodge;
+		private readonly List<(Enemy Body, Vector2 At)> targets = new();
+
+		protected override bool ExpectSolid => true;
+		protected override float WorkLimit => 130f;
+
+		public override void _ExitTree()
+		{
+			if (hooked && glass != null && IsInstanceValid(glass))
+			{
+				glass.StrikeCalled -= OnCalled;
+				glass.StrikeLanded -= OnLanded;
+			}
+		}
+
+		// A body set down under every bolt that is not at his feet, held there, to show what a bolt does to one.
+		private void OnCalled(Vector2 at)
+		{
+			called++;
+			Vector2 c = glass.GlobalPosition;
+			if (at.DistanceTo(Hero.FootPosition) > 80f && at.DistanceTo(c) > 30f)
+			{
+				if (Body(at, health: 4000f) is Enemy e)
+					targets.Add((e, at));
+				return;
+			}
+			// Called at his feet: step out from under it, to whichever side of the glass, inside the circle,
+			// is farthest from it.
+			Vector2 best = c;
+			float far = -1f;
+			foreach (Vector2 off in new[] { new Vector2(-85f, 40f), new Vector2(85f, 40f), new Vector2(0f, 90f), new Vector2(-60f, 80f), new Vector2(60f, 80f) })
+			{
+				float d = (c + off).DistanceTo(at);
+				if (d > far)
+				{
+					far = d;
+					best = c + off;
+				}
+			}
+			dodge = best;
+		}
+
+		private void OnLanded(Vector2 at, int hit)
+		{
+			if (targets.Exists(t => t.At.DistanceTo(at) < 1f))
+			{
+				landedOnBodies++;
+				bodiesHit += hit;
+			}
+		}
+
+		protected override bool Work(float delta, float seconds)
+		{
+			glass ??= Vault as Fulgurite;
+			if (glass == null)
+			{
+				Check("the vault is a Fulgurite", false);
+				Finish();
+				return false;
+			}
+			if (!hooked)
+			{
+				glass.StrikeCalled += OnCalled;
+				glass.StrikeLanded += OnLanded;
+				hooked = true;
+			}
+			// The bodies under the bolts stay where the bolts were called.
+			foreach (var (body, at) in targets)
+				if (body != null && IsInstanceValid(body))
+				{
+					body.GlobalPosition = at;
+					body.Velocity = Vector2.Zero;
+				}
+			Vector2 c = glass.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+					// Into the circle, and wait for the storm.
+					if (!SteerTo(c + new Vector2(0f, 80f), 6f) && seconds < 6f)
+						return false;
+					GD.Print($"VAULTWALK at the glass at pace {Director.Game.PaceSeconds:0.0} s; the first storm comes at {Fulgurite.FirstStorm:0} s");
+					Check($"no storm before its hour (pace {Director.Game.PaceSeconds:0.0} s)", !glass.StormOn || Director.Game.PaceSeconds >= Fulgurite.FirstStorm);
+					sub = 1;
+					return false;
+				case 1:
+				{
+					if (!glass.StormOn)
+						return false;
+					if (!gatherShot && glass.StormSecond > Fulgurite.GatherSeconds * 0.7f)
+					{
+						gatherShot = true;
+						GD.Print($"VAULTWALK the storm came at pace {Director.Game.PaceSeconds - glass.StormSecond:0.0} s");
+						Check("the storm comes on its hour", MathF.Abs(Director.Game.PaceSeconds - glass.StormSecond - Fulgurite.FirstStorm) < 1f);
+						Shot("the cloud gathers over the glass");
+					}
+					if (glass.StormSecond < Fulgurite.GatherSeconds)
+						return false;
+					sub = 2;
+					return false;
+				}
+				case 2:
+				{
+					if (dodge is Vector2 to && SteerTo(to, 6f))
+						dodge = null;
+					// A frame after it lands: the frame it lands has not been drawn yet.
+					if (!boltShot && landedOnBodies > 0)
+					{
+						if (boltFrame++ > 0)
+						{
+							boltShot = true;
+							Shot("a bolt comes down");
+						}
+					}
+					if (!glass.HasRung)
+					{
+						if (!glass.StormOn && called >= Fulgurite.StrikeCount)
+						{
+							Check("he held the circle and the glass rang", false);
+							Finish();
+						}
+						return false;
+					}
+					GD.Print($"VAULTWALK {called} bolts called, {landedOnBodies} on bodies, {bodiesHit} hits");
+					Check($"six bolts called ({called})", called == Fulgurite.StrikeCount);
+					Check($"the bolts hit the enemies under them ({bodiesHit} hits from {landedOnBodies} bolts on bodies)", landedOnBodies > 0 && bodiesHit >= landedOnBodies);
+					// It rings only if he held the circle when the last bolt was called (Fulgurite.Call).
+					Check("he held the circle, and the glass drew the last bolt into itself and rang", glass.HasRung);
+					mark = seconds;
+					sub = 3;
+					return false;
+				}
+				case 3:
+					if (seconds - mark < 0.35f)
+						return false;
+					Shot("the glass rings");
 					return true;
 			}
 			return false;

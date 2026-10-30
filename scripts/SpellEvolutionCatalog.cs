@@ -802,7 +802,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = FrostShatter.AvalancheId,
 			DisplayName = "Avalanche",
-			Description = $"What a shatter kills shatters in its turn a beat later, up to {FrostShatter.AvalancheDepth} deep, so one death in a crowd rolls out through the pack in waves of ice. +60% damage.",
+			// Reworded 2026-10-30 (Eric: "hard to read"). The same card; the words say it in order.
+			Description = $"Enemies killed by a shatter shatter too, a moment later - up to {FrostShatter.AvalancheDepth} times in a row - so one kill ripples out through the whole pack. +60% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 1.6f,
 			VisualTag = "Avalanche",

@@ -797,6 +797,18 @@ No *strike* here: it is the thaw's.
 | I3 | The Watch-Fire | planned, keepsake | 10-12 | guarded, then linger | a cold brazier on a ridge | a chest; 150 Arcane Energy, once |
 | I4 | **The Ice Window** | **new** | mid | **circle** a clear pane of lake ice with something warm frozen under it | the one clear patch in white ice | a flask and 25 Arcane Energy |
 
+**I2 built (2026-10-30, `wip/vaults-b`):** `BuriedRunes.cs`, the blowing snow and the calm
+`scenes/shaders/drift_field.gdshader` (two quads: streaks in the air with the wind, dense in a 640 px
+field and thinning out over two chunks; on the ground, the calm - clear ground ringed by the drift the
+wind dropped, solid cells, never a dithered wash), art `tools/art/secret_frost.py` (three flat stones
+each cut with the Sleet Rune diamond and a different mark in it; drifts that all lie one way). Stillness
+is `Player.StillSeconds`: in the field the calm grows from his feet as he holds, and at 2 s every stone
+within 400 px shows, with the warm glint on its cut, and stays shown; walking on lets the wind back. He
+digs each by walking onto it, any order; the third sends the light to him. Nothing solid. Walked on seed
+4242, fresh save, all pass (moving shows nothing, a 1.3 s stop grows the calm and shows nothing and
+resets, 2 s at the middle shows all three, the three dug). Needs eyes: whether a player in a horde
+thinks to stop, and whether the streaks over the bodies are too thick in a crowd.
+
 ### 8.9 Scorched Sands (`stage_6`) - event: the caravan master (catch)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -806,6 +818,20 @@ No *strike* here: it is the thaw's.
 | A3 | The Hidden Water | planned, keepsake | 10-12 | linger | cracked earth to scrub to reeds | full heal, a well; Recovery, once |
 | A4 | The Mirage | planned | - | stillness | a pool always ahead | 60 s of +20% speed |
 | A5 | **The Fulgurite** | **new, vault** | 5-7 chunks | **storm**: a branching tree of glass stands in the dunes where lightning struck. A dry storm passes over it every 90 pace seconds (clouds gather for 10 s, then six telegraphed strikes land round it over 6 s - `TelegraphedGroundHit`, 3 damage each, which also hit enemies). Stand within 120 px of the glass through the strikes: it draws the last one into itself and rings | far: glass beads in the sand and a dark sky over one place, visible from two chunks; near: the glass tree with the glint in its root | **Stormsweep**; later runs a chest |
+
+**A5 built (2026-10-30, `wip/vaults-b`):** `Fulgurite.cs`, art `tools/art/secret_sands.py` (the glass in
+Wind's ramp with Lightning's seams - Stormsweep is both - still, charged and ringing; beads and twigs of
+the same glass for the far tell). Storms on `Node2DGame.PaceSeconds`: the first at 60, then every 90;
+the cloud (stamped puffs of the violet row, always over the glass, the only one in the Sands' sky)
+spreads and darkens for 10 s, then six bolts a second apart, each warned by the shared
+`TelegraphedGroundHit` (3 to him) and dealing 3 to every enemy under it; two are called at his feet,
+so holding the 120 px circle means moving inside it. Held through all six, the last is drawn into the
+glass with no warning, it rings, and the light comes out of its root to him. Solid foot. No storm while
+the boss is up. Walked on seed 4242, fresh save, all pass: no storm before pace 60 and one at 60.0, six
+called, the three that landed on bodies hit them, he held the circle stepping out from under the two at
+his feet, and it rang. Needs eyes: the wait for a storm (up to 90 s) in play, whether the cloud over
+the top of the screen hides too much of a crowd, and whether the glass reads apart from the Sands'
+bleached dead trees.
 
 ### 8.10 The Emberdeep (`stage_7`) - no event
 

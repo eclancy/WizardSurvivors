@@ -167,6 +167,10 @@ public sealed partial class LevelGenerator
 		},
 		// `overgrowth`, not `grass`: the Forest's turf stamped opaque on black stone was a lawn on a
 		// dungeon floor. Overgrowth is partly transparent and lets the stone show between the stems.
+		// THE BROKEN WALLS (.ai/endgame-castle.md 7.3, piece V1): the Ruin topology (LevelGenerator.Ruin.cs)
+		// stands the Dungeon's maze on this floor at the rates that broke it, with gaps, fallen pillars,
+		// courts and colonnades. The blobs lie between the walls. No pits since the walls: cut by them
+		// into the lattice's lines they were ruler-cut holes, and one across a corridor closed it.
 		[StageEnvironmentKind.Ruins] = new Palette
 		{
 			GroundMaterial = "graystone",
@@ -175,9 +179,9 @@ public sealed partial class LevelGenerator
 				new BlobSpec("cobble", 2.2f, 2.0f, 3.4f),
 				new BlobSpec("dark_dirt", 1.4f, 1.8f, 3.0f),
 				new BlobSpec("overgrowth", 1.4f, 2.0f, 3.6f),
-				new BlobSpec("pit", 0.7f, 1.4f, 2.2f),
 			},
 			PropThemes = new[] { "funerary", "bones", "mining" },
+			Topology = StageTopology.Ruin,
 		},
 
 		// THE SUNKEN CAVE (stage_2, .ai/endgame-castle.md 7.3, piece V2). Its own palette at last: until
@@ -301,21 +305,28 @@ public sealed partial class LevelGenerator
 		// which is a playable field and nothing more. Walkable blobs only, plus the existing pit: a new
 		// blocking terrain has to agree in four shared places (.ai/terrain.md section 2).
 
-		// THE LAST BRIDGE (stage_11, C1): a Band (LevelGenerator.Band.cs). Stand-in: the Ruins' stone with
-		// laid patches, and the deck's gaps as the existing `pit` (3.8). C1 replaces the floor with the deck
-		// (terrain_bridge.py) and the drop with the `abyss` water.
+		// THE LAST BRIDGE (stage_11, C1): a Band (LevelGenerator.Band.cs) - a diagonal deck with the drop,
+		// generated as water in the `abyss` style, either side. The deck is `deck` (terrain_bridge.py), laid
+		// setts with no direction in them, used as the ground the way the Forest stands on `grass`; the
+		// graystone is only the fallback a missing deck would paint. A few spills of scree where the setts
+		// have broken up. `pit` is listed only so its tiles are built at stage start: weight 0, first, so
+		// PickBlob never draws it - the deck's two gaps are placed by the band itself (BridgeBand.Gaps,
+		// 3.8), never scattered.
 		[StageEnvironmentKind.Bridge] = new Palette
 		{
+			GroundTerrain = "deck",
 			GroundMaterial = "graystone",
 			Blobs = new[]
 			{
-				new BlobSpec("cobble", 2.0f, 2.0f, 3.4f),
-				new BlobSpec("pit", 0.5f, 1.4f, 2.2f),
+				new BlobSpec("pit", 0f, 1.4f, 2.2f),
+				new BlobSpec("rocky_pit", 1.0f, 1.4f, 2.4f),
 			},
-			Density = 0.004f,
-			// The garrison's braziers and chain-posts. Not bones: the bridge's dead are names on the
+			Density = 0.0018f,
+			// No scattered props. Everything standing on the bridge is BridgeRules' (the parapets, towers and
+			// castle wall), which the front takes with the deck; a scattered brazier would stand on in the
+			// drop after the deck under it fell. And none of it is bones: the bridge's dead are names on the
 			// parapet, never bodies (3.9).
-			PropThemes = new[] { "torture" },
+			PropThemes = Array.Empty<string>(),
 			Topology = StageTopology.Band,
 		},
 
