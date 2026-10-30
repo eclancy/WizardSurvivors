@@ -2484,7 +2484,7 @@
       "milestone": 8,
       "id": "frost_shard_absolute_zero",
       "name": "Avalanche",
-      "description": "What a shatter kills shatters in its turn a beat later, up to 3 deep, so one death in a crowd rolls out through the pack in waves of ice. \u002B60% damage.",
+      "description": "Enemies killed by a shatter shatter too, a moment later - up to 3 times in a row - so one kill ripples out through the whole pack. \u002B60% damage.",
       "synergy": "Ice / Chain reaction",
       "visual_tag": "Avalanche",
       "gains": {},
