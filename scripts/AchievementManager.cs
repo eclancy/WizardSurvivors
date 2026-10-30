@@ -87,65 +87,28 @@ public static class AchievementManager
 			if (!UnlockAchievement(data, definition.Id))
 				continue;
 
-			// Only report on the run that actually earned it. Re-completing an achievement is
-			// common - most of them are things a good run does every time - and re-announcing it
-			// would bury the one line that matters.
-			summary.AchievementNames.Add(definition.DisplayName);
-
 			// The results screen shows the THING earned, with the deed as how it was earned - one
 			// card for "Meteor Swarm, from Slayer" rather than a card for Slayer and another for
 			// Meteor Swarm saying the same event twice. A deed that granted no thing (its reward is
 			// Arcane Energy, or what it gives was already owned) is a card of its own.
 			string earnedBy = $"Unlock completed: {definition.DisplayName}";
-			bool grantedAThing = false;
+			List<RunUnlockEntry> granted = GrantUnlocks(data, definition, earnedBy);
+			PayCurrency(data, definition, summary);
 
-			if (!string.IsNullOrWhiteSpace(definition.SpellUnlockId)
-				&& GlobalStatsManager.UnlockSpell(data, definition.SpellUnlockId))
-			{
-				string name = SpellDisplayName(definition.SpellUnlockId);
-				summary.SpellNames.Add(name);
-				summary.Entries.Add(new RunUnlockEntry
-				{
-					Kind = RunUnlockKind.Spell, Id = definition.SpellUnlockId, Name = name, Source = earnedBy,
-				});
-				grantedAThing = true;
-			}
+			// A deed completed in the run (a side event, a secret) was announced there, by its own beat,
+			// and normally recorded there too (CompleteNow), so it only arrives here when its in-run path
+			// did not record it - a secret found before piece A4 wires SecretDirector to CompleteNow, say.
+			// It is recorded now and its unlock granted; it gets a card only for a thing it granted.
+			if (definition.CompletesInRun && granted.Count == 0 && definition.CurrencyReward <= 0)
+				continue;
 
-			// Boons are reported in the same list as spells. To the player they are the same kind
-			// of thing - something new they can be offered - and splitting the end-of-run summary
-			// by an internal distinction would say nothing useful.
-			if (!string.IsNullOrWhiteSpace(definition.BoonUnlockId)
-				&& GlobalStatsManager.UnlockBoon(data, definition.BoonUnlockId))
-			{
-				BoonDefinition boon = BoonCatalog.GetById(definition.BoonUnlockId);
-				string name = boon?.Name ?? definition.BoonUnlockId;
-				summary.SpellNames.Add(name);
-				summary.Entries.Add(new RunUnlockEntry
-				{
-					Kind = RunUnlockKind.Boon, Id = definition.BoonUnlockId, Name = name, Source = earnedBy,
-				});
-				grantedAThing = true;
-			}
+			// Only report on the run that actually earned it. Re-completing an achievement is
+			// common - most of them are things a good run does every time - and re-announcing it
+			// would bury the one line that matters.
+			summary.AchievementNames.Add(definition.DisplayName);
+			AddToSummary(summary, granted);
 
-			if (!string.IsNullOrWhiteSpace(definition.CharacterUnlockId)
-				&& GlobalStatsManager.UnlockCharacter(data, definition.CharacterUnlockId))
-			{
-				string name = CharacterDisplayName(definition.CharacterUnlockId);
-				summary.WizardNames.Add(name);
-				summary.Entries.Add(new RunUnlockEntry
-				{
-					Kind = RunUnlockKind.Wizard, Id = definition.CharacterUnlockId, Name = name, Source = earnedBy,
-				});
-				grantedAThing = true;
-			}
-
-			if (definition.CurrencyReward > 0)
-			{
-				data.TotalCurrency += definition.CurrencyReward;
-				summary.CurrencyAwarded += definition.CurrencyReward;
-			}
-
-			if (!grantedAThing)
+			if (granted.Count == 0)
 			{
 				summary.Entries.Add(new RunUnlockEntry
 				{
@@ -158,8 +121,145 @@ public static class AchievementManager
 			}
 		}
 
+		// A deed done before its reward moved to it (schema 19 moved four) is paid its reward now, and
+		// the gate chapters this save has met are written open for good - announced on the run that met
+		// them, which a boss victory alone never does for a gate (StageCatalog.ChapterOpenedBy skips it).
+		AddToSummary(summary, Reconcile(data));
+		foreach (StageDefinition gate in GlobalStatsManager.RecordMetGates(data))
+		{
+			summary.Entries.Add(new RunUnlockEntry
+			{
+				Kind = RunUnlockKind.Chapter,
+				Id = gate.Id,
+				Name = gate.DisplayName,
+				Source = "Every wizard on the road is free",
+			});
+		}
+
 		return summary;
 	}
+
+	/// <summary>
+	/// Completes a deed the moment it happens - a side event won, a secret found - grants its reward
+	/// and saves at once (.ai/achievements-and-secrets.md 2.6; the DiscoveryRewards rule: a wizard carried
+	/// out of a cell stays free even if the run is lost a minute later). The reward joins the level-up
+	/// pool from the next level-up of the same run, which reads the save live (Player.GetLevelUpOptions).
+	/// </summary>
+	/// <returns>Every unlock it newly granted, named, for the event's line and the results screen.</returns>
+	public static List<RunUnlockEntry> CompleteNow(SaveManager saveManager, string achievementId)
+	{
+		if (saveManager?.Data == null)
+			return new List<RunUnlockEntry>();
+		List<RunUnlockEntry> granted = Complete(saveManager.Data, achievementId);
+		saveManager.SaveGame();
+		return Named(granted);
+	}
+
+	/// <summary>
+	/// <see cref="CompleteNow"/> without the save to disk and without names: records the deed, writes the
+	/// fact a derived deed measures (the event won, the secret found) so the deed and its measure always
+	/// agree, pays its Arcane Energy if this is the first time it is recorded, and grants every unlock it
+	/// carries that the save does not own. Safe to call twice: the second call changes nothing.
+	/// </summary>
+	public static List<RunUnlockEntry> Complete(SaveData data, string achievementId)
+	{
+		var granted = new List<RunUnlockEntry>();
+		AchievementDefinition definition = AchievementDefinitions.GetById(achievementId);
+		if (data == null || definition == null)
+		{
+			if (definition == null)
+				Godot.GD.PushError($"AchievementManager: no achievement '{achievementId}' to complete.");
+			return granted;
+		}
+
+		if (!string.IsNullOrWhiteSpace(definition.SiteId))
+			data.Lifetime.RecordEventWon(definition.SiteId);
+		if (!string.IsNullOrWhiteSpace(definition.SecretId))
+			data.RecordSecretFound(definition.SecretId);
+
+		if (UnlockAchievement(data, definition.Id))
+			PayCurrency(data, definition, null);
+		granted.AddRange(GrantUnlocks(data, definition, $"Found during the run: {definition.DisplayName}"));
+		return granted;
+	}
+
+	/// <summary>
+	/// Grants the CURRENT unlock reward of every deed the save has done, where it is not already owned
+	/// (.ai/achievements-and-secrets.md 2.6 and section 3, step 3). Only ever adds, and only unlocks -
+	/// never Arcane Energy, which cannot be checked as already paid. So when a reward moves between deeds
+	/// it reaches the saves that had done the deed with no schema step: Survivor done pays Hollow Star,
+	/// Unwound done pays Fireball, and a reward that moved away stays where it was.
+	/// </summary>
+	/// <returns>Every unlock it granted, unnamed (the migration has no use for names).</returns>
+	public static List<RunUnlockEntry> Reconcile(SaveData data)
+	{
+		var granted = new List<RunUnlockEntry>();
+		if (data == null)
+			return granted;
+		foreach (string achievementId in data.UnlockedAchievementIds.ToList())
+		{
+			AchievementDefinition definition = AchievementDefinitions.GetById(achievementId);
+			if (definition != null)
+				granted.AddRange(GrantUnlocks(data, definition, $"Unlock completed: {definition.DisplayName}"));
+		}
+		return granted;
+	}
+
+	// Each thing a deed carries that the save does not own yet, granted. Unnamed, so the save migration
+	// can run it before any resource is loaded; Named() fills the names for a screen.
+	private static List<RunUnlockEntry> GrantUnlocks(SaveData data, AchievementDefinition definition, string earnedBy)
+	{
+		var granted = new List<RunUnlockEntry>();
+		if (!string.IsNullOrWhiteSpace(definition.SpellUnlockId)
+			&& GlobalStatsManager.UnlockSpell(data, definition.SpellUnlockId))
+			granted.Add(new RunUnlockEntry { Kind = RunUnlockKind.Spell, Id = definition.SpellUnlockId, Name = definition.SpellUnlockId, Source = earnedBy });
+		if (!string.IsNullOrWhiteSpace(definition.BoonUnlockId)
+			&& GlobalStatsManager.UnlockBoon(data, definition.BoonUnlockId))
+			granted.Add(new RunUnlockEntry { Kind = RunUnlockKind.Boon, Id = definition.BoonUnlockId, Name = definition.BoonUnlockId, Source = earnedBy });
+		if (!string.IsNullOrWhiteSpace(definition.CharacterUnlockId)
+			&& GlobalStatsManager.UnlockCharacter(data, definition.CharacterUnlockId))
+			granted.Add(new RunUnlockEntry { Kind = RunUnlockKind.Wizard, Id = definition.CharacterUnlockId, Name = definition.CharacterUnlockId, Source = earnedBy });
+		return granted;
+	}
+
+	private static void PayCurrency(SaveData data, AchievementDefinition definition, RunUnlockSummary summary)
+	{
+		if (definition.CurrencyReward <= 0)
+			return;
+		data.TotalCurrency += definition.CurrencyReward;
+		if (summary != null)
+			summary.CurrencyAwarded += definition.CurrencyReward;
+	}
+
+	// Into the results screen's lists. Boons are reported in the same list as spells: to the player they
+	// are the same kind of thing - something new they can be offered.
+	private static void AddToSummary(RunUnlockSummary summary, List<RunUnlockEntry> granted)
+	{
+		foreach (RunUnlockEntry entry in Named(granted))
+		{
+			(entry.Kind == RunUnlockKind.Wizard ? summary.WizardNames : summary.SpellNames).Add(entry.Name);
+			summary.Entries.Add(entry);
+		}
+	}
+
+	/// <summary>The same entries with the names a player reads: "Unlocked Meteor Swarm", not "meteor_swarm".</summary>
+	public static List<RunUnlockEntry> Named(List<RunUnlockEntry> entries) =>
+		entries.Select(e => new RunUnlockEntry
+		{
+			Kind = e.Kind,
+			Id = e.Id,
+			Name = e.Kind switch
+			{
+				RunUnlockKind.Spell => SpellDisplayName(e.Id),
+				RunUnlockKind.Boon => BoonCatalog.GetById(e.Id)?.Name ?? e.Id,
+				RunUnlockKind.Wizard => CharacterDisplayName(e.Id),
+				_ => e.Name,
+			},
+			Source = e.Source,
+			SpellId = e.SpellId,
+			IconPath = e.IconPath,
+			Currency = e.Currency,
+		}).ToList();
 
 	private static bool UnlockAchievement(SaveData data, string achievementId)
 	{

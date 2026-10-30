@@ -43,7 +43,9 @@ line in the order (section 9, decision 1).
 \* While the two new chapters are not playable, Elderbark opens the Sunken Cave.
 
 The Emberdeep is still gated on **every spell recovered and every wizard freed**, not on a boss,
-and is still last. The Sketchbook is still outside the campaign: open from the first run, in no
+and is still last. (Since schema 19 it is a gate chapter instead, `StageGate.PreviousBossAndWizards`:
+the Long Coil beaten and every wizard whose rescue comes before it - `.ai/achievements-and-secrets.md`
+2.5 and section 11.) The Sketchbook is still outside the campaign: open from the first run, in no
 order, gating nothing. The table mean is the spawn table's shares times their health multipliers
 (the Forest's wolves and wisps included), the measure `.ai/run-pacing.md` section 10.1 uses.
 
@@ -137,7 +139,9 @@ A boss-gated chapter is earned by any one of three things, and each only ever ad
    old order wrote down.
 
 `IsStageAvailable` is `IsPlayable && IsStageEarned`. The finale stays `CampaignComplete` (every spell
-recovered and every wizard freed, live); the Sketchbook stays `Open`.
+recovered and every wizard freed, live); the Sketchbook stays `Open`. **Since schema 19** the finale is
+`PreviousBossAndWizards`: rules 1 and 2 as above, and in place of rule 3 its previous boss beaten AND
+every wizard whose rescue comes before it (`GlobalStatsManager.IsGateMet`).
 
 ### Stand-ins, so Phase 2 creates files rather than editing shared ones
 
