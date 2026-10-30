@@ -731,6 +731,19 @@ reads at the bottom on the phone.
 | R4 | The Statue's Eye | planned | mid | strike | a gem eye | a flask |
 | R5 | **The Lecture Hall** | **new** | mid | **cull** 25 inside a ring of broken stone benches | the benches face an empty lectern | 60 s of +15% damage; page |
 
+**R1 built (2026-10-30, `wip/vaults-b`):** `BrokenWard.cs`, art `tools/art/secret_ruins.py` (the stones in
+the heath's granite family, pale enough to stand off the ruins' stone floor). Five solid stones on a
+190 px circle round a flat heart-stone with the glint in its cup; the ring's turn and the order of the
+notch counts round it are the seed's, and `LayOut` turns the ring until every stone stands on open
+ground, so the ruins' walls (`wip/variety-walls`, not merged when this was built) can never take one. He
+touches a stone by walking up to it (50 px); a wrong one sends the notches to embers and resets. The
+fifth raises the ward for 30 s: a wall of Light's ramp on a 214 px circle (drawn and tested as one
+circle) that throws whatever has its feet inside back out by `ApplyKnockback`; then it breaks and the
+light goes to him. It breaks at once if the boss comes. Walked on seed 4242, fresh save, all pass: the
+wrong-stone resets, the sequence, three bodies inside thrown out, a pack of fourteen held at 213 px for
+6 s. Needs eyes: whether the notch counts read at a glance in a crowd on the phone, and whether thirty
+seconds of sanctuary is too much late in a run.
+
 ### 8.8 Frozen Waste (`stage_5`) - event: the thaw (fight near)
 
 No *strike* here: it is the thaw's.
