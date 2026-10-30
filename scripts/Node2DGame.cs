@@ -3820,13 +3820,12 @@ public partial class Node2DGame : Node2D
 		title.AddThemeColorOverride("font_color", PauseInk.Heading);
 		row.AddChild(title);
 
-		StageDefinition stage = StageCatalog.GetByIndex(Global.SelectedStageIdx);
 		CharacterData character = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
-		string chapter = stage == null || string.IsNullOrWhiteSpace(stage.DisplayName)
-			? $"Chapter {Global.SelectedStageIdx + 1}"
-			: $"Chapter {Global.SelectedStageIdx + 1}  ·  {stage.DisplayName}";
-		Label where = CodexRows.MakeText(character == null ? chapter : $"{chapter}\n{character.Name}",
-			ResponsiveLayout.TextRole.Label, PauseInk.InkSoft);
+		string chapter = DescribePauseChapter(StageCatalog.GetByIndex(Global.SelectedStageIdx));
+		string whereText = character == null ? chapter
+			: string.IsNullOrEmpty(chapter) ? character.Name
+			: $"{chapter}\n{character.Name}";
+		Label where = CodexRows.MakeText(whereText, ResponsiveLayout.TextRole.Label, PauseInk.InkSoft);
 		where.Name = "EscapeWhere";
 		where.HorizontalAlignment = HorizontalAlignment.Right;
 		where.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -3835,6 +3834,26 @@ public partial class Node2DGame : Node2D
 		where.AutowrapMode = narrow ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
 		row.AddChild(where);
 		return band;
+	}
+
+	// The chapter's place in the campaign, not its stage index: since the reorder (.ai/campaign.md)
+	// stage_9 is the second chapter played, and numbering it by index called the Fallow Fields
+	// "Chapter 10". Said the way the world map's card says it - a chapter outside the campaign (the
+	// Sketchbook) has no number and goes by its name alone - and a Boss Rush, which is fought in a
+	// chapter (BossRushCatalog.Arena) but is not one, is called what it is.
+	private string DescribePauseChapter(StageDefinition stage)
+	{
+		if (IsBossRush)
+			return "Boss Rush";
+		if (stage == null)
+			return string.Empty;
+		int position = StageCatalog.CampaignPositionOf(stage.Id);
+		string name = stage.DisplayName ?? string.Empty;
+		if (position < 0)
+			return name;
+		return string.IsNullOrWhiteSpace(name)
+			? $"Chapter {position + 1}"
+			: $"Chapter {position + 1}  ·  {name}";
 	}
 
 	// Every button on the pause screen takes focus. They used to refuse it, so that EscapeRoot could
