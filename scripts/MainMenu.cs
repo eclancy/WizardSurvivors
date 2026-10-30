@@ -670,7 +670,6 @@ public partial class MainMenu : Control
 	{
 		int total = 0;
 		float nextRunPreview = 1.0f;
-		int defeatStreak = 0;
 		int victoryStreak = 0;
 		string presetName = "Default";
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
@@ -678,15 +677,12 @@ public partial class MainMenu : Control
 		{
 			total = saveManager.Data.TotalCurrency;
 			nextRunPreview = GlobalStatsManager.GetNextRunArcanePreviewMultiplier(saveManager.Data);
-			defeatStreak = GlobalStatsManager.GetConsecutiveOutcomeCount(saveManager.Data, "Defeat");
 			victoryStreak = GlobalStatsManager.GetConsecutiveOutcomeCount(saveManager.Data, "Victory");
 			presetName = GlobalStatsManager.GetBalancePresetDisplayName(saveManager.Data.BalancePresetId);
 			nextRunPreview *= GlobalStatsManager.GetArcaneRewardScaleForPreset(saveManager.Data.BalancePresetId);
 		}
 
-		string streakTag = defeatStreak > 0
-			? $"Pity streak {defeatStreak}"
-			: victoryStreak > 1 ? $"Momentum streak {victoryStreak}" : "Steady";
+		string streakTag = victoryStreak > 1 ? $"Momentum streak {victoryStreak}" : "Steady";
 
 		// Both purses, every time: this runs after a purchase too (TryPurchaseUpgrade), which is the
 		// moment the shop's header has to drop, and after a reset.

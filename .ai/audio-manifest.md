@@ -5,6 +5,16 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
+**2026-10-30: 84 files, three of them not yet played.** The secret stings (piece A14 of
+`.ai/achievements-and-secrets.md`): `secret_seen`, `secret_found` and `secret_shatter`, generated,
+allowlisted in `SfxCatalog` and **not wired** - the secret agents build the sites that play them.
+Each is in the table under "Secrets" below with the trigger site proposed for it; `SfxPlayer` will
+report `84 sounds preloaded`. Also on 2026-10-30, three castle sets were rendered for the music
+(the Last Bridge, the Court, the Throne; "The castle's music" at the end) and are not yet in
+`MusicCatalog`. And the generators now run under Python 3 (the container has only 3.13) as well as
+2.7, writing the same bytes under either: all 81 earlier effects and the heath's three stems
+re-rendered byte-identical under 3.13 (`.ai/audio-direction.md` section 3).
+
 **2026-10-25: 81 files.** `spell_stormsweep` and `spell_sleet_rune` were added and wired for the facing family
 (`.ai/spell-roster.md` "The facing family"); `SfxPlayer` reports `81 sounds preloaded`. Each REPLACES
 its spell's element cast cue rather than sitting on it (both spells return `CastOutcome.Maintained`):
@@ -287,6 +297,65 @@ way. Tier Normal: they never duck anything. The caption carries the words; these
 | one strike and its tail | `ui_pause` | 0.084 | five nearly level strikes - a rhythm, not a decay |
 | the cry at G4 | `meta_unlock` | 0.104 | raised to B-flat 4 rising to C-sharp 5, called rather than spoken - out of the A-minor chord's partials |
 
+## Secrets
+
+The secrets of `.ai/stage-secrets.md` and `.ai/achievements-and-secrets.md`: the soft shimmer and
+the found sting section 7.7 of the first asked for, and the Geode Heart's shatter (8.4.1 of the
+second). Generated 2026-10-30 (`tools/audio/sfx.py`, "secrets"), allowlisted in `SfxCatalog`
+(`SecretSeen`, `SecretFound`, `SecretShatter`) and **not yet played anywhere**: every Trigger below
+is a proposal for the agents building `SecretDirector` (A4) and the Sunken Cave's secrets (A5-A13).
+
+They are the near tell in sound. A secret's tell is a warm glint that breathes (stage-secrets
+section 2), so the shimmer and the sting are a cloud of soft sine grains - each a Hann swell, the
+cloud swelling and going - in A minor's pentatonic from A4 to E6, never on G5 (the light element's
+bell). Breathed, never struck: every other reward in the game is a struck bell, and a secret must not
+sound like one. Nothing in them opens on `palette.transient`, because nothing here is a spell.
+
+| File | Length | Peak | Tier | Trigger (proposed) |
+|---|---|---|---|---|
+| `secret_seen.wav` | 2.05 s | -9.0 dBFS | Normal | `SecretDirector`, the moment a secret's near tell is first on screen - the seen mark, recorded into `SaveData.GlimpsedSecretIds` (achievements-and-secrets 4.3, 4.9): **`SfxPlayer.AtPosition(name, site)`**, once per secret per save, with no toast and no text. At the site, not global: the tell is already on screen, so the pan points at nothing he has not seen, and at the ~450 px the mark is taken from Godot's attenuation takes another 5-6 dB off, which is what makes -9 "soft". If stage-secrets 7.7's reading is wanted instead (every approach to a dormant site, every run), it still fits the band: a few a run |
+| `secret_found.wav` | 1.74 s | -8.0 dBFS | Normal | `SecretDirector.Found`, **in place of `event_reward`** at both of its sites there (a secret found again this run - another pen blooming - and a find in a later run). `meta_unlock` stays where it is for a find that changes the save (the page mark the first time; a vault's spell): it is the one sound that means the save changed. `event_reward` then goes back to meaning a side event's chest. Global, under the toast. A few a run - every Forest pen blooms - so beside `event_reward` |
+| `secret_shatter.wav` | 2.30 s | -4.0 dBFS | **Critical** | the Geode Heart's `Breakable` reaching its last stage (the Sunken Cave's vault, C2), as the ring of frost goes out: `SfxPlayer.AtPosition(name, crystal)`. Once a run at most. Then `SecretDirector.Found` plays its own sting a beat later (`meta_unlock` the first time, with Frost Shard; `secret_found` after), so the shatter carries the breaking and the freeze and leaves the reward to that |
+
+What each is:
+
+- **`secret_seen`** - one breath of the glint: twenty-six grains thickening over 0.7 s and thinning
+  over the next second, under a faint band of air of the same shape. Not a tremolo (arcane's 17 Hz),
+  not detuned triangles (arcane), not a run of glints (`spell_starfall` falls in 60 ms), not a swell
+  into a held tone (`event_reward`). Centroid 1.07 kHz, hf 0%.
+- **`secret_found`** - the glint, now his: the cloud **gathers** for 0.4 s (its first grain on the
+  frame he finds it) and **blooms** into a rolled F major seventh (F3 F4 C5 E5 A5, 18 ms apart), a
+  sine and a soft triangle per voice under a lowpass that opens as it sounds, with three grains
+  settling over it. Centroid 670 Hz, hf 0%. Warm and on purpose no brighter: spread up to E6 it
+  measured 0.112 from `player_heal` and 0.121 from `card_select`, and a Fenced Bloom heals as it is
+  found, so this and `player_heal` play together.
+- **`secret_shatter`** - two strain ticks 85 ms apart (the hairline cracks giving); the crack, a band
+  of noise over a low split falling 190 to 92 Hz (nothing under 80: the sub band is the explosion's
+  and the boss's); forty crystal shards going out, dense at the crack and thinning, falling in pitch
+  as they fly farther, each two inharmonic partials at 1 : 2.43 - not the ice element's
+  1 : 2.76 : 5.40 stack; a cold rush falling 2.2 kHz to 500 Hz (frost spreading - the ice element's
+  hiss rises); all in a long cavern. Driven for weight, lowpassed after the drive. Centroid 2.0 kHz,
+  hf 6%. It is Critical because it is a vault opening in the thick of the fight the crystal asked
+  for, where a Normal sound can lose its voice to the swarm; that makes eleven Critical sounds of
+  the fourteen `RegressionChecks` allows.
+
+**The audit.** `analyse.py --confuse` compares inside a category, and these three are a category of
+their own (`secret`) - so each was also measured against the **whole** set with the same profile.
+Nearest neighbours: `secret_seen` 0.175 `hint_cell_cry`, 0.231 `hint_lantern_flare`;
+`secret_found` 0.146 `wave_warning`, 0.152 `card_select`, 0.168 `hint_caravan_bell`, 0.192
+`player_heal`; `secret_shatter` 0.155 `cast_wind`, 0.160 `card_appear`, 0.203 `spell_beam_end`. The
+other glass breaking in the set, `player_shield_break` - one struck stack in 0.65 s where this is a
+cascade over a second and a half - is not among its nearest six. Nothing within 0.14 of anything;
+inside their own category the closest pair is `secret_seen` / `secret_found` at 0.415, and the full
+`analyse.py --confuse` still reports **0 confusable pairs**.
+
+| First draft | Measured | Fix |
+|---|---|---|
+| the found bloom voiced close from F3 at full weight | centroid 570 Hz, in the band the music owns | the low F softened (0.45) |
+| the found bloom spread up to E6 for brightness | 0.112 from `player_heal`, 0.121 from `card_select` | back to F3-A5; warm, not bright |
+| the found cloud starting from a near-silent density | the first 150 ms silent: a sting that answers late | its first grain placed on the frame he finds it |
+| the shatter's strain ticks at a third of the crack | 30 dB under the peak, inaudible | raised to about 20 dB under |
+
 ## Deliberately absent
 
 Listed so nobody adds them by reflex:
@@ -380,6 +449,68 @@ full tables.
   as the old Forest did. `player_hurt` stays 17-23 dB over it everywhere.
 - **Inside each stem:** `music.py --balance` prints every voice's level; no ostinato is more than
   7 dB under its bed, no snare or tek more than 22 dB under its pulse.
+
+### The castle's music (2026-10-30: rendered, not yet wired)
+
+Piece C7 of `.ai/endgame-castle.md`: a set for each of the three new castle chapters, scored in its
+own `tools/audio/music_<chapter>.py` (which `music.py` picks up by name) and rendered once into
+`assets/music/`. The Cursed Dungeon, which moves into the castle, keeps its own set. Section 11 of
+`.ai/audio-direction.md` has their rows in the chapter table and the rule they change (the Court and
+the Throne take up his G sharp and B flat). **Nobody has heard them.**
+
+| Files | Chapter | What it is | Length | RMS |
+|---|---|---|---|---|
+| `bridge_bed/pulse/lead.wav` | The Last Bridge, `stage_11` | a march under wind: A Aeolian, 2/4 at 120; low strings on the march figure under long low gusts (bed), a side drum, bass drum and oom-pah (pulse), horns in octaves then fifes (lead) | 24.00 s | -33 / -34 / -35 |
+| `court_bed/pulse/lead.wav` | The Court, `stage_12` | a court dance with no dancers: an A minor minuet in 3/4 at 112; viols and a harpsichord's continuo (bed), a theorbo's bass, pah-pah and a tambour playing the minuet step's hemiola - the dancers' feet, with nobody dancing (pulse), recorder then viol (lead) | 25.71 s | -33 / -34 / -35 |
+| `throne_bed/pulse/lead.wav` | The Throne, `stage_13` | the heaviest piece: A minor with B flat and G sharp, 4/4 at 104 in half time, a lament bass to E2; choir, strings, a brass pedal and a slow tread (bed), taiko, snare, square bass and a sixteenth-note motor (pulse), low brass then a chant (lead) | 27.69 s | -33 / -34 / -35 |
+
+All nine are 22050 Hz mono 16-bit, 9.8 MB of WAV (about 2 MB in an export as QOA), each `.import`
+written before the first import with `edit/loop_mode=2` (Forward) and `compress/mode=2`.
+
+**Where they are wired, and by whom:**
+
+- **`MusicCatalog`: the castle's plumbing agent (C0).** Three planned sets with the Emberdeep's as
+  their stand-in, under these ids - `PlannedChapter("bridge", Emberdeep)`, `("court", ...)`,
+  `("throne", ...)` - and rows `[11]`, `[12]`, `[13]` in `PerStage`. A planned set switches itself
+  on when its bed is imported, so the moment C0's rows land these play; `ValidateMusic` checks the
+  three stems are the same length (they are, to the sample) and loop.
+- **The Last Bridge and the Court play as every chapter does** (`Node2DGame.PlayRunMusic`, the
+  pulse and lead thresholds, the shared boss loop for the Constable and the Seneschal). Nothing more.
+- **The Throne does not.** Whoever builds `ThroneRules` (C4) and the dark wizard (C5) between them:
+  the set plays from the Muster on and **never hands over to the boss loop** - the whole chapter is
+  the fight - so the Throne should not call `PlayBossMusic` (its `MusicSet.Boss` can stay the shared
+  loop for `ValidateMusic`; it is simply never asked for). Bed alone under the Muster's level-ups
+  (paused; the music runs in real time), the pulse and lead by the usual rule through the procession
+  (the pinned pace clock keeps the lead up), all three for his first phase. **His second phase drops
+  the pulse: `MusicPlayer.SetLayerTargets(pulse: 0, lead: 1)` when phase 2 begins** - the 8 s
+  layer fade-out is the right speed for "the hall goes dark" - held against `Node2DGame.UpdateRunMusic`,
+  which re-sets the layers every quarter second and would otherwise bring the pulse straight back;
+  **phase 3 restores it** (`SetLayerTargets(1, 1)`, in over 4 s). His fall fades everything as a
+  boss's does. No phase-2 file exists or is needed: every bit of the piece's drive is in the pulse,
+  so the bed and lead are complete without it. `music.py --journey` writes
+  `tools/audio/_music_preview/throne_journey.wav`: bed, pulse in, lead in, pulse out over 8 s, back
+  over 4 s, the end - the switch, to listen to before it is built.
+
+**Measured** (the same checks as every chapter; the scratch renders are byte-identical to the
+committed files):
+
+- **Seams** (`music.py --report`): step 0.00-0.24 and click 0.00-0.80 of each loop's own body, every
+  bed and pulse within 2.3 dB of its median second at the wrap, the leads -3.0 to -3.4 dB there
+  because each rests before it. The bridge's pulse is the clickiest seam in the set at 0.80: a side
+  drum roll lands on the downbeat across it, which is the music, not a discontinuity (step 0.11).
+- **Budget** (`analyse.py --music`): 0% under 80 Hz and above 5 kHz in all nine, at most 1% in the
+  2-5 kHz band, hf at most 1%. Beds 51-70% mid band, leads 59-100% mid (the Throne's is 41% low, its
+  brass doubled an octave down), pulses 65-85% low.
+- **Under the effects** (`mixsim.py --music --policy tiered --sets bridge,court,throne`): a median
+  cast +14.8 to +15.2 dB over a bed, +12.0 to +12.3 over bed and pulse, +7.5 to +8.3 over all three;
+  `player_hurt` +16.3 to +21.7 dB over the music; the worst critical in the late game is still
+  `elite_spawn` (-6.6 to -7.4 dB), the known redraw. The Throne, the heaviest, is the edge of the
+  set: a late cast 0.4 dB nearer its music and `player_hurt` about a dB nearer than any road
+  chapter's - still 16 dB clear. The Court's worst-tenth cast over bed and pulse (+6.8 dB) is the
+  lowest of any chapter's (the road's are +7.4 to +8.7).
+- **Inside each stem** (`--balance`): the bridge's gusts 7.5 dB under its bed and its side drum
+  6.7 under its pulse; the Court's tambour 6.1 under its pulse; the Throne's tread 7.0 under its
+  bed, its motor 6.7 and its snare 13.4 under its pulse.
 
 ### Known limitations
 
