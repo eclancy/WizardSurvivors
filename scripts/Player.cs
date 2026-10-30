@@ -175,6 +175,8 @@ public partial class Player : CharacterBody2D
 	// with no chance to react. While this is > 0 the player ignores all incoming damage.
 	[Export] public float PostMenuInvincibilitySeconds { get; set; } = 2.0f;
 	private float invincibilityTimeRemaining = 0f;
+	// How much longer he is drawn white: only a grace that asked for it (GrantInvincibility's whiten).
+	private float whiteTimeRemaining = 0f;
 	private static readonly Shader InvincibilityShader =
 		ResourceLoader.Load<Shader>("res://scenes/shaders/invincibility_white.gdshader");
 	private ShaderMaterial? invincibilityMaterial;
@@ -2279,14 +2281,24 @@ public partial class Player : CharacterBody2D
 		earthMaxHpBonusApplied = currentBonus;
 	}
 
-	// Starts (or extends) the post-menu grace period. Never shortens an active one, so closing a
-	// chest menu immediately after a level-up cannot cut the first window short.
-	public void GrantInvincibility(float seconds)
+	// Starts (or extends) a grace period. Never shortens an active one, so closing a chest menu
+	// immediately after a level-up cannot cut the first window short.
+	//
+	// whiten: whether he is drawn flat white while it lasts. Not after a pick (Eric, 2026-10-30: "when
+	// the player selects a spell from level up / item from a chest and is invulnerable for a second,
+	// remove the white coloring from the player") - the grace after a menu is a courtesy, not an event,
+	// and a white figure on every pick read as something happening to him. The boss's fall still
+	// whitens him: there it says the fight is over and nothing can touch him. The white has its own
+	// clock, so a quiet grace that outlasts a white one does not keep him white.
+	public void GrantInvincibility(float seconds, bool whiten = true)
 	{
 		if (IsDead || seconds <= 0f)
 			return;
 
 		invincibilityTimeRemaining = Mathf.Max(invincibilityTimeRemaining, seconds);
+		if (!whiten)
+			return;
+		whiteTimeRemaining = Mathf.Max(whiteTimeRemaining, seconds);
 		SetInvincibilityVisual(true);
 	}
 
@@ -2294,11 +2306,13 @@ public partial class Player : CharacterBody2D
 
 	private void TickInvincibility(float delta)
 	{
-		if (invincibilityTimeRemaining <= 0f)
+		if (invincibilityTimeRemaining > 0f)
+			invincibilityTimeRemaining = Mathf.Max(0f, invincibilityTimeRemaining - delta);
+		if (whiteTimeRemaining <= 0f)
 			return;
 
-		invincibilityTimeRemaining = Mathf.Max(0f, invincibilityTimeRemaining - delta);
-		if (invincibilityTimeRemaining <= 0f)
+		whiteTimeRemaining = Mathf.Max(0f, whiteTimeRemaining - delta);
+		if (whiteTimeRemaining <= 0f)
 			SetInvincibilityVisual(false);
 	}
 
