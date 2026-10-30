@@ -413,6 +413,10 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		GlobalPosition = Vector2.Zero;
 		// The effects: over the bodies, as ImpactDebrisLayer is; under the HUD.
 		fx = new Node2D { Name = "FamiliarFx", ZAsRelative = false, ZIndex = DrawLayers.Air, YSortEnabled = false };
+		// The pixel-art pass (2026-10-29): the motes, jaws, claws and pecks faded with alpha, translucent
+		// over the bodies they bit; through SpellInk's dither the same alpha is the share of their pixels
+		// drawn, each opaque. (This node stands on the world origin, so their cells are the world's.)
+		fx.Material = SpellInk.DitherByCell;
 		AddChild(fx);
 		fx.Draw += DrawFx;
 	}
@@ -602,6 +606,9 @@ public partial class Familiar : Node2D, IPaintsElementPath
 				Name = "Hound",
 				Scale = new Vector2(2f, 2f),
 				TextureFilter = TextureFilterEnum.Nearest,
+				// A blink fades the creature out and in (its modulate's alpha, _Process): through the
+				// dither it loses and regains whole art pixels instead of going translucent.
+				Material = SpellInk.DitherByTexel,
 			},
 		};
 		Vector2 at = PlayerRef != null ? FreeHeelSpot(hounds.Count, MazeNavigation.Active) : Vector2.Zero;
