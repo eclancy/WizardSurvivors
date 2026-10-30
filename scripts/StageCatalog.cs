@@ -51,6 +51,13 @@ public sealed class StageDefinition
 	public string LockedHint => StageCatalog.LockedHintFor(this);
 	/// <summary>False while a chapter has no boss or content yet - it is listed, but not enterable.</summary>
 	public bool IsPlayable { get; init; } = true;
+	/// <summary>
+	/// A chapter outside the campaign that is reached only once the campaign is finished
+	/// (<see cref="GlobalStatsManager.HasFinishedCampaign"/>): off the world map, on a page of its own
+	/// (.ai/world-map.md, section 4). The Sketchbook. Its <see cref="Gate"/> stays Open - nothing in
+	/// the road opens it - and <see cref="GlobalStatsManager.IsStageEarned"/> adds this rule.
+	/// </summary>
+	public bool AfterCampaign { get; init; }
 }
 
 /// <summary>
@@ -156,8 +163,11 @@ public static class StageCatalog
 			Gate = StageGate.PreviousBossAndWizards,
 		},
 		// THE ONE CHAPTER OUTSIDE THE CAMPAIGN, and the reason the roster is a list rather than
-		// a fixed eight. It is open from the first run and gates nothing, so it can sit after the
-		// finale in the roster without implying it comes after it in the story.
+		// a fixed eight. It gates nothing, so it can sit after the finale in the roster without
+		// implying it comes after it in the story. It was open from the first run; since 2026-10-30
+		// it is reached once the campaign is finished, on its own page off the world map (Eric:
+		// "Once you beat the whole campaign, you should be able to navigate to it, but it shows up as
+		// its own separate map"). A save that has already played it keeps it (IsStageEarned).
 		//
 		// Every sprite in it - eight enemies, a boss and its projectile - was drawn by Eric's
 		// kids. It has no CorruptionText because there is nothing here the dark wizard did: the
@@ -170,6 +180,7 @@ public static class StageCatalog
 			FlavorText = "A world drawn in a workbook, loose.",
 			EnvironmentKind = StageEnvironmentKind.Sketchbook,
 			Gate = StageGate.Open,
+			AfterCampaign = true,
 		},
 		// THE TWO CHAPTERS THAT OPEN EARLY (.ai/campaign.md). Eric, 2026-10-24: "cursed dungeon
 		// should be a later level. there should be another few levels that open up earlier." They
@@ -326,6 +337,21 @@ public static class StageCatalog
 	public static StageDefinition FinalChapter => Campaign.Count > 0 ? Campaign[Campaign.Count - 1] : null;
 
 	/// <summary>
+	/// The last chapter of the campaign that can be played: its boss beaten is the campaign finished
+	/// (<see cref="GlobalStatsManager.HasFinishedCampaign"/>). The Emberdeep today; the Throne once the
+	/// castle is built. Not <see cref="FinalChapter"/>, which names the Throne already, unbuilt.
+	/// </summary>
+	public static StageDefinition LastPlayableChapter => Campaign.LastOrDefault(s => s.IsPlayable);
+
+	/// <summary>
+	/// Open from a new save's first run: gated Open and not held back until the campaign is finished
+	/// (<see cref="StageDefinition.AfterCampaign"/>). What the gate validators mean by "reachable before
+	/// any gate" for a chapter outside the campaign.
+	/// </summary>
+	public static bool IsOpenFromStart(StageDefinition stage) =>
+		stage != null && stage.Gate == StageGate.Open && !stage.AfterCampaign;
+
+	/// <summary>
 	/// The first gate chapter in the campaign (<see cref="StageGate.PreviousBossAndWizards"/>): the
 	/// Emberdeep. "The road" is everything before it. Not <see cref="FinalChapter"/>, which stays "last"
 	/// once the castle's chapters come after the gate (.ai/endgame-castle.md 1.9).
@@ -389,6 +415,8 @@ public static class StageCatalog
 			return string.Empty;
 		if (!stage.IsPlayable)
 			return "Not yet open - this chapter is still being built";
+		if (stage.AfterCampaign)
+			return "Beyond the map - finish the campaign to find it";
 
 		switch (stage.Gate)
 		{

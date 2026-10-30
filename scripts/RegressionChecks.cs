@@ -500,9 +500,9 @@ public static class RegressionChecks
 	// THE WORLD MAP'S GEOMETRY is generated (tools/art/world_map.py -> worldmap.json), so a chapter
 	// added to StageCatalog is on no map until somebody places it - and the screen would quietly leave
 	// it out. Every chapter and the Boss Rush must have a stop; the road must visit the campaign in its
-	// order, the seat after the last chapter, and the chapters outside the campaign after everything;
-	// the Sketchbook lies off the world picture (.ai/world-map.md, section 4); and every picture the
-	// screen draws must exist.
+	// order and the seat after the last chapter; a chapter held until the campaign is finished (the
+	// Sketchbook) is on its own page and never on the road (.ai/world-map.md, section 4); and every
+	// picture the screen draws must exist.
 	private static void ValidateWorldMap(List<string> warnings)
 	{
 		WorldMapLayout map = WorldMapLayout.Load(out string problem);
@@ -515,10 +515,11 @@ public static class RegressionChecks
 		// is its own piece (C8), and drawing the castle waits on the Dungeon's move. Its missing stop is
 		// then an item on that chapter's campaign to-do line (ValidateCampaignToDo), and the screen leaves
 		// it out quietly (WorldMap.BuildStops). A PLAYABLE chapter with no stop is a fault, as always, so
-		// none can flip with its place undrawn.
+		// none can flip with its place undrawn - except one held until the campaign is finished, whose
+		// place is the page.
 		foreach (StageDefinition stage in StageCatalog.All)
 		{
-			if (map.Get(stage.Id) == null && stage.IsPlayable)
+			if (map.Get(stage.Id) == null && stage.IsPlayable && !stage.AfterCampaign)
 				warnings.Add($"World map: {stage.DisplayName} ({stage.Id}) has no place on the map - add it to PLACES in tools/art/world_map.py and draw its landmark.");
 		}
 		WorldMapStop rush = map.Get(WorldMapLayout.BossRushId);
@@ -543,12 +544,25 @@ public static class RegressionChecks
 		foreach (StageDefinition stage in StageCatalog.All.Where(s => !StageCatalog.IsInCampaign(s)))
 		{
 			WorldMapStop stop = map.Get(stage.Id);
-			if (stop == null)
+			// Eric, 2026-10-30: "sketchbook level should not be attached to the map ... it shows up as its
+			// own separate map". A stop for it would put it back in the road's flow and on the compass.
+			if (stage.AfterCampaign)
+			{
+				if (stop != null)
+					warnings.Add($"World map: {stage.DisplayName} is held until the campaign is finished and belongs on its own page, but it stands on the road (remove it from PLACES in tools/art/world_map.py).");
 				continue;
-			if (stop.ArcLength <= beyond)
+			}
+			if (stop != null && stop.ArcLength <= beyond)
 				warnings.Add($"World map: {stage.DisplayName} is outside the campaign but the road reaches it before the campaign's end.");
-			if (stop.OnMap)
-				warnings.Add($"World map: {stage.DisplayName} is outside the campaign and must lie off the world picture.");
+		}
+
+		// The page: its sheet drawn, the wizard's stand on the paper, the kids' drawings on the sheet.
+		if (StageCatalog.All.Any(s => s.AfterCampaign && s.IsPlayable))
+		{
+			if (string.IsNullOrEmpty(map.PageImage) || map.PageSize.X <= 0f || map.PageSize.Y <= 0f)
+				warnings.Add("World map: a chapter is held for the page, but worldmap.json has no page to show it on.");
+			else if (!map.PageRect.HasPoint(map.PageStand))
+				warnings.Add($"World map: the wizard's stand on the page ({map.PageStand}) is off the paper ({map.PageRect}).");
 		}
 
 		var pictures = new List<string> { "world.png", map.PageImage, "ring-open.png", "ring-locked.png", "ring-current.png",
@@ -565,10 +579,12 @@ public static class RegressionChecks
 			if (!ResourceLoader.Exists(WorldMapLayout.Directory + picture))
 				warnings.Add($"World map: {WorldMapLayout.Directory + picture} is missing or not imported.");
 		}
-		foreach (var (texture, _) in map.PageDrawings)
+		foreach (var (texture, at) in map.PageDrawings)
 		{
 			if (!ResourceLoader.Exists(texture))
 				warnings.Add($"World map: the page's drawing {texture} is missing.");
+			else if (!map.PageRect.HasPoint(at))
+				warnings.Add($"World map: the page's drawing {texture} is placed off the paper, at {at}.");
 		}
 	}
 
@@ -2077,6 +2093,10 @@ public static class RegressionChecks
 				warnings.Add($"Campaign: {stage.DisplayName} ({stage.Id}) is outside the order but gated {stage.Gate}, so nothing could ever open it.");
 			if (inCampaign && stage.Gate == StageGate.Open && StageCatalog.CampaignPositionOf(stage.Id) > 0)
 				warnings.Add($"Campaign: {stage.DisplayName} is in the middle of the order but always open, so the chapters before it gate nothing.");
+			// Reached once the campaign is finished (the Sketchbook's page, .ai/world-map.md section 4): it
+			// must stand outside the road, or the road would have to be finished to walk it.
+			if (stage.AfterCampaign && (inCampaign || stage.Gate != StageGate.Open))
+				warnings.Add($"Campaign: {stage.DisplayName} is held until the campaign is finished, so it must be outside the order and gated Open.");
 		}
 
 		for (int i = 0; i < campaign.Count; i++)
@@ -2403,7 +2423,7 @@ public static class RegressionChecks
 				if (string.IsNullOrWhiteSpace(stageId))
 					return true;
 				int position = StageCatalog.CampaignPositionOf(stageId);
-				return position < 0 ? StageCatalog.GetById(stageId)?.Gate == StageGate.Open : position < gatePosition;
+				return position < 0 ? StageCatalog.IsOpenFromStart(StageCatalog.GetById(stageId)) : position < gatePosition;
 			}
 
 			// On paper.
@@ -4348,7 +4368,7 @@ public static class RegressionChecks
 		StageDefinition gate = StageCatalog.GateChapter;
 		int position = StageCatalog.CampaignPositionOf(stageId);
 		if (position < 0)
-			return StageCatalog.GetById(stageId)?.Gate == StageGate.Open;
+			return StageCatalog.IsOpenFromStart(StageCatalog.GetById(stageId));
 		return gate == null || position < StageCatalog.CampaignPositionOf(gate.Id);
 	}
 
@@ -5143,11 +5163,11 @@ public static class RegressionChecks
 			foreach (StageDefinition gate in StageCatalog.GateChapters)
 			{
 				if (GlobalStatsManager.CountsTowardGate(definition.Id, gate)
-					&& (revealAt < 0 ? stage.Gate != StageGate.Open : revealAt >= StageCatalog.CampaignPositionOf(gate.Id)))
+					&& (revealAt < 0 ? !StageCatalog.IsOpenFromStart(stage) : revealAt >= StageCatalog.CampaignPositionOf(gate.Id)))
 					warnings.Add($"Secret '{definition.Id}' is counted by {gate.DisplayName}'s gate but revealed by '{stage.DisplayName}', which is not before it - he would stay sealed until after he was needed.");
 			}
 		}
-		if (GlobalStatsManager.IsCharacterRevealed(new SaveData(), definition.Id) && stage.Gate != StageGate.Open)
+		if (GlobalStatsManager.IsCharacterRevealed(new SaveData(), definition.Id) && !StageCatalog.IsOpenFromStart(stage))
 			warnings.Add($"Secret '{definition.Id}' reads as revealed on a brand-new save although '{stage.DisplayName}' is closed on one; IsCharacterRevealed has stopped honouring the reveal.");
 
 		// A wizard found at a side event is revealed by the chapter that holds him: the place the

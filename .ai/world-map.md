@@ -47,9 +47,10 @@ south between places, so the map is a world rather than a strip, and the camera 
 | 9 | Scorched Sands (`stage_6`) | over the mountain pass, south-east: a dry basin, dunes, the trade road | the rain shadow of the range and the heat of his seat; *"He hid the water"* |
 | 10 | The Emberdeep (`stage_7`) | the far east: black ground, lava, a volcano at the end of the road | *"His seat, and the end of the road."* The one place on the map lit by the `darkness` ramp as emission, at its summit (`world-and-tone.md`: he is the only source of dark light) |
 
-The Emberdeep's summit is where the **Boss Rush** stands (section 5). Past it the land ends at black
-cliffs and a dark sea, and the picture ends at the world's edge. **The Sketchbook is not in the
-world** (section 4).
+The Emberdeep's summit is where the **Boss Rush** stands (section 5). Past it the road runs on down
+to black cliffs and a dark sea - drawn, walked by no one, the tail where the castle across the water
+will join it - and the picture ends at the world's edge. **The Sketchbook is not in the world, nor on
+the road** (section 4).
 
 **Lighting and palette.** Ground from the deep half of each material's ramp, features lit on their
 top and left, `occ` for contact and cliff shadow, no colour outside `bonelight.py`. The places' colours
@@ -117,25 +118,56 @@ whole number of SCREEN pixels per art pixel - x2 on a 1:1 canvas, the nearest wh
 any other window (`.ai/art-direction.md` 6a, `PixelArtRect`'s rule) - and every position is snapped to
 a screen pixel. One pixel size for the world and the wizard on it. No `SubViewport`, no `Camera2D`.
 
-## 4. The Sketchbook: off the map
+## 4. The Sketchbook: its own page, once the campaign is finished
 
-Eric: *"a special final separate level that appears outside the context of this map, but you should be
-able to scroll to it."*
+Eric, 2026-10-29: *"a special final separate level that appears outside the context of this map, but
+you should be able to scroll to it."* And on 2026-10-30, after playing it: *"sketchbook level should
+not be attached to the map, remove it from the map. Once you beat the whole campaign, you should be
+able to navigate to it, but it shows up as its own separate map that doesn't mix in with the flow of
+the actual world map."*
 
-**The last stop is beyond the world's east edge.** The picture of the world ends; past it is the dark
-(`occ`), and across a short gap lies **a loose sheet of squared paper** - a workbook page, generated
-(paper, faint blue ruling, a red margin, a strip of tape; `world_map.py`, never derived from anything
-in `assets/kidsart/`). Its card is the Sketchbook's: *"A world drawn in a workbook, loose."*
+The first build put it as the last stop past the world's east edge, reached by a pencil line off the
+end of the road, and as a page mark at the end of the compass. That is gone. **The Sketchbook is a
+sheet of its own** - not a stop, not on the road, not on the compass:
 
-- **The road goes there as a pencil line.** From the cliff path past the Emberdeep a ruled graphite
-  line runs off the edge of the world, over the gap and onto the page - as if somebody drew a road off
-  the paper into the world. The wizard walks it; nothing about the route model changes.
+- **The page**: a loose sheet of squared paper on the dark - a workbook page, generated (paper, faint
+  blue ruling, a red margin, two strips of tape, a short pencil road in from its torn edge, a pencil
+  lying on it; `world_map.py`'s `page()`, never derived from anything in `assets/kidsart/`). Drawn by
+  `WorldMapPage` in the map's place, at the world's whole-pixel rule (x2 on a 1:1 canvas, a step down
+  if it would not fit), with the selected wizard standing at the end of the pencil road. The card is
+  the same card, for the one stop: *"Beyond the map"*, *"A world drawn in a workbook, loose."*, its
+  warden, what it holds, *"Enter the Sketchbook"*. Nothing walks: there is one place on the page.
+- **How he gets there**: a **Sketchbook** button with the page glyph (`mark-page.png`) at the right end
+  of the top bar, past the compass and apart from it. It is there only once the page is open to the
+  save (below), so it never names a place the player cannot reach. Pressing it turns the screen to the
+  page; on the page, **Back** reads *"Back to the world"* (*"World"* on a phone) and turns back, to the
+  stop he was standing at. B, Escape and Android back do the same; from the world they still leave
+  the map. Each turn reloads `WorldMap.tscn` with `WorldMap.OnPage` set, so a sheet is always built
+  whole. A run started from the page returns to the page (`OnPage` lasts the session).
+- **The pad**: the world's focus stops go round Start, Sketchbook, Back with up and down (up from Start
+  is the button above it); the page's are Start and Back. Left and right do nothing on the page.
+- **When it is open** (`StageDefinition.AfterCampaign`, read by `GlobalStatsManager.IsStageEarned`; its
+  `Gate` stays `Open`, since nothing on the road opens it): **the campaign is finished**
+  (`GlobalStatsManager.HasFinishedCampaign` - the boss of `StageCatalog.LastPlayableChapter`, the
+  Warden of the Deep today, the Throne's once the castle is built), **or the save has already played
+  it** (a best time there: it was open from the first run until now, and nothing a save could enter is
+  ever closed - CLAUDE.md's migration rule, met without a schema step), **or it is in the opened list**.
+  `GlobalStatsManager.RecordFinishedCampaign` writes it there the moment the campaign is finished - at
+  that run's end, where the results screen shows *"The Sketchbook - The road is finished"* as a chapter
+  opened, and quietly whenever the map opens on a save that finished it earlier - so it stays open when
+  the castle's chapters make the campaign longer. **A chapter appended to the end of the campaign does
+  not close the page to anyone who had it.** A save that finished at the Emberdeep and never opens the
+  map again before the castle ships is the one gap; it would see the page again on finishing the castle.
 - **The kids' drawings are on the page as themselves.** The page is mine; what is drawn on it is theirs,
-  shown at runtime from their own imported files (`assets/kidsart/doodle-*.png`, the Wizard Dude),
-  untinted and at a whole scale - never redrawn, recoloured, cropped or derived, and never baked into a
-  generated PNG (the generator does not open their files at all).
-- It is open from the first run (its gate is `Open`) and is in no order: in the compass it sits apart
-  from the campaign's marks, past a break.
+  shown at runtime from their own imported files (`assets/kidsart/doodle-sun.png`, the Wizard Dude),
+  untinted and at the page's whole scale - never redrawn, recoloured, cropped or derived, and never
+  baked into a generated PNG (the generator does not open their files at all).
+- **Everything about the page is in page space**: `worldmap.json`'s `page` holds its image, `size`,
+  the paper's `rect`, the wizard's `stand` and the drawings' `at`, all in the page image's own pixels.
+  The world's stops and route no longer mention it.
+- **The gate validators** read "reachable before any gate" through `StageCatalog.IsOpenFromStart`, which
+  is false for a chapter held until the campaign is finished, so nothing in the Sketchbook can ever be
+  counted toward a gate (its secrets pay the page mark only, and its deed Arcane Energy).
 
 ## 5. Boss Rush
 
@@ -148,13 +180,14 @@ record (*"Cleared in 12:40"*, *"Best: 6 of 10 felled"*) in place of rewards, and
 
 ## 6. The stops, and their order
 
-`[the campaign in StageCatalog.Campaign order] + [Boss Rush, if open] + [chapters outside the
-campaign: the Sketchbook]`. Left and right step through that list; the route visits it in the same
-order. A stop is a stage id or `boss_rush`.
+`[the campaign in StageCatalog.Campaign order] + [Boss Rush, if open]`. Left and right step through
+that list; the route visits it in the same order. A stop is a stage id or `boss_rush`. The Sketchbook
+is not a stop (section 4): it is on its own page.
 
 `RegressionChecks.ValidateWorldMap` holds the layout file to it: every chapter in `StageCatalog` has a
-stop, Boss Rush has one, the stand points' arc lengths rise in stop order, the Sketchbook's stand
-point is off the world picture, and every focus point is inside the picture (or on the page). **A new
+stop, Boss Rush has one, the stand points' arc lengths rise in stop order, every focus point is inside
+the picture, a chapter held until the campaign is finished (`AfterCampaign`) has **no** stop on the
+road, and the page has its sheet, a stand on the paper and its drawings on the paper. **A new
 chapter must be placed on the map** (a line in `world_map.py`'s `PLACES` and a landmark drawn for it),
 or the validator says so.
 
@@ -162,8 +195,9 @@ or the validator says so.
 dungeon, a castle labyrinth, a throne room) join the same way: a `StageCatalog` entry and its place in
 `CampaignOrder`, a line in `PLACES` with its stand point, focus and fog radii, the road's waypoints to
 it in `WAYPOINTS`, and a landmark function. Nothing in C# names a place. They come after the Emberdeep,
-so the world grows east: widen `W`, move the page's `PAGE_ORIGIN` with the edge, and the route, the
-compass and the camera follow from the JSON.
+so the world grows east: widen `W`, turn the road's tail (the last list in `WAYPOINTS`) into their
+road, and the route, the compass and the camera follow from the JSON. The page is in its own space and
+does not move.
 
 ## 7. The compass strip
 
@@ -172,16 +206,17 @@ to."*
 
 A heading bar across the top of the screen, as a game compass is: a dark stone band with a gold rule
 at its foot (the level-up heading band's materials), a fixed gold caret at its centre, and a mark for
-**every stop** - each chapter, Boss Rush when it is a stop, and the Sketchbook past a break.
+**every stop** - each chapter, and Boss Rush when it is a stop. Not the Sketchbook (section 4).
 
 - **It slides with the wizard**, not with the press: the strip's centre is his fractional position
   between stops, so it glides as he walks and stops when he does. The selected stop's mark is lit and
   larger; the caret shows where he is on the way to it.
 - **Mark states**: *cleared* (the chapter's warden has fallen: gold, with the done glyph), *open*
-  (gold), *locked* (stone, with the lock glyph), *Boss Rush* (the seat's glyph), *Sketchbook* (a page).
+  (gold), *locked* (stone, with the lock glyph), *Boss Rush* (the seat's glyph). The page glyph
+  (`MarkKind.Page`) is still drawn and is the Sketchbook button's icon; no stop on the road wears it.
   Under each chapter mark, its campaign number. Marks thin out toward the ends of the band.
 - **Tapping a mark jumps to it** (my call). On a phone the compass is the quickest way to the
-  Sketchbook from the first chapter, and because the wizard's speed grows with the distance (section 3)
+  Boss Rush from the first chapter, and because the wizard's speed grows with the distance (section 3)
   a jump is still a run along the road, never a teleport. It takes no focus: a pad steps with left and
   right, which the strip shows, and a stop on the strip for the stick would be a second selection
   fighting the first.
@@ -266,7 +301,9 @@ mouse-button presses (the emulated mouse covers a finger), never both.
 The map opens with the wizard **standing** (no walk) at the last stop played: `WorldMap.LastStopId`,
 set when a run is started from it, survives the run and the results screen for the session; on a cold
 start it falls back to the save's most recent run (`RunTelemetryHistory[0].StageId`), then to the
-furthest open chapter of the campaign. Back returns to CharacterSelection.
+furthest open chapter of the campaign. Back returns to CharacterSelection. A run started from the
+Sketchbook's page returns to the page (`WorldMap.OnPage`, section 4), and turning back from it finds him
+at the world stop he left.
 
 ## 12. Files
 
@@ -274,10 +311,10 @@ furthest open chapter of the campaign. Back returns to CharacterSelection.
 |---|---|
 | the generator | `tools/art/world_map.py` - the world, the page, the fog, the markers, the compass glyphs, the secret and keepsake icons, and `worldmap.json` |
 | the art | `assets/bonelight/ui/worldmap/*.png` + `.import` |
-| the screen | `scenes/WorldMap.tscn`, `scripts/WorldMap.cs` (layout, input, card), `scripts/WorldMapView.cs` (the drawn world, wizard and camera), `scripts/WorldMapCompass.cs`, `scripts/WorldMapLayout.cs` (reads the JSON) |
+| the screen | `scenes/WorldMap.tscn`, `scripts/WorldMap.cs` (layout, input, card, the two sheets), `scripts/WorldMapView.cs` (the drawn world, wizard and camera), `scripts/WorldMapPage.cs` (the Sketchbook's page), `scripts/WorldMapCompass.cs`, `scripts/WorldMapLayout.cs` (reads the JSON) |
 | the authority | `scripts/StageRewards.cs`; `RegressionChecks.ValidateStageRewards`, `ValidateWorldMap` |
 | the flow | `CharacterSelection` opens `WorldMap.tscn`; `StageSelection` stays in the tree, unused, until this has been played |
-| the harness | `_UiShot --scene=res://scenes/WorldMap.tscn`, plus `--map-at=<stop>` (where he starts), `--character=N` (who), `--all-unlocked` (everything owned, found and beaten, in memory), `--last-run=<stage>` (a run recorded, for the cold-start return), and the existing `--pad=release,right,...` for presses and `--frames` to catch him mid-walk or at rest; `--map-tap=<stop>` / `--compass-tap=<stop>` put a real screen touch on a place or a mark and report the selection; `--map-start-probe` presses Start and reports the chapter the run that loads is, or that a locked stop loaded nothing |
+| the harness | `_UiShot --scene=res://scenes/WorldMap.tscn`, plus `--map-at=<stop>` (where he starts), `--character=N` (who), `--all-unlocked` (everything owned, found and beaten, in memory), `--last-run=<stage>` (a run recorded, for the cold-start return), and the existing `--pad=release,right,...` for presses and `--frames` to catch him mid-walk or at rest; `--map-tap=<stop>` / `--compass-tap=<stop>` put a real screen touch on a place or a mark and report the selection; `--map-start-probe` presses Start and reports the chapter the run that loads is, or that a locked stop loaded nothing; `--map-page` opens on the Sketchbook's page (with `--campaign-complete`; without it the world opens with no Sketchbook button) |
 
 ## 13. Sound
 
@@ -310,9 +347,11 @@ and the camera are this doc's own, from Eric's description.
    Emberdeep's goal again.
 2. **Should a locked chapter's card show what it holds?** It does (as silhouettes, a secret wizard
    sealed): it is the reason to open it. Hiding it is one line.
-3. **The Sketchbook as a page off the edge of the world**, reached by a pencil line. If it should feel
-   more apart, the line can go and the camera can cut across the dark instead - but then the wizard
-   has to cross it somehow, and walking is the rule of the screen.
+3. ~~The Sketchbook as a page off the edge of the world~~ - decided 2026-10-30: its own page, off the
+   road and the compass, behind a button that appears once the campaign is finished (section 4).
+4. **A save that played the Sketchbook before it was held keeps it** (section 4) - the CLAUDE.md rule
+   against confiscating content. If Eric wants it held from everyone until the campaign is finished,
+   drop the best-time clause in `GlobalStatsManager.HasReachedAfterCampaign`.
 
 ## 16. As built (2026-10-29), and what still needs eyes
 
@@ -348,3 +387,18 @@ Laelaps from the Circle in data, then restoring him.
 - **On a large monitor** the map draws at the nearest whole number of screen pixels to x2 (x3 at 1080p
   full screen, x4 at 2736), so a bigger screen shows the same amount of map, larger - by design, but
   worth seeing.
+
+## 17. The Sketchbook's page, as built (2026-10-30)
+
+Branch `wip/pause-toasts-sketchbook`. Section 4 is the design as built. `world.png` is byte-identical:
+taking the Sketchbook's stop out of `PLACES` left the road's tail drawn (`build_route` now allows a
+waypoint list after the last stop), and only `sketchbook.png` and `worldmap.json` changed.
+
+**Checked by the harness** (`_UiShot`, `xvfb`, `--campaign-complete`): the world on both canvases with
+no Sketchbook stop or compass mark and the Sketchbook button at the top bar's right; the page on both
+canvases (`--map-page`) with the kids' drawings, the wizard on the pencil road and the card; on the
+phone, a pad step up from Start landing on the Sketchbook button. The validator run: no new warning.
+
+**Still needs eyes:** the turn itself (a scene fade, both ways) and a run started from the page coming
+back to the page; whether "World" reads as Back on a phone; and whether the button wants a first-time
+flourish the run after the campaign is finished (the results screen does say the page opened).

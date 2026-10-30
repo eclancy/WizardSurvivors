@@ -5,7 +5,8 @@ Writes, under assets/bonelight/ui/worldmap/:
 
     world.png         the world, 1680x840 at 1:1 (the screen draws it at a whole number of screen
                       pixels per art pixel, x2 on a 1:1 canvas - .ai/art-direction.md section 6a)
-    sketchbook.png    the page that lies off the world's east edge, and the pencil line to it
+    sketchbook.png    the Sketchbook's page: its own sheet, a map apart from the world, with a short
+                      pencil road on it to where the wizard stands
     shroud-<stop>.png the bank of his fog laid over a locked place, one per stop, sized to it
     shadow.png        the wizard's contact shadow on the map
     ring-open.png, ring-locked.png, ring-current.png   the mark under each stop's stand point
@@ -55,7 +56,7 @@ def T(mat, role):
 
 
 # ---------------------------------------------------------------------------------------------
-# THE PLACES. Each stop: its id (a StageCatalog id, or boss_rush, or the Sketchbook's stage_8),
+# THE PLACES. Each stop: its id (a StageCatalog id, or boss_rush),
 # the stand point on the road where the wizard waits (his feet), the focus the camera frames (the
 # landmark's middle), and the radii of the fog laid over it while it is locked. West to east in
 # stop order; .ai/world-map.md section 1 says why each is where it is.
@@ -73,11 +74,15 @@ PLACES = [
     ("stage_6",  (1340, 542), (1378, 626), 90, 58), # Scorched Sands - past the pass
     ("stage_7",  (1470, 532), (1508, 470), 70, 56), # The Emberdeep - the black gate
     ("boss_rush", (1572, 350), (1576, 300), 46, 30),# the seat, at the summit
-    ("stage_8",  (1850, 474), (1850, 420), 0, 0),   # The Sketchbook - off the world, on the page
+    # The Sketchbook is not a stop on this road (Eric, 2026-10-30: "sketchbook level should not be
+    # attached to the map ... it shows up as its own separate map"). It is the page below, its own
+    # sheet, reached from the world map once the campaign is finished (.ai/world-map.md, section 4).
 ]
 
 # The road between the stand points, in order. Each list runs from one stand point to the next
-# (exclusive of both); the spline goes through every point.
+# (exclusive of both); the spline goes through every point. A list past the last stop is the road's
+# TAIL: drawn, walked by no one - it runs down off the summit to the cliffs, where the castle across
+# the water will join it (.ai/endgame-castle.md).
 WAYPOINTS = [
     [(258, 518), (312, 548)],                               # forest -> fields
     [(424, 540), (452, 474), (484, 410)],                   # fields -> up onto the heath
@@ -89,20 +94,22 @@ WAYPOINTS = [
     [(1230, 262), (1250, 330), (1268, 400), (1298, 466), (1320, 512)],  # ice -> the pass -> sands
     [(1392, 548), (1432, 544)],                             # sands -> the gate
     [(1496, 520), (1510, 494), (1515, 462), (1540, 434), (1522, 408), (1550, 386), (1564, 366)],  # through the gate -> the summit
-    [(1600, 384), (1632, 410), (1660, 432), (1680, 444), (1720, 456), (1780, 466)],  # down, off the edge
+    [(1600, 384), (1632, 410), (1660, 432), (1680, 444), (1720, 456), (1780, 466)],  # the tail: down, off the edge
 ]
 
-# The page's place in map space: its image is drawn with its top-left here. It starts at the
-# world's east edge, so the pencil line can leave the world from the road's last point.
-PAGE_ORIGIN = (1680, 300)
-PAGE_SIZE = (290, 300)
-# The page itself inside that image.
-PAGE_RECT = (96, 40, 280, 268)
+# THE PAGE: the Sketchbook's own sheet, a map of its own with nothing of the world on it. Every
+# coordinate below is in the page image's own pixels (it used to be placed in map space, off the
+# world's east edge, with the road running onto it as a pencil line).
+PAGE_SIZE = (204, 246)
+# The sheet inside that image; the margin round it holds its shadow and the tape.
+PAGE_RECT = (8, 8, 192, 236)
+# Where the wizard stands on it (his feet), at the end of its own short pencil road.
+PAGE_STAND = (82, 142)
 # The kids' drawings laid on the page at runtime, unmodified, from their own files.
 PAGE_DRAWINGS = [
-    # file, top-left in MAP space
-    ("res://assets/kidsart/doodle-sun.png", (1858, 348)),
-    ("res://assets/kidsart/kid-wizard-moving.png", (1796, 392)),
+    # file, top-left in PAGE space
+    ("res://assets/kidsart/doodle-sun.png", (90, 16)),
+    ("res://assets/kidsart/kid-wizard-moving.png", (28, 60)),
 ]
 
 
@@ -327,7 +334,9 @@ def build_route():
         steps = max(2, int(seg / 2.0))
         for s in range(steps):
             points.append(catmull(p0, p1, p2, p3, s / float(steps)))
-    stop_index[marks[len(control) - 1]] = len(points)
+    # The last control point is a stop's stand point only when no tail follows the last stop.
+    if len(control) - 1 in marks:
+        stop_index[marks[len(control) - 1]] = len(points)
     points.append(control[-1])
     return points, stop_index
 
@@ -1662,7 +1671,8 @@ def edge_falloff(g):
 
 
 # ---------------------------------------------------------------------------------------------
-# THE PAGE, off the world's east edge, and the pencil line that carries the road to it.
+# THE PAGE: the Sketchbook's own sheet. Nothing joins it to the world any more - no road runs off
+# the world's edge onto it - so its pencil road starts at its own torn edge.
 # ---------------------------------------------------------------------------------------------
 def page():
     pw, ph = PAGE_SIZE
@@ -1697,12 +1707,10 @@ def page():
         g.rect(tx, ty, tx + 18, ty + 7, T("gold", "lit"))
         g.rect(tx, ty, tx + 18, ty, T("gold", "hi"))
         g.rect(tx, ty + 7, tx + 18, ty + 7, T("gold", "base"))
-    # The pencil line: from the world's edge (x 0 here is the world's x 1680) along the road's last
-    # points, onto the page, and to the stand point. Graphite, hand-wobbled.
-    last = [p for p in ROUTE if p[0] >= PAGE_ORIGIN[0] - 2]
-    stand = PLACES[-1][1]
-    pts = [(p[0] - PAGE_ORIGIN[0], p[1] - PAGE_ORIGIN[1]) for p in last]
-    pts.append((stand[0] - PAGE_ORIGIN[0], stand[1] - PAGE_ORIGIN[1]))
+    # The pencil road: in from the torn edge, a little downhill, to where the wizard stands - a road
+    # somebody drew on the paper. Graphite, hand-wobbled.
+    sx, sy = PAGE_STAND
+    pts = [(x0 + 2, sy + 22), (x0 + 30, sy + 16), (sx - 26, sy + 6), (sx, sy)]
     for i in range(len(pts) - 1):
         ax, ay = pts[i]
         bx, by = pts[i + 1]
@@ -1716,7 +1724,7 @@ def page():
             g.set(x, y, ink)
             if int(x) % 5 != 0:
                 g.set(x, y + 1, ink)
-    # A little pencil lying on the page, sharpened, where the line ends.
+    # A little pencil lying on the page, sharpened.
     px, py = x0 + 120, y1 - 30
     for k in range(26):
         g.set(px + k, py - k // 3, T("gold", "base"))
@@ -1957,11 +1965,12 @@ def write_json():
         "size": [W, H],
         "route": [[round(p[0], 1), round(p[1], 1)] for p in ROUTE],
         "stops": stops,
+        # The Sketchbook's page, its own sheet: every coordinate in the page image's own pixels.
         "page": {
             "image": "sketchbook.png",
-            "origin": [PAGE_ORIGIN[0], PAGE_ORIGIN[1]],
-            "rect": [PAGE_ORIGIN[0] + PAGE_RECT[0], PAGE_ORIGIN[1] + PAGE_RECT[1],
-                     PAGE_ORIGIN[0] + PAGE_RECT[2], PAGE_ORIGIN[1] + PAGE_RECT[3]],
+            "size": [PAGE_SIZE[0], PAGE_SIZE[1]],
+            "rect": [PAGE_RECT[0], PAGE_RECT[1], PAGE_RECT[2], PAGE_RECT[3]],
+            "stand": [PAGE_STAND[0], PAGE_STAND[1]],
             "drawings": [{"texture": f, "at": [p[0], p[1]]} for (f, p) in PAGE_DRAWINGS],
         },
     }

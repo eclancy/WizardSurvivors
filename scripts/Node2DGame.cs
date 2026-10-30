@@ -6904,6 +6904,19 @@ public partial class Node2DGame : Node2D
 				Source = $"Defeated {defeatedBoss.DisplayName}",
 			});
 		}
+
+		// The campaign finished: the Sketchbook's page opens, off the world map (.ai/world-map.md section 4).
+		// Written into the opened list so it stays open when the campaign grows a new last chapter.
+		foreach (StageDefinition page in GlobalStatsManager.RecordFinishedCampaign(data))
+		{
+			summary?.Entries.Add(new RunUnlockEntry
+			{
+				Kind = RunUnlockKind.Chapter,
+				Id = page.Id,
+				Name = page.DisplayName,
+				Source = "The road is finished - a loose page, beyond the map",
+			});
+		}
 	}
 
 	private RunResult BuildRunResult(RunOutcome outcome, string bossId)

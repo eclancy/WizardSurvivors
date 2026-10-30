@@ -288,7 +288,7 @@ public static class GlobalStatsManager
 			return true;
 		int position = StageCatalog.CampaignPositionOf(chapter);
 		if (position < 0)
-			return StageCatalog.GetById(chapter)?.Gate == StageGate.Open;
+			return StageCatalog.IsOpenFromStart(StageCatalog.GetById(chapter));
 		return position < StageCatalog.CampaignPositionOf(gate.Id);
 	}
 
@@ -339,6 +339,49 @@ public static class GlobalStatsManager
 	}
 
 	/// <summary>
+	/// The campaign is finished: the boss of its last playable chapter has fallen there
+	/// (<see cref="StageCatalog.LastPlayableChapter"/> - the Warden of the Deep today). What opens the
+	/// Sketchbook's page (Eric, 2026-10-30: "Once you beat the whole campaign, you should be able to
+	/// navigate to it").
+	/// </summary>
+	public static bool HasFinishedCampaign(SaveData data)
+	{
+		StageDefinition last = StageCatalog.LastPlayableChapter;
+		BossDefinition boss = last != null ? BossCatalog.ForStageIndex(last.Index) : null;
+		return boss != null && data?.Lifetime != null && data.Lifetime.HasDefeatedBoss(boss.Id);
+	}
+
+	/// <summary>
+	/// A chapter held back until the campaign is finished (<see cref="StageDefinition.AfterCampaign"/>) is
+	/// reached three ways, any one enough: it is in the opened list (<see cref="RecordFinishedCampaign"/>
+	/// wrote it), the campaign is finished now, or the save has already played there - it was open from
+	/// the first run until 2026-10-30, and nothing a save could enter is ever closed to it.
+	/// </summary>
+	private static bool HasReachedAfterCampaign(SaveData data, StageDefinition stage) =>
+		IsStageUnlocked(data, stage.Id)
+		|| HasFinishedCampaign(data)
+		|| (data?.Lifetime != null && data.Lifetime.BestTimeOnStage(stage.Id) > 0f);
+
+	/// <summary>
+	/// Writes every chapter held back until the campaign is finished into the opened list once it is, so
+	/// it stays open when the campaign grows a new last chapter (the castle's) - the reason
+	/// <see cref="RecordMetGates"/> writes the gates down. Only adds. Returns the chapters it wrote: the
+	/// run that finished the campaign shows the Sketchbook opened on its results screen.
+	/// </summary>
+	public static List<StageDefinition> RecordFinishedCampaign(SaveData data)
+	{
+		var opened = new List<StageDefinition>();
+		if (data == null || !HasFinishedCampaign(data))
+			return opened;
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			if (stage.AfterCampaign && stage.IsPlayable && UnlockStage(data, stage.Id))
+				opened.Add(stage);
+		}
+		return opened;
+	}
+
+	/// <summary>
 	/// Whether a chapter can be entered, resolving its <see cref="StageGate"/>. The gate chapters are
 	/// the reason this is not just a lookup in the unlocked-stages list.
 	/// </summary>
@@ -381,7 +424,7 @@ public static class GlobalStatsManager
 
 		return stage.Gate switch
 		{
-			StageGate.Open => true,
+			StageGate.Open => !stage.AfterCampaign || HasReachedAfterCampaign(data, stage),
 			StageGate.PreviousBossAndWizards => IsStageUnlocked(data, stage.Id)
 				|| HasPassedInCampaign(data, stage)
 				|| IsGateMet(data, stage),

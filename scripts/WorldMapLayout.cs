@@ -19,7 +19,8 @@ public sealed class WorldMapStop
 	/// <summary>The fog's radii over a locked place; zero for a stop that is never fogged.</summary>
 	public Vector2 Shroud { get; init; }
 	public string ShroudImage { get; init; } = string.Empty;
-	/// <summary>False for the Sketchbook, which lies off the world picture.</summary>
+	/// <summary>Whether the stand point is on the world picture. Every stop's is: the Sketchbook, which
+	/// once stood off the world's edge, is on a page of its own now (<see cref="WorldMapLayout.PageImage"/>).</summary>
 	public bool OnMap { get; init; }
 	/// <summary>Distance along the route to the stand point.</summary>
 	public float ArcLength { get; set; }
@@ -42,18 +43,22 @@ public sealed class WorldMapLayout
 	public float[] Arc { get; private set; } = Array.Empty<float>();
 	public List<WorldMapStop> Stops { get; } = new();
 
+	// THE SKETCHBOOK'S PAGE, a sheet of its own (.ai/world-map.md, section 4): not on the world and not
+	// on the road. Everything below is in the page image's own pixels.
 	public string PageImage { get; private set; } = string.Empty;
-	public Vector2 PageOrigin { get; private set; }
+	/// <summary>The page image's size.</summary>
+	public Vector2 PageSize { get; private set; }
+	/// <summary>The sheet of paper inside the image (the rest is its shadow and the tape).</summary>
 	public Rect2 PageRect { get; private set; }
+	/// <summary>Where the wizard's feet are on the page, at the end of its pencil road.</summary>
+	public Vector2 PageStand { get; private set; }
+	/// <summary>The kids' drawings laid on it from their own files, and where.</summary>
 	public List<(string Texture, Vector2 At)> PageDrawings { get; } = new();
 
 	public float Length => Arc.Length > 0 ? Arc[^1] : 0f;
 
-	/// <summary>
-	/// How far east anything is drawn - the world picture, or the page past its edge - so the camera
-	/// knows where the drawn world ends.
-	/// </summary>
-	public float RightEdge => Mathf.Max(Size.X, PageRect.End.X + 24f);
+	/// <summary>How far east the world is drawn, so the camera knows where it ends.</summary>
+	public float RightEdge => Size.X;
 
 	public WorldMapStop Get(string id)
 	{
@@ -112,8 +117,10 @@ public sealed class WorldMapLayout
 
 			JsonElement page = root.GetProperty("page");
 			layout.PageImage = page.GetProperty("image").GetString() ?? string.Empty;
-			JsonElement origin = page.GetProperty("origin");
-			layout.PageOrigin = new Vector2(origin[0].GetSingle(), origin[1].GetSingle());
+			JsonElement pageSize = page.GetProperty("size");
+			layout.PageSize = new Vector2(pageSize[0].GetSingle(), pageSize[1].GetSingle());
+			JsonElement pageStand = page.GetProperty("stand");
+			layout.PageStand = new Vector2(pageStand[0].GetSingle(), pageStand[1].GetSingle());
 			JsonElement rect = page.GetProperty("rect");
 			layout.PageRect = new Rect2(rect[0].GetSingle(), rect[1].GetSingle(),
 				rect[2].GetSingle() - rect[0].GetSingle(), rect[3].GetSingle() - rect[1].GetSingle());

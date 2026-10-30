@@ -4,8 +4,9 @@ using System.Collections.Generic;
 using WizardSurvivors.scripts;
 
 /// <summary>
-/// The drawn world on the world map: the picture, the page off its edge, the fog over held places,
-/// the stand-point rings, and the selected wizard walking the road, under a camera that leads him.
+/// The drawn world on the world map: the picture, the fog over held places, the stand-point rings,
+/// and the selected wizard walking the road, under a camera that leads him. The Sketchbook's page is
+/// not on it: that is a sheet of its own (<see cref="WorldMapPage"/>, .ai/world-map.md section 4).
 /// </summary>
 /// <remarks>
 /// WHOLE SCREEN PIXELS (.ai/art-direction.md 6a). Everything here is drawn by this one control at a
@@ -54,20 +55,13 @@ public partial class WorldMapView : Control
 	private ViewStop[] stops = Array.Empty<ViewStop>();
 	private Texture2D[] shrouds = Array.Empty<Texture2D>();
 	private Texture2D world;
-	private Texture2D page;
 	private Texture2D ringOpen;
 	private Texture2D ringLocked;
 	private Texture2D ringCurrent;
 	private Texture2D shadow;
 	private Texture2D lockGlyph;
-	private readonly List<(Texture2D Texture, Vector2 At)> drawings = new();
 
-	private Texture2D[] idleFrames = Array.Empty<Texture2D>();
-	private Texture2D[] movingFrames = Array.Empty<Texture2D>();
-	private float idleFps = 6f;
-	private float movingFps = 10f;
-	private bool sheetFacesLeft;
-	private Color tint = Colors.White;
+	private Figure figure = new();
 
 	private int selected;
 	private float wizardS;
@@ -112,21 +106,12 @@ public partial class WorldMapView : Control
 			shrouds[i] = string.IsNullOrEmpty(image) ? null : Load(WorldMapLayout.Directory + image);
 		}
 		world = Load(WorldMapLayout.Directory + "world.png");
-		page = Load(WorldMapLayout.Directory + map.PageImage);
 		ringOpen = Load(WorldMapLayout.Directory + "ring-open.png");
 		ringLocked = Load(WorldMapLayout.Directory + "ring-locked.png");
 		ringCurrent = Load(WorldMapLayout.Directory + "ring-current.png");
 		shadow = Load(WorldMapLayout.Directory + "shadow.png");
 		lockGlyph = StatIcons.Load("lock");
-		drawings.Clear();
-		foreach (var (path, at) in map.PageDrawings)
-		{
-			// The kids' drawings, from their own files, untouched (.ai/world-map.md, section 4).
-			Texture2D drawing = Load(path);
-			if (drawing != null)
-				drawings.Add((drawing, at));
-		}
-		SetCharacter(character);
+		figure = Figure.Of(character);
 
 		selected = Mathf.Clamp(startIndex, 0, Math.Max(0, stops.Length - 1));
 		wizardS = targetS = stops.Length > 0 ? stops[selected].Layout.ArcLength : 0f;
@@ -136,7 +121,7 @@ public partial class WorldMapView : Control
 		CallDeferred(nameof(SnapCamera));
 	}
 
-	private static Texture2D Load(string path)
+	internal static Texture2D Load(string path)
 	{
 		if (string.IsNullOrEmpty(path) || !ResourceLoader.Exists(path))
 		{
@@ -146,42 +131,61 @@ public partial class WorldMapView : Control
 		return GD.Load<Texture2D>(path);
 	}
 
-	private void SetCharacter(CharacterData character)
+	/// <summary>
+	/// The selected wizard as the map draws him: his idle and moving frames, their speeds, his tint and
+	/// which way his sheet faces. Shared with the Sketchbook's page (<see cref="WorldMapPage"/>), where he
+	/// stands on the paper.
+	/// </summary>
+	internal sealed class Figure
 	{
-		tint = CharacterVisuals.GetCharacterTint(character?.Id);
-		sheetFacesLeft = CharacterVisuals.SpriteFacesLeft(character?.Id);
-		SpriteFrames frames = character?.Frames;
-		if (frames != null && frames.HasAnimation("idle"))
-		{
-			idleFrames = FramesOf(frames, "idle");
-			idleFps = (float)frames.GetAnimationSpeed("idle");
-			if (frames.HasAnimation("moving"))
-			{
-				movingFrames = FramesOf(frames, "moving");
-				movingFps = (float)frames.GetAnimationSpeed("moving");
-			}
-		}
-		else
-		{
-			// No sheet of his own (the Test Wizard, whose sprite is Eric's drawing and is never derived):
-			// the idle built from the portrait, played quicker while he walks.
-			idleFrames = CharacterVisuals.GetIdleFrames(character?.Portrait).ToArray();
-			idleFps = CharacterVisuals.IdleFramesPerSecond;
-		}
-		if (movingFrames.Length == 0)
-		{
-			movingFrames = idleFrames;
-			movingFps = idleFps * 2f;
-		}
-	}
+		public Texture2D[] Idle = Array.Empty<Texture2D>();
+		public Texture2D[] Moving = Array.Empty<Texture2D>();
+		public float IdleFps = 6f;
+		public float MovingFps = 10f;
+		public bool SheetFacesLeft;
+		public Color Tint = Colors.White;
 
-	private static Texture2D[] FramesOf(SpriteFrames frames, string animation)
-	{
-		int count = frames.GetFrameCount(animation);
-		var result = new Texture2D[count];
-		for (int i = 0; i < count; i++)
-			result[i] = frames.GetFrameTexture(animation, i);
-		return result;
+		public static Figure Of(CharacterData character)
+		{
+			var f = new Figure
+			{
+				Tint = CharacterVisuals.GetCharacterTint(character?.Id),
+				SheetFacesLeft = CharacterVisuals.SpriteFacesLeft(character?.Id),
+			};
+			SpriteFrames frames = character?.Frames;
+			if (frames != null && frames.HasAnimation("idle"))
+			{
+				f.Idle = FramesOf(frames, "idle");
+				f.IdleFps = (float)frames.GetAnimationSpeed("idle");
+				if (frames.HasAnimation("moving"))
+				{
+					f.Moving = FramesOf(frames, "moving");
+					f.MovingFps = (float)frames.GetAnimationSpeed("moving");
+				}
+			}
+			else if (character != null)
+			{
+				// No sheet of his own (the Test Wizard, whose sprite is Eric's drawing and is never derived):
+				// the idle built from the portrait, played quicker while he walks.
+				f.Idle = CharacterVisuals.GetIdleFrames(character.Portrait).ToArray();
+				f.IdleFps = CharacterVisuals.IdleFramesPerSecond;
+			}
+			if (f.Moving.Length == 0)
+			{
+				f.Moving = f.Idle;
+				f.MovingFps = f.IdleFps * 2f;
+			}
+			return f;
+		}
+
+		private static Texture2D[] FramesOf(SpriteFrames frames, string animation)
+		{
+			int count = frames.GetFrameCount(animation);
+			var result = new Texture2D[count];
+			for (int i = 0; i < count; i++)
+				result[i] = frames.GetFrameTexture(animation, i);
+			return result;
+		}
 	}
 
 	public void SetLook(int index, StopLook look)
@@ -281,7 +285,7 @@ public partial class WorldMapView : Control
 		if (layout == null)
 			return at;
 		Vector2 half = HalfViewInArt();
-		// Inside the drawn world: the picture, and the page past its east edge.
+		// Inside the drawn world.
 		float minX = half.X;
 		float maxX = layout.RightEdge - half.X;
 		at.X = minX > maxX ? layout.RightEdge / 2f : Mathf.Clamp(at.X, minX, maxX);
@@ -339,9 +343,6 @@ public partial class WorldMapView : Control
 		}
 
 		DrawTextureRect(world, new Rect2(origin, world.GetSize() * u), false);
-		Blit(page, layout.PageOrigin);
-		foreach (var (texture, at) in drawings)
-			Blit(texture, at);
 
 		// His fog over the places he still holds, and the lock above each. UI icons are saved x2, so
 		// a 24-pixel glyph is 12 art pixels.
@@ -372,30 +373,38 @@ public partial class WorldMapView : Control
 		Vector2 feet = layout.PointAt(wizardS);
 		if (shadow != null)
 			Blit(shadow, feet - new Vector2(shadow.GetWidth() / 2f, 3f));
-		Texture2D[] frames = IsWalking ? movingFrames : idleFrames;
-		float fps = IsWalking ? movingFps : idleFps;
-		if (frames.Length > 0)
+		Texture2D[] frames = IsWalking ? figure.Moving : figure.Idle;
+		float fps = IsWalking ? figure.MovingFps : figure.IdleFps;
+		DrawFigure(this, frames, fps, animClock, figure, facingLeft, feet, origin, u, toScreen, fromScreen);
+	}
+
+	/// <summary>
+	/// The wizard with his feet at <paramref name="feetArt"/> - row cell-2, the contract's anchor
+	/// (.ai/art-direction.md, section 5) - drawn from <paramref name="origin"/> at <paramref name="u"/>
+	/// canvas units per art pixel, his top-left snapped to a screen pixel, mirrored when he faces
+	/// against his sheet. No allocation: the map draws him every frame.
+	/// </summary>
+	internal static void DrawFigure(CanvasItem canvas, Texture2D[] frames, float fps, double clock, Figure figure,
+		bool facingLeft, Vector2 feetArt, Vector2 origin, float u, Transform2D toScreen, Transform2D fromScreen)
+	{
+		if (frames.Length == 0)
+			return;
+		Texture2D sprite = frames[(int)(clock * Math.Max(1f, fps)) % frames.Length];
+		if (sprite == null)
+			return;
+		Vector2 cell = sprite.GetSize();
+		Vector2 topLeftArt = feetArt - new Vector2(cell.X / 2f, cell.Y - 2f);
+		Vector2 topLeft = fromScreen * (toScreen * (origin + topLeftArt * u)).Round();
+		Vector2 drawn = cell * u;
+		if (facingLeft != figure.SheetFacesLeft)
 		{
-			int frame = (int)(animClock * Math.Max(1f, fps)) % frames.Length;
-			Texture2D sprite = frames[frame];
-			if (sprite != null)
-			{
-				Vector2 cell = sprite.GetSize();
-				// Feet on row cell-2, the contract's anchor (.ai/art-direction.md, section 5).
-				Vector2 topLeft = At(feet - new Vector2(cell.X / 2f, cell.Y - 2f));
-				Vector2 drawn = cell * u;
-				bool flip = facingLeft != sheetFacesLeft;
-				if (flip)
-				{
-					DrawSetTransform(topLeft + new Vector2(drawn.X, 0f), 0f, new Vector2(-1f, 1f));
-					DrawTextureRect(sprite, new Rect2(Vector2.Zero, drawn), false, tint);
-					DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-				}
-				else
-				{
-					DrawTextureRect(sprite, new Rect2(topLeft, drawn), false, tint);
-				}
-			}
+			canvas.DrawSetTransform(topLeft + new Vector2(drawn.X, 0f), 0f, new Vector2(-1f, 1f));
+			canvas.DrawTextureRect(sprite, new Rect2(Vector2.Zero, drawn), false, figure.Tint);
+			canvas.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+		}
+		else
+		{
+			canvas.DrawTextureRect(sprite, new Rect2(topLeft, drawn), false, figure.Tint);
 		}
 	}
 

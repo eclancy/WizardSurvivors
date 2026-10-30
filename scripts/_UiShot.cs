@@ -1131,6 +1131,11 @@ public partial class _UiShot : Node
 			// --pad=right and a short --frames, at rest with a long one.
 			else if (arg.StartsWith("--map-at="))
 				WorldMap.StartOverride = arg.Substring("--map-at=".Length);
+			// --map-page: opens the map on the Sketchbook's page (WorldMap.OnPage), as turning to it does.
+			// Honoured only where the page is open - pair with --campaign-complete; without it the world
+			// opens, with no Sketchbook button, which is the other half of the check.
+			else if (arg == "--map-page")
+				WorldMap.OnPage = true;
 			else if (arg.StartsWith("--character="))
 				Global.SelectedCharacterIdx = int.Parse(arg.Substring("--character=".Length));
 			else if (arg == "--all-unlocked")
