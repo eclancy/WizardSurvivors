@@ -30,6 +30,37 @@ import random
 import struct
 import wave
 
+try:
+    xrange
+except NameError:
+    # Python 3 (2026-10-30: the container that renders now has only 3.13). Every module in this
+    # package uses xrange as a bare name and imports synth first, so it is lent to them from here
+    # rather than edited out of a few thousand lines written for 2.7. Under 2.7 this is a no-op,
+    # and a render is byte-identical under either - checked against the committed files.
+    import builtins
+    builtins.xrange = range
+
+
+def round_half_away(x):
+    """Python 2.7's round(): halves go away from zero. Python 3 rounds them to even, which moved
+    every n_samples that landed on an exact half by one sample - bearing_found's 45 ms tick gap,
+    for one, rendered 19,000 samples different. x - floor(x) is exact for a double, so this agrees
+    with 2.7's round() on every value, and both interpreters write the same bytes."""
+    if x < 0.0:
+        return -round_half_away(-x)
+    r = math.floor(x)
+    return r + 1.0 if x - r >= 0.5 else r
+
+
+def frombytes(arr, data):
+    """array.frombytes under Python 3, array.fromstring under 2.7: the WAV readers' one call."""
+    if hasattr(arr, "frombytes"):
+        arr.frombytes(data)
+    else:
+        arr.fromstring(data)
+    return arr
+
+
 SR = 44100
 TWO_PI = 2.0 * math.pi
 
@@ -44,7 +75,7 @@ FILTER_BLOCK = 64
 # ---------------------------------------------------------------------------
 
 def n_samples(dur):
-    return int(round(dur * SR))
+    return int(round_half_away(dur * SR))
 
 
 def silence(dur):
@@ -304,7 +335,7 @@ def fold(buf, amount=1.0):
 
 def bitcrush(buf, bits=6):
     levels = float(2 ** max(1, bits) - 1)
-    return [round(v * levels) / levels for v in buf]
+    return [round_half_away(v * levels) / levels for v in buf]
 
 
 def decimate(buf, factor):
@@ -529,13 +560,13 @@ def write_wav(path, buf, sr=SR):
         elif v < -1.0:
             v = -1.0
             clipped += 1
-        data.append(int(round(v * 32767.0)))
+        data.append(int(round_half_away(v * 32767.0)))
     w = wave.open(path, "wb")
     try:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(sr)
-        w.writeframes(data.tostring())
+        w.writeframes(data.tobytes() if hasattr(data, "tobytes") else data.tostring())
     finally:
         w.close()
     return db(peak(buf)), db(rms(buf)), len(buf) / float(sr), clipped

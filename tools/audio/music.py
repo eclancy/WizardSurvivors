@@ -1775,8 +1775,7 @@ def read_wav(path):
         if w.getnchannels() != 1 or w.getsampwidth() != 2:
             raise SystemExit("%s: expected 16-bit mono" % path)
         sr = w.getframerate()
-        raw = array.array("h")
-        raw.fromstring(w.readframes(w.getnframes()))
+        raw = S.frombytes(array.array("h"), w.readframes(w.getnframes()))
     finally:
         w.close()
     return [v / 32768.0 for v in raw], sr
