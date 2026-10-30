@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""The Court's walls (.ai/endgame-castle.md 5.8). Drawn by tools/art/tiles.py (tiles.wall_modules) as
+"""The Court's walls (.ai/endgame-castle.md 5.8). Drawn by tools/art/tiles.py (tiles.wall_set_modules) as
 the `court_wall` terrain, which the Court's StageEnvironmentProfile.WallSet names:
 
     python tools/art/tiles.py court_wall      # redraw only these while iterating
@@ -35,7 +35,8 @@ import math
 import bonelight as bl
 import jail_walls as J
 
-WALL_TERRAIN = "court_wall"
+# The tiles.json terrain this set is drawn under (tiles.wall_set_modules reads TERRAIN).
+TERRAIN = "court_wall"
 
 OCC = bl.OCC
 SIZE = 48

@@ -131,7 +131,14 @@ public partial class _UiShot : Node
 	// drops to the First Tree and plants it, checking each step (PASS/FAIL, exit code = failures) and
 	// saving a picture of each as secret-N.png. Writes are off: the save it checks is in memory.
 	private bool secretProbe;
+	private bool secretProbeKeepsake;
 	private bool secretProbeStarted;
+	// On a chapter with a built spell vault, --secret-probe walks to the vault instead and works it
+	// (VaultProbe): for the Geode Heart, the far tell, the seen mark, the strike, the shatter and the spell.
+	// --secret-stage=N (below) poses a breakable vault at a stage for a photograph.
+	private int secretStage = -1;
+	private int secretStageFrame = -1;
+	private bool secretStaged;
 	// --pen-camp: stands the wizard (immortal, still) inside the nearest flower pen, just in from its
 	// east rail, and for 30 s counts the enemies outside the fence that have stopped moving against it
 	// (2026-10-28: "standing in the fence near the big flower makes an easy way for players to get
@@ -889,9 +896,32 @@ public partial class _UiShot : Node
 				penCamp = true;
 				SaveManager.WritesDisabled = true;
 			}
-			else if (arg == "--secret-probe")
+			else if (arg == "--secret-probe" || arg == "--secret-probe=keepsake")
 			{
 				secretProbe = true;
+				// =keepsake: the Forest's bloom-and-seed walk even on a chapter whose vault is built (the Pale
+				// Hart), which would otherwise take the probe.
+				secretProbeKeepsake = arg.EndsWith("=keepsake");
+				SaveManager.WritesDisabled = true;
+			}
+			// --secret=<id>: that secret, if the chapter places it (an anchor, keepsake or vault), stands
+			// beside the spawn instead of where the seed puts it (SecretDirector.PlaceBesideSpawn), so it can
+			// be photographed without the walk (.ai/stage-secrets.md 7.8). Writes off: one worked there saves.
+			else if (arg.StartsWith("--secret="))
+			{
+				SecretDirector.PlaceBesideSpawn = arg.Substring("--secret=".Length).Trim();
+				SaveManager.WritesDisabled = true;
+			}
+			// --secret-stage=N: the chapter's vault, if it breaks (a Breakable named "Crystal"), shown at stage
+			// N a third of the way in - 0 whole, 1 hairline, 2 cracked, 3 splitting, 4 broken (which plays the
+			// shatter and opens it, so writes are off).
+			else if (arg.StartsWith("--secret-stage="))
+			{
+				// --secret-stage=N@F poses it at frame F instead, to catch the shatter mid-flight at the shutter.
+				string[] parts = arg.Substring("--secret-stage=".Length).Split('@');
+				secretStage = int.Parse(parts[0]);
+				if (parts.Length > 1)
+					secretStageFrame = int.Parse(parts[1]);
 				SaveManager.WritesDisabled = true;
 			}
 			else if (arg.StartsWith("--give-relics="))
@@ -2585,12 +2615,34 @@ public partial class _UiShot : Node
 				penCampStarted = true;
 				GetTree().Root.AddChild(new PenCampProbe { Hero = camper, Game = FindNodeOfType<Node2DGame>(GetTree().Root) });
 			}
-			if (secretProbe && !secretProbeStarted && frames >= WarmupFrames / 2
+			// Early, whatever --frames is: a long --frames keeps the shutter loop dismissing level-ups for the
+			// probe, and a probe that waited for half of it gave the kiting bot time to die first on a loaded
+			// machine (slow frames are long frames).
+			if (secretProbe && !secretProbeStarted && frames >= System.Math.Min(WarmupFrames / 2, 240)
 				&& FindNodeOfType<SecretDirector>(GetTree().Root) is SecretDirector probeSecrets
 				&& FindNodeOfType<Player>(GetTree().Root) is Player secretHero)
 			{
 				secretProbeStarted = true;
-				GetTree().Root.AddChild(new SecretProbe { Director = probeSecrets, Hero = secretHero });
+				GetTree().Root.AddChild(probeSecrets.Vault != null && !secretProbeKeepsake
+					? NewVaultProbe(probeSecrets, secretHero)
+					: new SecretProbe { Director = probeSecrets, Hero = secretHero });
+			}
+			if (secretStage >= 0 && !secretStaged && frames >= (secretStageFrame >= 0 ? secretStageFrame : WarmupFrames / 3)
+				&& FindNodeOfType<SecretDirector>(GetTree().Root) is SecretDirector posed)
+			{
+				secretStaged = true;
+				Breakable crystal = posed.Vault?.GetNodeOrNull<Breakable>("Crystal");
+				// A vault that is not a breakable poses itself (PoseForProbe(stage): the Swallow-Hole half full,
+				// the Broken Ward's stones lit, and so on - _UiShot.VaultWalk.cs).
+				if (crystal == null && posed.Vault != null && posed.Vault.HasMethod("PoseForProbe"))
+					posed.Vault.Call("PoseForProbe", secretStage);
+				else if (crystal == null)
+					GD.PrintErr($"_UiShot: --secret-stage: stage {Global.SelectedStageIdx} has no breakable vault");
+				else if (secretStage >= crystal.StageCount + 1)
+					crystal.BreakNow();
+				else
+					crystal.State.Progress = secretStage <= 0 ? 0f : crystal.Needed * (secretStage - 0.5f) / crystal.StageCount;
+				GD.Print($"_UiShot: the vault posed at stage {secretStage}");
 			}
 			if (menuQueueProbe && !menuQueueProbeStarted && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame probeGame
@@ -2994,6 +3046,15 @@ public partial class _UiShot : Node
 					at = hazard.GlobalPosition;
 				}
 			}
+		}
+		else if (gotoTarget == "secret")
+		{
+			// The secret --secret= put beside the spawn, or else the chapter's vault, keepsake or anchor.
+			SecretDirector secrets = FindNodeOfType<SecretDirector>(GetTree().Root);
+			SecretSite site = secrets == null ? null
+				: !string.IsNullOrEmpty(SecretDirector.PlaceBesideSpawn) ? secrets.PlacedSite(SecretDirector.PlaceBesideSpawn)
+				: secrets.Vault ?? secrets.Keepsake ?? secrets.Anchor;
+			at = site?.GlobalPosition;
 		}
 		else if (FindNodeOfType<SideEventDirector>(GetTree().Root) is not SideEventDirector director)
 			return null;
@@ -3851,6 +3912,277 @@ public partial class _UiShot : Node
 		}
 	}
 
+	// --secret-probe on a chapter with a built spell vault (piece A4's proof, the Geode Heart): a walk from
+	// the start to the vault in steps, checking what 6.4 and 8.4.1 promise on the way - placed five to seven
+	// chunks out, solid in the navigation grid, never a target; the far tell thickening toward it with the
+	// cracked clusters nearest; not seen at 1000 px and seen at its foot - then the strike: a hit beyond its
+	// reach counts for nothing, hits within it crack it through every stage, and the last one shatters it,
+	// freezes what stands in the ring and sends the light to him. On a save without it: the spell owned at
+	// once, the deed recorded, the spell in the level-up pool and not in the loadout. On a save that has it
+	// (run with --all-unlocked): a chest from the budget instead, and nothing granted. PASS / FAIL lines,
+	// exit code = failures, vault-N.png at each beat (under xvfb). Writes are off: the save is in memory.
+	//
+	// The strike's damage is the player's own, through Player.DealDamageToEnemy - the path every spell hit
+	// takes, so Player.EnemyDamagedAt fires as it does in play - on three of the chapter's bulk creatures
+	// stood at the foot and made too tough to die (no kill, no XP, no level-up to pause the probe), held in
+	// place each frame. The rest of the swarm is cleared every frame, as the Forest's probe clears it.
+	private partial class VaultProbe : Node
+	{
+		public SecretDirector Director;
+		public Player Hero;
+		private SecretVault vault;
+		private Breakable crystal;
+		private SaveData save;
+		private bool hadBefore;
+		private int step;
+		private int failures;
+		private int shots;
+		private float wait;
+		private Vector2 stand;
+		private readonly System.Collections.Generic.List<(Enemy Body, Vector2 At)> dummies = new();
+		private readonly System.Collections.Generic.List<(Enemy Body, Vector2 At)> witnesses = new();
+		private Enemy faraway;
+		private Vector2 farAt;
+		private int lastStage;
+		private int chestsBefore;
+		private float struckFor;
+
+		private void Check(string what, bool ok)
+		{
+			if (!ok)
+				failures++;
+			GD.Print($"VAULTPROBE {(ok ? "PASS" : "FAIL")} {what}");
+		}
+
+		private void Shot(string what)
+		{
+			shots++;
+			if (DisplayServer.GetName() == "headless")
+				return;
+			Image image = GetViewport().GetTexture().GetImage();
+			// Named by the vault: several chapters' probes run side by side and share the user folder.
+			string path = OS.GetUserDataDir() + $"/vault-{vault?.SecretId ?? "none"}-{shots}.png";
+			image.SavePng(path);
+			GD.Print($"VAULTPROBE shot {path} - {what}");
+		}
+
+		private void Finish()
+		{
+			GD.Print($"VAULTPROBE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+			GetTree().Quit(failures);
+			step = -1;
+		}
+
+		// A level-up from an orb the warmup left pauses the tree, and the probe with it; the tool's own
+		// shutter loop dismisses it (run with a long --frames so it is still watching).
+		private bool InFrostShardPool() => Hero.GetDealableCandidates()
+			.Any(o => o.SpellId.Equals("frost_shard", System.StringComparison.OrdinalIgnoreCase));
+
+		// Everything but the probe's own bodies goes, every frame; they are put back where they stand.
+		private void Hold()
+		{
+			foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+				Input.ActionRelease(action);
+			var keep = new System.Collections.Generic.HashSet<Enemy>();
+			foreach (var (body, at) in dummies.Concat(witnesses))
+			{
+				if (body != null && IsInstanceValid(body))
+				{
+					body.GlobalPosition = at;
+					body.Velocity = Vector2.Zero;
+					keep.Add(body);
+				}
+			}
+			if (faraway != null && IsInstanceValid(faraway))
+			{
+				faraway.GlobalPosition = farAt;
+				keep.Add(faraway);
+			}
+			foreach (Enemy e in EnemyRegistry.Snapshot)
+				if (e != null && IsInstanceValid(e) && !keep.Contains(e))
+					e.QueueFree();
+			Hero.MaxHP = System.Math.Max(Hero.MaxHP, 20);
+			Hero.CurrentHP = Hero.MaxHP;
+			// Once there, he stands where he was put: the tool's kiting bot would walk him off.
+			if (step >= 2)
+				Hero.GlobalPosition = stand;
+		}
+
+		private Enemy Body(Vector2 at)
+		{
+			Enemy e = Director.Game.SpawnEventEnemy(BestiaryRole.Bulk, at, 4000f, false);
+			if (e != null)
+				e.GlobalPosition = at;
+			return e;
+		}
+
+		public override void _Process(double delta)
+		{
+			if (step < 0)
+				return;
+			float dt = (float)delta;
+			Hold();
+			if (wait > 0f)
+			{
+				wait -= dt;
+				return;
+			}
+			switch (step)
+			{
+				case 0:
+				{
+					vault = Director.Vault as SecretVault;
+					crystal = vault?.GetNodeOrNull<Breakable>("Crystal");
+					save = Director.GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+					Check($"the chapter's vault was placed ({Director.Vault?.SecretId})", vault != null && crystal != null && save != null);
+					if (vault == null || crystal == null || save == null)
+					{
+						Finish();
+						return;
+					}
+					hadBefore = save.HasFoundSecret(vault.SecretId);
+					Vector2 origin = Director.Game.StageOrigin;
+					float chunks = vault.GlobalPosition.DistanceTo(origin) / 1536f;
+					GD.Print($"VAULTPROBE {vault.SecretId} at {vault.GlobalPosition}, {chunks:0.0} chunks out; save had it found before: {hadBefore}");
+					Check($"it is five to seven chunks out ({chunks:0.00})", chunks >= SecretDirector.VaultMinChunks - 0.3f && chunks <= SecretDirector.VaultMaxChunks + 1.1f);
+					Check("it is never a target: not in \"enemies\", nor anything in it",
+						!vault.IsInGroup("enemies") && !vault.FindChildren("*", "", true, false).Any(n => n.IsInGroup("enemies")));
+					Check("its foot is solid in the navigation grid (a fence's flag)", Director.Game.Terrain?.IsFenceAtWorld(vault.GlobalPosition) == true);
+					Check("not seen before he has been near it", !Director.IsGlimpsed(vault.SecretId));
+					if (!hadBefore)
+						Check("Frost Shard is not in the level-up pool before it is found", !InFrostShardPool());
+					stand = vault.GlobalPosition + new Vector2(0f, 230f);
+					step++;
+					return;
+				}
+				case 1:
+				{
+					// The walk: a third of a chunk a step, every few frames, so the ground streams in round him.
+					Vector2 to = stand - Hero.GlobalPosition;
+					float left = to.Length();
+					float toTell = Hero.GlobalPosition.DistanceTo(vault.TellPosition);
+					if (toTell > SecretDirector.SeenRadius + 50f && toTell <= SecretDirector.SeenRadius + 562f)
+						Check($"not seen at {toTell:0} px from its glint", !Director.IsGlimpsed(vault.SecretId));
+					Hero.GlobalPosition += left <= 512f ? to : to / left * 512f;
+					wait = 0.1f;
+					if (left <= 512f)
+					{
+						step++;
+						wait = 1.5f;
+					}
+					return;
+				}
+				case 2:
+				{
+					Check($"seen at its foot ({Hero.GlobalPosition.DistanceTo(vault.TellPosition):0} px from the glint)", Director.IsGlimpsed(vault.SecretId));
+					Check("and the seen mark is on the save", save.HasGlimpsedSecret(vault.SecretId));
+					// The far tell: crystals thicker near it than far from it, and cracked ones only near.
+					int inner = 0, outer = 0, cracked = 0, crackedFar = 0;
+					foreach (Node n in GetTree().GetNodesInGroup(SecretFarTell.Group))
+					{
+						if (n is not Node2D s) continue;
+						float d = s.GlobalPosition.DistanceTo(vault.GlobalPosition);
+						if (d <= 1536f) inner++;
+						else if (d <= 3072f) outer++;
+					}
+					foreach (Node n in GetTree().GetNodesInGroup(SecretFarTell.GroupNear))
+					{
+						if (n is not Node2D s) continue;
+						if (s.GlobalPosition.DistanceTo(vault.GlobalPosition) <= 1536f) cracked++;
+						else crackedFar++;
+					}
+					GD.Print($"VAULTPROBE far tell: {inner} crystals within a chunk (+{cracked} cracked), {outer} from one to two chunks out (+{crackedFar} cracked)");
+					// Per area: the inner disc (less the footprint) is a third of the outer annulus's area.
+					Check("the far tell thickens toward it (density within a chunk > from one to two)",
+						inner + cracked > 0 && (inner + cracked) / 1f > (outer + crackedFar) / 3f);
+					Check("the cracked clusters are the near ones", cracked > 0 && crackedFar == 0);
+					Shot("standing at its foot, whole");
+					// Three bodies within its reach, two witnesses inside the freeze but out of reach, and
+					// one beyond the reach whose hits must count for nothing.
+					Vector2 foot = vault.GlobalPosition;
+					foreach (Vector2 off in new[] { new Vector2(-104f, 24f), new Vector2(104f, 24f), new Vector2(30f, 80f) })
+						if (Body(foot + off) is Enemy e) dummies.Add((e, foot + off));
+					foreach (Vector2 off in new[] { new Vector2(-200f, 150f), new Vector2(210f, 120f) })
+						if (Body(foot + off) is Enemy e) witnesses.Add((e, foot + off));
+					farAt = foot + new Vector2(-40f, 300f);
+					faraway = Body(farAt);
+					Check("the bodies were set down", dummies.Count == 3 && witnesses.Count == 2 && faraway != null);
+					step++;
+					wait = 0.2f;
+					return;
+				}
+				case 3:
+				{
+					float before = crystal.State.Progress;
+					Hero.DealDamageToEnemy(faraway, 300, 0f, false, null);
+					Check($"a hit on an enemy beyond its reach counts for nothing ({before:0} -> {crystal.State.Progress:0})", crystal.State.Progress <= before + 0.01f);
+					// The player's own spells are firing at the bodies too, so the count starts from here.
+					lastStage = crystal.Stage;
+					chestsBefore = Director.Game.GetChildren().Count(c => c is ChestReward);
+					step++;
+					return;
+				}
+				case 4:
+				{
+					// Hits within reach, a little each frame: through every stage to broken.
+					foreach (var (body, _) in dummies)
+						if (body != null && IsInstanceValid(body))
+							Hero.DealDamageToEnemy(body, 18, 0f, false, null);
+					struckFor += dt;
+					int stage = crystal.Stage;
+					if (stage != lastStage)
+					{
+						GD.Print($"VAULTPROBE stage {stage} at {crystal.State.Progress:0} of {crystal.Needed:0} landed");
+						if (stage <= crystal.StageCount)
+							Shot($"stage {stage}");
+						lastStage = stage;
+					}
+					if (crystal.IsBroken)
+					{
+						Check($"hits within its reach broke it ({crystal.State.Progress:0} landed, {struckFor:0.0} s)", crystal.State.Progress >= crystal.Needed);
+						step++;
+						wait = 0.15f;
+					}
+					else if (struckFor > 30f)
+					{
+						Check("hits within its reach broke it within 30 s", false);
+						Finish();
+					}
+					return;
+				}
+				case 5:
+				{
+					var heart = vault as GeodeHeart;
+					Check("the shatter ran (the light has left it)", heart == null || heart.HasShattered);
+					Check($"it froze what stood in the ring ({witnesses.Count(w => IsInstanceValid(w.Body) && w.Body.IsFrozen)} of {witnesses.Count})",
+						witnesses.All(w => IsInstanceValid(w.Body) && w.Body.IsFrozen));
+					Shot("the shatter");
+					step++;
+					wait = 1.6f;
+					return;
+				}
+				case 6:
+				{
+					Shot("the light reached him: the toast");
+					Check("the vault is opened for the run", vault.IsOpened);
+					Check("it is found on the save", save.HasFoundSecret(vault.SecretId));
+					Check("its deed is recorded", GlobalStatsManager.IsAchievementUnlocked(save, AchievementDefinitions.SecretDeedId(vault.SecretId)));
+					Check("Frost Shard is owned on the save", GlobalStatsManager.IsSpellUnlockedForLevelUp(save, "frost_shard"));
+					Check("Frost Shard joins the level-up pool in this run", InFrostShardPool());
+					Check("and is not put into the run (not in the loadout)",
+						!Hero.GetEquippedSpells().Any(s => s != null && s.Id.Equals("frost_shard", System.StringComparison.OrdinalIgnoreCase)));
+					int chests = Director.Game.GetChildren().Count(c => c is ChestReward);
+					if (hadBefore)
+						Check($"found before: a chest from the budget instead ({chestsBefore} -> {chests}, paid {Director.ChestsPaid})", chests == chestsBefore + 1 && Director.ChestsPaid == 1);
+					else
+						Check($"found for the first time: no chest, the spell is the reward ({chestsBefore} -> {chests})", chests == chestsBefore && Director.ChestsPaid == 0);
+					Finish();
+					return;
+				}
+			}
+		}
+	}
+
 	// --secret-probe: one step a frame or a held wait, the player moved by hand (he is made immortal,
 	// and the swarm is cleared at each step so a hit cannot knock the seed loose mid-probe).
 	private partial class SecretProbe : Node
@@ -3878,6 +4210,7 @@ public partial class _UiShot : Node
 			Image image = GetViewport().GetTexture().GetImage();
 			string path = OS.GetUserDataDir() + $"/secret-{++shots}.png";
 			image.SavePng(path);
+			GD.Print($"SECRETPROBE shot {path}");
 		}
 
 		private void Clear()

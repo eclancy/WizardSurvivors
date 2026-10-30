@@ -125,6 +125,8 @@ public partial class _BossProbe : Node
 	// number that showed it, and it should stay at the punch itself (1.08 at most).
 	private readonly Dictionary<BossEnemy, float> arrivalScale = new();
 	private float peakScaleGrowth = 1f;
+	// Frames a targetable body spent, summed over the bodies, and how many of them on a wall or water cell.
+	private int bodyFrames, bodyFramesInGround;
 
 	private void TrackBoss(float delta)
 	{
@@ -168,6 +170,15 @@ public partial class _BossProbe : Node
 				sawRetargetable = true;
 
 			peakPhase = Math.Max(peakPhase, body.BossPhase);
+			// On walled ground a body can be put where it cannot stand: an echo placed on a ring round
+			// its voice, a burrower surfacing at a random point near the player. Counted only while it is
+			// out (a burrower under the floor is driven straight through anything, as it should be).
+			if (body.IsTargetable && Node2DGame.Current?.Terrain is TerrainStreamer ground)
+			{
+				bodyFrames++;
+				if (ground.IsWallAtWorld(body.GlobalPosition) || ground.IsBlockedAtWorld(body.GlobalPosition))
+					bodyFramesInGround++;
+			}
 			if (!arrivalScale.TryGetValue(body, out float arrived))
 				arrivalScale[body] = arrived = Mathf.Abs(body.Scale.X);
 			if (arrived > 0f)
@@ -307,6 +318,7 @@ public partial class _BossProbe : Node
 		GD.Print($"  peak size      : x{peakScaleGrowth:0.00} of its arrival size");
 		GD.Print($"  drain ticks    : {drainTicks}");
 		GD.Print($"  went untargetable / came back : {sawUntargetable} / {sawRetargetable}");
+		GD.Print($"  in wall/water  : {bodyFramesInGround} of {bodyFrames} body-frames out of the ground");
 		foreach (string note in notes)
 			GD.Print($"  note           : {note}");
 

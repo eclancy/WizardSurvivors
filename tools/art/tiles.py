@@ -2,7 +2,8 @@
 """The ground. Run: python tools/art/tiles.py
 
 Every tile every stage is fought on: the autotile terrains at fourteen roles each, the plain floor
-materials, and the Cursed Dungeon's jail walls (`jail_walls.py`, with the shadows they throw). About six hundred 48x48 tiles
+materials, the Cursed Dungeon's jail walls (`jail_walls.py`, with the shadows they throw) and the
+chapters' own wall sets (`<name>_walls.py`, wall_set_modules below). About eight hundred 48x48 tiles
 and a `tiles.json` manifest, which `CuratedTileCatalog.LoadMany` merges alongside the
 Sketchbook's. The small things lying ON the ground - flowers, lilypads, reeds, pebbles - are
 `ground_detail.py`, not this. Water is not drawn here either: its shape is computed
@@ -954,26 +955,35 @@ def _add_chapter_ground():
 _add_chapter_ground()
 
 
-def wall_modules():
-    """The wall sets drawn here: the Cursed Dungeon's jail walls (jail_walls.py, the `wall` terrain, and
-    the shadows every set's walls throw) and any chapter's own, tools/art/<chapter>_walls.py - the
-    Court's court_walls.py, say (.ai/endgame-castle.md 11.3). A chapter's module defines WALL_TERRAIN
-    (its tiles.json terrain id, which its StageEnvironmentProfile.WallSet names) and the same
-    variants(role), paint(...) and STUB_SIDES the jail's does, so it is drawn by the same code, role
-    for role. The grid's wall cells stay `wall` whatever set paints them."""
+# A CHAPTER'S WALLS IN THEIR OWN FILE (.ai/endgame-castle.md 11.3). The grid's wall cells are always the
+# `wall` terrain - collision, navigation and the chunk flags read that - and a chapter chooses only how
+# they are DRAWN (StageEnvironmentProfile.WallSet). The Cursed Dungeon's jail is jail_walls.py, drawn as
+# the `wall` terrain itself. Any other set is tools/art/<name>_walls.py, found here by its name like the
+# ground modules above, and drawn under the terrain id its module names as TERRAIN (cave_walls.py ->
+# `cave_wall`, ruin_walls.py -> `ruin_wall`, court_walls.py -> `court_wall`). A set module has the jail's
+# shape: STUB_SIDES, variants(role) and paint(c, role, dressing, plain_index, sides, inner), every role
+# the jail has (RegressionChecks.ValidateGroundArt holds a set to all of them the moment it exists). The
+# shadow a wall throws stays the jail's, one set for every wall.
+def wall_set_modules():
+    """[(terrain id, module)]: the jail's first, then every tools/art/*_walls.py in name order."""
     import glob
     here = os.path.dirname(os.path.abspath(__file__))
-    mods = [jail_walls]
-    for p in sorted(glob.glob(os.path.join(here, "*_walls.py"))):
-        name = os.path.splitext(os.path.basename(p))[0]
-        if name != "jail_walls":
-            mods.append(__import__(name))
-    return mods
+    sets = [(WALL_TERRAIN, jail_walls)]
+    for path in sorted(glob.glob(os.path.join(here, "*_walls.py"))):
+        name = os.path.splitext(os.path.basename(path))[0]
+        if name == "jail_walls":
+            continue
+        mod = __import__(name)
+        terrain = getattr(mod, "TERRAIN", None)
+        if not terrain or terrain == WALL_TERRAIN:
+            raise ValueError("tools/art/%s.py names no TERRAIN of its own" % name)
+        sets.append((terrain, mod))
+    return sets
 
 
-def emit_walls(frames, mod=jail_walls):
-    """One wall set's tiles (`mod`, see wall_modules): the jail walls and the shadows they throw on the
-    floor, or a chapter's own set (no shadows: every set's walls throw the jail's).
+def emit_walls(frames, only=None):
+    """The wall sets - the Cursed Dungeon's jail (jail_walls.py) and every chapter's own (wall_set_modules)
+    - and the shadows walls throw on the floor.
 
     Every one of the fourteen roles, because the maze's two-tile walls produce inner corners as
     well as edges and the painter asks for the role the autotiler resolved - plus three for the
@@ -984,10 +994,25 @@ def emit_walls(frames, mod=jail_walls):
     the full-cell square on the terrain layer, as it did the void tile - and are not `blocking`
     terrain: walls are their own flag (TerrainStreamer.FlagWall), not water.
 
+    `only`: on a partial run, the wall sets (terrain ids) to redraw; None redraws them all.
+
     Returns (tiles written, any failed the palette audit). Tiles left over from an older set (the
     outlined `wall` terrain had different variant counts) are deleted with their .import, so the
     atlas and the manifest never pick up a stale one.
     """
+    n = 0
+    bad_any = False
+    for terrain, module in wall_set_modules():
+        if only and terrain not in only:
+            continue
+        k, bad = emit_wall_set(frames, terrain, module, shadows=(terrain == WALL_TERRAIN))
+        n += k
+        bad_any = bad_any or bad
+    return n, bad_any
+
+
+def emit_wall_set(frames, terrain, module, shadows):
+    """One wall set: every role, plain and dressed, under `terrain`; with `shadows`, the floor shadows."""
     written = set()
     bad_any = False
     n = 0
@@ -1012,50 +1037,42 @@ def emit_walls(frames, mod=jail_walls):
             % (tid, tid, tid, terrain, role, extra))
         return True
 
-    terrain = getattr(mod, "WALL_TERRAIN", WALL_TERRAIN)
-    shadows = mod.SHADOW_ROLES if mod is jail_walls else []
     dressed = 0
-    for role in ROLES + sorted(mod.STUB_SIDES):
-        sides = mod.STUB_SIDES.get(role) or SIDES.get(role, ())
-        for v, (dressing, plain_index, weight) in enumerate(mod.variants(role)):
+    for role in ROLES + sorted(module.STUB_SIDES):
+        sides = module.STUB_SIDES.get(role) or SIDES.get(role, ())
+        for v, (dressing, plain_index, weight) in enumerate(module.variants(role)):
             c = raster.Canvas(SIZE, SIZE, None)
-            mod.paint(c, role, dressing, plain_index, sides, INNER.get(role))
+            module.paint(c, role, dressing, plain_index, sides, INNER.get(role))
             tid = "%s_%s" % (terrain, role) if v == 0 else "%s_%s_%d" % (terrain, role, v)
             if write(tid, c, terrain, role, dressing, weight):
                 n += 1
                 dressed += 1 if dressing else 0
             else:
                 bad_any = True
-    for role in shadows:
-        c = raster.Canvas(SIZE, SIZE, None)
-        mod.shadow(c, role)
-        if write("%s_%s" % (WALL_SHADOW_TERRAIN, role), c, WALL_SHADOW_TERRAIN, role):
-            n += 1
-        else:
-            bad_any = True
+    shadow_count = 0
+    if shadows:
+        for role in jail_walls.SHADOW_ROLES:
+            c = raster.Canvas(SIZE, SIZE, None)
+            jail_walls.shadow(c, role)
+            if write("%s_%s" % (WALL_SHADOW_TERRAIN, role), c, WALL_SHADOW_TERRAIN, role):
+                n += 1
+                shadow_count += 1
+            else:
+                bad_any = True
 
-    # wall_shadow_* starts with "wall_" and is written above, so it is never stale; a chapter's set
-    # (court_wall_*) has its own prefix and is never swept up by the jail's.
+    # The jail's prefix `wall_` is also the start of `wall_shadow_`, which is why the shadows are drawn
+    # with the jail and are in `written` then; a chapter's prefix (`cave_wall_`) is its own.
     stale = [f for f in os.listdir(OUT_DIR)
-             if f.startswith(terrain + "_") and f.endswith(".png") and f not in written
-             and not any(f.startswith(other + "_") for other in _longer_wall_prefixes(terrain))]
+             if f.startswith(terrain + "_") and f.endswith(".png") and f not in written]
     for f in stale:
         os.remove(os.path.join(OUT_DIR, f))
         if os.path.exists(os.path.join(OUT_DIR, f + ".import")):
             os.remove(os.path.join(OUT_DIR, f + ".import"))
-    print("  %-12s %d tiles over %d roles (%d dressed), %d shadows%s"
-          % (terrain, n - len(shadows), len(ROLES) + len(mod.STUB_SIDES), dressed,
-             len(shadows),
+    print("  %-12s %d tiles over %d roles (%d dressed)%s%s"
+          % (terrain, n - shadow_count, len(ROLES) + len(module.STUB_SIDES), dressed,
+             (", %d shadows" % shadow_count) if shadows else "",
              (", %d stale removed" % len(stale)) if stale else ""))
     return n, bad_any
-
-
-def _longer_wall_prefixes(terrain):
-    """Wall terrains that start with this one's name (none today: `wall_shadow` is written with the
-    jail's set), so one set's stale sweep can never delete another's tiles."""
-    return [getattr(m, "WALL_TERRAIN", WALL_TERRAIN) for m in wall_modules()
-            if getattr(m, "WALL_TERRAIN", WALL_TERRAIN) != terrain
-            and getattr(m, "WALL_TERRAIN", WALL_TERRAIN).startswith(terrain + "_")]
 
 
 def main(only=None):
@@ -1068,11 +1085,11 @@ def main(only=None):
     frames = []
     count = 0
 
-    for mod in wall_modules():
-        if not only or getattr(mod, "WALL_TERRAIN", WALL_TERRAIN) in only:
-            n, bad_walls = emit_walls(frames, mod)
-            ok = ok and not bad_walls
-            count += n
+    wall_terrains = [t for t, _ in wall_set_modules()]
+    if not only or any(t in only for t in wall_terrains):
+        n, bad_walls = emit_walls(frames, only)
+        ok = ok and not bad_walls
+        count += n
 
     for name, painter, rim in TERRAINS:
         if only and name not in only:
@@ -1137,7 +1154,7 @@ def main(only=None):
                 'fought on. Ours, replacing the bought dungeon-floor pack. One line: a raw '
                 'newline inside a JSON string is invalid and JsonDocument.Parse throws on it.",\n'
                 '  "frames": [\n%s\n  ]\n}\n' % (",\n".join(frames)))
-    # Text on Python 3 already; bytes on 2.7, where io.open wants unicode.
+    # A str on Python 3, bytes on 2.7: tile_atlas.py and ground_detail.py take both the same way.
     io.open(os.path.join(OUT_DIR, "tiles.json"), "w", encoding="utf-8",
             newline="\n").write(manifest if isinstance(manifest, type(u"")) else manifest.decode("utf-8"))
     # The game draws the ground from one packed texture, not from these files one by one.
@@ -1146,8 +1163,8 @@ def main(only=None):
     if not ok:
         return 1
     print("")
-    print("%d tiles across %d terrains, the jail walls and %d materials, palette clean"
-          % (count, len(TERRAINS), len(MATERIALS)))
+    print("%d tiles across %d terrains, %d wall sets and %d materials, palette clean"
+          % (count, len(TERRAINS), len(wall_terrains), len(MATERIALS)))
     return 0
 
 
