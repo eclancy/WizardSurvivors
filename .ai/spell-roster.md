@@ -120,6 +120,48 @@ so its own hit is modest and most of its value is what the knot does for the are
 Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
 and all ended inside the collapse; with no well they moved 3 px.
 
+**0.9.3: Eric's playtest of 0.9.2** (2026-10-30): *"hollow star should never be centered on the player,
+so the enemies are not dragged into the player. reduce the cooldown on hollow star, it's very powerful.
+hollow star should pull the enemies in slower. enemies should take more damage the closer they are to
+the center."*
+
+- **Never on the wizard.** A swarm pressed round him was the densest pack in range, so the well opened
+  on his feet and dragged it onto him. Now a well opens with the rim of its pull 40 px past him
+  (`HollowStar.OpenSpot`, Iron Ring's clearance): a pack within a reach of him is aimed *through* - the
+  well goes out along the line to it, the pack ends on its near side and is dragged away. Every well of
+  a cast is cleared by its exact reach (the level 3 reach and the Spirit Mirror's half again included);
+  a spot pushed onto water or a wall turns up to 30 degrees round him for open ground. Twin Stars' twin
+  is drawn again if the pair would meet on him, and its drift never steps a well nearer him than that;
+  Nova Seed's wells land by the same rule (re-cleared where he stands when they land). A well he walks
+  into himself leaves alone any enemy whose road to the centre passes within 30 px of him, so it never
+  drags one onto him. With the widest wells (Black Sun with the Spirit Mirror, about 470 px) a pack on
+  him is knotted some 500 px off - near the edge of the screen.
+- **Slower pull:** 240 -> 120 px/s and the ease 4.5 -> 2.2, so the rim of a plain well takes 0.8 s to
+  come within 55 px and the swarm drifts in over the whole pull rather than snapping in half a second.
+- **More at the core:** the collapse deals its whole damage at the centre, falling straight to 35% at
+  its edge (`HollowStar.ShareAt`), drawn as the well's heat (art-replacement-manifest section 9).
+- **"Reduce the cooldown ... it's very powerful" was read as fire less often:** a shorter cooldown would
+  have made a spell he called too strong stronger. 4.5 -> 6.0 s (5.1 at level 8, was 3.6).
+- **The numbers.** In the 8-minute bot the spell kills everything it catches, so its damage a second
+  follows its hit, not its cooldown (the longer cooldown only let more gather - the first pass, with the
+  cooldown alone and the core at x1.5, measured *higher*). Damage 18 / +5 / +6 / +8 -> 8 / +2 / +3 / +8;
+  Crush 6% a body (up to +90%) -> 2% (up to +30%); Twin Stars +30% damage, because Crush's Darkness lifts
+  the spell to tier 2 attunement (x1.2) and Twin Stars' gains nothing, and at the same footing the Crush
+  path read 1.5-1.9 times the Twin path's.
+
+Eight minutes, normal health (`--minutes=8 --timescale=2 --all-unlocked --immortal --character=0
+--seed=11 --spell=hollow_star --solo --upgrade-chance=1 --force-ascension`), damage a second, before ->
+after, against the peer bands 40-60 / 70-130 / 331-465. Read levels 4 and 6 as bands: each is 15-55
+seconds of play, two to nine casts.
+
+| path | L4 | L6 | L8 |
+|---|---|---|---|
+| Crush, Black Sun (John Dee's path) | 113 -> 40 | 250 -> 100 | 758 -> 506 |
+| Twin Stars, Nova Seed | 82 -> 56 | 174 -> 67 | 509 -> 361 |
+
+Black Sun's 506 is its own +60% on the strongest base path, past the band by 9%: an Ascension number,
+left for the level 8 audit, as is whether Black Sun's 60% re-pulls still knot enough at half the drag.
+
 ### Starfall - the weather spell (2026-10-25)
 
 The developer: *"lets add a falling star spell of some kind. maybe a meteor ascension, or a rain ability
@@ -1245,6 +1287,8 @@ the numbers on the card ride the stat fields `EvolutionStatReaders` lists for it
 on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground under the bodies.
 
 - **Hollow Star** (`HollowStar.cs`, `Player.FireHollowStar`). Built as proposed - the pull is its own.
+  (0.9.3 changed Crush to 2% a body and gave Twin Stars +30% damage: "Hollow Star - the spell that moves
+  the swarm", above.)
   - **Crush** (L4, was +35% damage and +30% area): the collapse hits +6% harder for every body in it,
     up to +90% at fifteen; the core swells a third wider as the knot fills and throws more debris.
   - **Twin Stars** (L4, was -30% cooldown and a 25% harder drag): two wells a cast, the twin on a pack

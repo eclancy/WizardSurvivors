@@ -4915,6 +4915,12 @@ public partial class Player : CharacterBody2D
 
 	// Hollow Star (issue #64). Opened on the densest pack in range - a pull centred on one straggler
 	// gathers one straggler - and only when something is in range at all, like every aimed spell.
+	//
+	// Never on the wizard (Eric, 0.9.2: "hollow star should never be centered on the player, so the
+	// enemies are not dragged into the player"): a pack within a reach of him is not where the well
+	// opens but what it is aimed THROUGH - HollowStar.OpenSpot pushes the well out along the line from him
+	// until the rim of its pull clears him, so that pack is on its near side and is dragged away. Before,
+	// a swarm pressed round him was the densest pack in range, and the well opened on his feet.
 	private CastOutcome FireHollowStar(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
@@ -4937,23 +4943,33 @@ public partial class Player : CharacterBody2D
 		// TwinMostApartReaches reaches off, so the two can drift together within one pull (HollowStar).
 		bool twins = spell.HasEvolution(HollowStar.TwinStarsId);
 		int wells = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, HollowStar.MaxPerCast);
-		sporeSpots[0] = centre.GlobalPosition;
+		// Every well of the cast pulls at this reach, so it is what each is cleared of the wizard by and
+		// spaced by (it was the area alone, without the level 3 reach or the Spirit Mirror's).
+		float reach = HollowStarReach(spell);
+		sporeSpots[0] = HollowStar.OpenSpot(GlobalPosition, centre.GlobalPosition, reach);
 		int opened = 1;
-		float apart = HollowStar.DefaultPullRadius * GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+		float apart = reach;
 		float mostApart = apart * HollowStar.TwinMostApartReaches;
 		for (int tries = 0; opened < wells && tries < wells * 6; tries++)
 		{
 			Node2D pick = FindRandomEnemy(castRange);
 			if (pick == null)
 				break;
-			if (SporeSpotCrowded(pick.GlobalPosition, opened, apart * apart))
+			Vector2 spot = HollowStar.OpenSpot(GlobalPosition, pick.GlobalPosition, reach);
+			if (SporeSpotCrowded(spot, opened, apart * apart))
 				continue;
 			// A twin too far from its partner to meet it is drawn again, for the first two-thirds of the
-			// tries; after that any pack will do, and the pair simply closes what it can.
-			if (twins && opened % 2 == 1 && tries < wells * 4
-				&& sporeSpots[opened - 1].DistanceSquaredTo(pick.GlobalPosition) > mostApart * mostApart)
-				continue;
-			sporeSpots[opened++] = pick.GlobalPosition;
+			// tries; after that any pack will do, and the pair simply closes what it can. So is one whose
+			// pair would meet on the wizard - opened either side of him, the two would drift together onto
+			// him (HollowStar.DriftToPartner stops each short of him, but then the knots never meet).
+			if (twins && opened % 2 == 1 && tries < wells * 4)
+			{
+				Vector2 partner = sporeSpots[opened - 1];
+				if (partner.DistanceSquaredTo(spot) > mostApart * mostApart
+					|| !HollowStar.IsClearOf(GlobalPosition, (partner + spot) * 0.5f, reach))
+					continue;
+			}
+			sporeSpots[opened++] = spot;
 		}
 
 		HollowStar previous = null;
@@ -4975,25 +4991,18 @@ public partial class Player : CharacterBody2D
 		var well = scene.Instantiate<Node2D>();
 		if (well is HollowStar script)
 		{
-			// The evolutions' area belongs in the radius the well pulls and hits at - Bramble Seed's
-			// bug again (.ai/gameplay-design.md): Amplified Impact's +30% and Titan Cataclysm's +100%
-			// grew nothing, while Titan's x2 visual scale drew the well twice as wide as it pulled.
-			// Found putting John Dee's Apotheosis path through Titan Cataclysm.
-			float area = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-			if (spell.IsApotheosis)
-				area *= HollowStar.SpiritMirrorReach;
-			float reachBonus = spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
 			script.SpellData = spell;
 			script.PlayerRef = this;
 			script.Damage = Math.Max(1, Mathf.RoundToInt(
 				spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
 			// Reach and collapse grow together, so a wider pull still closes on what it gathered.
-			float reachScale = (script.PullRadius + reachBonus) / MathF.Max(1f, script.PullRadius);
-			script.PullRadius = (script.PullRadius + reachBonus) * area;
-			script.CollapseRadius *= reachScale * area;
-			// 240 px/s for 1.6 s already carries the rim of a Titan well (about 390 px) to the knot, so
-			// only the Spirit Mirror - half as wide again - drags harder. Hyper Acceleration's Speed
-			// drags harder too: the knot it closes on is tighter, which is the spell's whole payload.
+			float reach = HollowStarReach(spell);
+			script.CollapseRadius *= reach / MathF.Max(1f, script.PullRadius);
+			script.PullRadius = reach;
+			// 120 px/s (0.9.3, halved) brings the rim of a Black Sun well (about 260 px) within its
+			// collapse in about a second, so only the Spirit Mirror - half as wide again - drags harder.
+			// Twin Stars' Speed drags harder too: the knot it closes on is tighter, which is the spell's
+			// whole payload.
 			script.PullSpeed *= MathF.Max(0.25f, spell.GetSpeedMultiplier());
 			if (spell.IsApotheosis)
 				script.PullSpeed *= HollowStar.SpiritMirrorPullSpeed;
@@ -5010,6 +5019,21 @@ public partial class Player : CharacterBody2D
 		// The well draws its own radius, so the evolutions' visual scale stays out of it (Bramble Seed).
 		well.Scale = Vector2.One;
 		return well as HollowStar;
+	}
+
+	// The reach a Hollow Star well of this spell pulls at. The evolutions' area belongs in it - Bramble
+	// Seed's bug again (.ai/gameplay-design.md): Amplified Impact's +30% and Titan Cataclysm's +100% once
+	// grew nothing, while Titan's x2 visual scale drew the well twice as wide as it pulled (found putting
+	// John Dee's Apotheosis path through Titan Cataclysm). The level 3 reach is pixels on the scene's 150,
+	// and the Spirit Mirror opens half again as wide. FireHollowStar clears the wizard by this before any
+	// well exists; OpenHollowStar sizes the well by it.
+	private float HollowStarReach(SpellData spell)
+	{
+		float area = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+		if (spell.IsApotheosis)
+			area *= HollowStar.SpiritMirrorReach;
+		float reachBonus = spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
+		return (HollowStar.DefaultPullRadius + reachBonus) * area;
 	}
 
 	private int ScaledSpellDamage(SpellData spell) =>

@@ -933,6 +933,7 @@ icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall
 | Twin Stars' tether | **Failed**: two `DrawPolyline`s | `SpellStrokes`: an occlusion filament round a one-pixel core of the ramp's mid |
 | Nova Seed's shards | **Failed**: `DrawLine`s | `SpellStrokes`: a dark sliver with a hot spine cooling behind a white point |
 | Collapse debris (`ImpactDebris`) | Shared; passes | Fades by dither in this canvas |
+| The heat - the collapse's falloff (0.9.3) | New | In the same shader: the floor between the lip and the collapse radius glows by ordered dither, opaque cells of the ramp, densest and hottest (hot, then mid, then edge) against the core and thinning to nothing at the collapse's edge, in slowly turning bands. It smoulders as the well opens, builds through the pull, and flares as the core shuts (with the hole gone, a disc hottest at its centre). It says where the collapse hits hardest (`HollowStar.ShareAt`: the whole hit at the centre, about a third at the edge) and is never outlined |
 
 ### Starfall
 

@@ -2516,11 +2516,16 @@ public static class SpellEvolutionCatalog
 				+ $"up to +{HollowStar.CrushPerBody * HollowStar.CrushMostBodies * 100f:0}% at {HollowStar.CrushMostBodies}. The core swells as the knot fills.",
 			"Knot / Power", "Pull a pack in tight and every body in it hits the rest harder.",
 			o => { o.DisplayName = "Crush"; o.VisualTag = "Crush"; o.ModulateColor = Colors.White; }));
+		// +30% damage since 0.9.3. Crush gains a Darkness, which lifts a pure Hollow Star to Darkness tier 2
+		// and its attunement (x1.2); Twin Stars gains nothing, and its twin cannot open across the wizard
+		// (two wells either side of him would drift together onto him, HollowStar.DriftToPartner). At the
+		// same footing Crush's path measured 1.5-1.9 times this one's, and when the spell came down into the
+		// level 4 band (40-60) this path fell under it. The +30% puts the two cards near each other again.
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
 			"Two wells open on two packs at once and drift together as they pull, tethered, dragging both knots into one "
-				+ "for both collapses to land on. Each drags 15% harder.",
+				+ "for both collapses to land on. Each drags 15% harder, +30% damage.",
 			"Twin / Pull", "Two packs become one knot, and it is hit twice.",
-			o => { o.DisplayName = "Twin Stars"; o.VisualTag = "TwinStars"; o.ModulateColor = Colors.White; o.ProjectileCountBonus = 1; o.SpeedMultiplier = 1.15f; }));
+			o => { o.DisplayName = "Twin Stars"; o.VisualTag = "TwinStars"; o.ModulateColor = Colors.White; o.ProjectileCountBonus = 1; o.SpeedMultiplier = 1.15f; o.DamageMultiplier = 1.3f; }));
 		AddElementPath(spell);
 		// +60%: at +30% it measured x1.5 of the spell at level 7 against a crowd it was still clearing; at
 		// +60%, x2.30 against one it could not (2026-10-29, --enemy-hp=30; the Titan it replaced, x2.63).
