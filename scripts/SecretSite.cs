@@ -79,21 +79,101 @@ public abstract partial class SecretSite : Node2D
 	/// <summary>The contract's gold.hi, #FFF0C0: the only warm light on screen that is not his.</summary>
 	public static readonly Color GoldHi = new(1.0f, 0.941f, 0.753f);
 
+	/// <summary>gold.lit, #D8B04A: a glint's halo and the body of a warm light.</summary>
+	public static readonly Color GoldLit = new(0.847f, 0.690f, 0.290f);
+
+	/// <summary>gold.base, #8A6A1E: a dimmed glint's core at the bottom of its breath.</summary>
+	public static readonly Color GoldBase = new(0.541f, 0.416f, 0.118f);
+
 	/// <summary>A slow breath, never a flicker: a flicker is fire or his, a breath is a secret.</summary>
 	public const float GlintPeriod = 2.4f;
 
 	/// <summary>0 to 1 and back over <see cref="GlintPeriod"/>.</summary>
 	public static float Breath(float clock) => 0.5f - 0.5f * MathF.Cos(clock * Mathf.Tau / GlintPeriod);
 
+	private const float Grid = PixelInk.Grid;
+
 	/// <summary>
-	/// The warm glint (.ai/stage-secrets.md section 2): a 2 x 2 art-pixel core (4 x 4 on screen) of gold.hi
-	/// and a one-pixel halo, breathing. Never a bloom - a glint the size of a spell reads as a spell.
-	/// <paramref name="at"/> is in the canvas item's own space.
+	/// The warm glint (.ai/stage-secrets.md section 2): a 2 x 2 art-pixel core (4 x 4 on screen) and a
+	/// one-pixel halo round it, breathing. Never a bloom - a glint the size of a spell reads as a spell.
+	/// <paramref name="at"/> is in the canvas item's own space; <paramref name="strength"/> under 1 dims it
+	/// (the First Tree's bed while he has nothing to plant).
 	/// </summary>
+	/// <remarks>
+	/// PIXEL ART (2026-10-30, the secrets' pass onto the spells' contract - .ai/art-direction.md sections 1 and
+	/// 3, .ai/art-replacement-manifest.md section 9). It was two translucent rects anywhere in the canvas,
+	/// half-pixel offsets and all. Now every pixel is an opaque stop of the gold row on the WORLD's 2-unit
+	/// grid, wherever the canvas stands, and the breath is a dissolve through the 4x4 Bayer matrix
+	/// (PixelInk.Keeps), never alpha: the core's gold.hi pixels come and go over gold.lit (gold.base when
+	/// dimmed), and the halo's gold.lit pixels with them, so at the bottom of a breath it is a small dull-gold
+	/// square and at the top a pale one with a scatter round it. The canvas must be unrotated and unscaled,
+	/// with no draw transform set when this is called: the grid is found from its global origin.
+	/// </remarks>
 	public static void DrawGlint(CanvasItem canvas, Vector2 at, float clock, float strength = 1f)
 	{
 		float breath = Breath(clock);
-		canvas.DrawRect(new Rect2(at - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color(GoldHi, (0.18f + 0.22f * breath) * strength));
-		canvas.DrawRect(new Rect2(at - new Vector2(2f, 2f), new Vector2(4f, 4f)), new Color(GoldHi, (0.45f + 0.55f * breath) * strength));
+		Vector2 o = canvas.GetGlobalTransform().Origin;
+		// The core's top-left art pixel on the world's grid: the four cells round the corner nearest it.
+		int cx = (int)MathF.Round((o.X + at.X) / Grid) - 1;
+		int cy = (int)MathF.Round((o.Y + at.Y) / Grid) - 1;
+		float core = (0.45f + 0.55f * breath) * strength;
+		float halo = (0.15f + 0.35f * breath) * strength;
+		Color under = strength >= 0.6f ? GoldLit : GoldBase;
+		for (int y = -1; y <= 2; y++)
+		{
+			for (int x = -1; x <= 2; x++)
+			{
+				bool rowIn = y >= 0 && y <= 1, colIn = x >= 0 && x <= 1;
+				// The halo is the four sides of the core, two cells each: no corners, so it is round.
+				if (!rowIn && !colIn)
+					continue;
+				int wx = cx + x, wy = cy + y;
+				Color c;
+				if (rowIn && colIn)
+					c = PixelInk.Keeps(wx, wy, core) ? GoldHi : under;
+				else if (PixelInk.Keeps(wx, wy, halo))
+					c = GoldLit;
+				else
+					continue;
+				canvas.DrawRect(new Rect2(wx * Grid - o.X, wy * Grid - o.Y, Grid, Grid), c);
+			}
+		}
+	}
+
+	/// <summary>
+	/// A warm light at rest or in flight - the light a vault lets go travelling to him, an opened flower's
+	/// steady glow: a disc of art pixels on the world's grid, gold.hi at its heart, gold.lit round it,
+	/// thinning by the Bayer matrix toward <paramref name="radius"/> - opaque, never a translucent bloom.
+	/// <paramref name="density"/> thins the outer ring further (0 leaves only the heart). Same canvas rule as
+	/// <see cref="DrawGlint"/>.
+	/// </summary>
+	public static void DrawLight(CanvasItem canvas, Vector2 at, float radius, float density = 1f)
+	{
+		if (radius < Grid)
+			return;
+		Vector2 o = canvas.GetGlobalTransform().Origin;
+		Vector2 w = o + at;
+		int ccx = (int)MathF.Round(w.X / Grid), ccy = (int)MathF.Round(w.Y / Grid);
+		int r = (int)MathF.Ceiling(radius / Grid);
+		for (int y = -r; y < r; y++)
+		{
+			for (int x = -r; x < r; x++)
+			{
+				float d = MathF.Sqrt((x + 0.5f) * (x + 0.5f) + (y + 0.5f) * (y + 0.5f)) * Grid / radius;
+				if (d > 1f)
+					continue;
+				int wx = ccx + x, wy = ccy + y;
+				Color c;
+				if (d < 0.3f)
+					c = GoldHi;
+				else if (d < 0.55f)
+					c = PixelInk.Keeps(wx, wy, (0.55f - d) / 0.25f) ? GoldHi : GoldLit;
+				else if (PixelInk.Keeps(wx, wy, density * (1f - (d - 0.55f) / 0.45f)))
+					c = GoldLit;
+				else
+					continue;
+				canvas.DrawRect(new Rect2(wx * Grid - o.X, wy * Grid - o.Y, Grid, Grid), c);
+			}
+		}
 	}
 }

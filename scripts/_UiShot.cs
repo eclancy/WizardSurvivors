@@ -131,6 +131,7 @@ public partial class _UiShot : Node
 	// drops to the First Tree and plants it, checking each step (PASS/FAIL, exit code = failures) and
 	// saving a picture of each as secret-N.png. Writes are off: the save it checks is in memory.
 	private bool secretProbe;
+	private bool secretProbeKeepsake;
 	private bool secretProbeStarted;
 	// On a chapter with a built spell vault, --secret-probe walks to the vault instead and works it
 	// (VaultProbe): for the Geode Heart, the far tell, the seen mark, the strike, the shatter and the spell.
@@ -895,9 +896,12 @@ public partial class _UiShot : Node
 				penCamp = true;
 				SaveManager.WritesDisabled = true;
 			}
-			else if (arg == "--secret-probe")
+			else if (arg == "--secret-probe" || arg == "--secret-probe=keepsake")
 			{
 				secretProbe = true;
+				// =keepsake: the Forest's bloom-and-seed walk even on a chapter whose vault is built (the Pale
+				// Hart), which would otherwise take the probe.
+				secretProbeKeepsake = arg.EndsWith("=keepsake");
 				SaveManager.WritesDisabled = true;
 			}
 			// --secret=<id>: that secret, if the chapter places it (an anchor, keepsake or vault), stands
@@ -2611,12 +2615,15 @@ public partial class _UiShot : Node
 				penCampStarted = true;
 				GetTree().Root.AddChild(new PenCampProbe { Hero = camper, Game = FindNodeOfType<Node2DGame>(GetTree().Root) });
 			}
-			if (secretProbe && !secretProbeStarted && frames >= WarmupFrames / 2
+			// Early, whatever --frames is: a long --frames keeps the shutter loop dismissing level-ups for the
+			// probe, and a probe that waited for half of it gave the kiting bot time to die first on a loaded
+			// machine (slow frames are long frames).
+			if (secretProbe && !secretProbeStarted && frames >= System.Math.Min(WarmupFrames / 2, 240)
 				&& FindNodeOfType<SecretDirector>(GetTree().Root) is SecretDirector probeSecrets
 				&& FindNodeOfType<Player>(GetTree().Root) is Player secretHero)
 			{
 				secretProbeStarted = true;
-				GetTree().Root.AddChild(probeSecrets.Vault != null
+				GetTree().Root.AddChild(probeSecrets.Vault != null && !secretProbeKeepsake
 					? new VaultProbe { Director = probeSecrets, Hero = secretHero }
 					: new SecretProbe { Director = probeSecrets, Hero = secretHero });
 			}
@@ -3949,7 +3956,8 @@ public partial class _UiShot : Node
 			if (DisplayServer.GetName() == "headless")
 				return;
 			Image image = GetViewport().GetTexture().GetImage();
-			string path = OS.GetUserDataDir() + $"/vault-{shots}.png";
+			// Named by the vault: several chapters' probes run side by side and share the user folder.
+			string path = OS.GetUserDataDir() + $"/vault-{vault?.SecretId ?? "none"}-{shots}.png";
 			image.SavePng(path);
 			GD.Print($"VAULTPROBE shot {path} - {what}");
 		}
@@ -4198,6 +4206,7 @@ public partial class _UiShot : Node
 			Image image = GetViewport().GetTexture().GetImage();
 			string path = OS.GetUserDataDir() + $"/secret-{++shots}.png";
 			image.SavePng(path);
+			GD.Print($"SECRETPROBE shot {path}");
 		}
 
 		private void Clear()
