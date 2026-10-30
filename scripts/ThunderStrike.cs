@@ -13,6 +13,13 @@ namespace WizardSurvivors.scripts;
 /// off it, and a white-hot knot where it lands, all in Lightning's ramp: drawn for a fraction of a
 /// second and flickering out, as a strike does. In the air (DrawLayers.Air), over the bodies it hits.
 /// The stroke is jagged once, at birth, into fixed arrays - nothing is allocated while it draws.
+///
+/// The pixel-art pass (2026-10-29: "does not look up to our typical visual fidelity"): it was three
+/// DrawPolylines of falling width and two DrawCircles, translucent, so the bolt was a soft yellow smear
+/// at every angle but straight down. Every segment is now a SpellStrokes stroke on the world's 2 px grid -
+/// a white-hot spine three px across, a hot body, and the ramp's edge as a dithered glow where the old
+/// translucent outer line was - and the knot is two of them at one point. The flicker that faded its alpha
+/// now dissolves it by dither: on, thinning, on, gone.
 /// </remarks>
 public partial class ThunderStrike : Node2D
 {
@@ -25,6 +32,7 @@ public partial class ThunderStrike : Node2D
 	private readonly Vector2[] forkB = new Vector2[4];
 	private float age;
 	private float reach = 90f;
+	private SpellStrokes strokes;
 
 	public static void Spawn(Node2D arena, Vector2 at, float reach)
 	{
@@ -39,6 +47,10 @@ public partial class ThunderStrike : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		strokes = new SpellStrokes(Segments + 8);
+		ElementColors.Ramp lightning = ElementColors.GetRamp(Element.Lightning);
+		strokes.SetTones(lightning, lightning.Edge, new Color(0.020f, 0.027f, 0.047f));
+		Material = strokes.Material;
 		var rng = new RandomNumberGenerator();
 		rng.Randomize();
 		// From above, leaning a little, jagged the whole way down; the last point is the strike.
@@ -74,19 +86,34 @@ public partial class ThunderStrike : Node2D
 	public override void _Draw()
 	{
 		float t = age / Lifetime;
-		// Full for the first third, then it flickers out: on, off, on, gone.
-		float alpha = t < 0.35f ? 1f : (MathF.Sin(age * 90f) > 0f ? 1f - t : 0.15f * (1f - t));
-		ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Lightning);
-		DrawPolyline(stroke, ramp.Edge with { A = 0.5f * alpha }, 16f);
-		DrawPolyline(forkA, ramp.Edge with { A = 0.4f * alpha }, 8f);
-		DrawPolyline(forkB, ramp.Edge with { A = 0.4f * alpha }, 8f);
-		DrawPolyline(stroke, ramp.Hot with { A = alpha }, 7f);
-		DrawPolyline(forkA, ramp.Hot with { A = alpha }, 3.5f);
-		DrawPolyline(forkB, ramp.Hot with { A = alpha }, 3.5f);
-		DrawPolyline(stroke, ramp.Core with { A = alpha }, 3f);
+		// Full for the first third, then it flickers out: on, thinning, on, gone.
+		float gone = t < 0.35f ? 0f : (MathF.Sin(age * 90f) > 0f ? t : 0.85f + 0.15f * t);
+		Vector2 origin = GlobalPosition;
+		strokes.Begin();
+		for (int i = 0; i < Segments; i++)
+			Bolt(origin + stroke[i], origin + stroke[i + 1], 3.5f, 4.5f, gone);
+		for (int i = 0; i < forkA.Length - 1; i++)
+		{
+			Bolt(origin + forkA[i], origin + forkA[i + 1], 1.75f, 2.25f, gone);
+			Bolt(origin + forkB[i], origin + forkB[i + 1], 1.75f, 2.25f, gone);
+		}
 		// Where it lands: a knot of white light, a fraction of the reach - the strike, not its area.
 		float knot = MathF.Max(6f, reach * 0.16f) * (1.2f - 0.6f * t);
-		DrawCircle(Vector2.Zero, knot, ramp.Hot with { A = 0.45f * alpha });
-		DrawCircle(Vector2.Zero, knot * 0.5f, ramp.Core with { A = alpha });
+		strokes.Add(new SpellStrokes.Stroke
+		{
+			A = origin, B = origin, HalfA = knot * 0.5f, HalfB = knot * 0.5f, SpineHalf = knot * 0.5f,
+			Spine = 0, Body = 0, Glow = knot * 0.5f, Density = 0.45f, GlowTone = 1, Dissolve = gone,
+		});
+		strokes.Draw(this, Colors.White);
+	}
+
+	// One straight run of the bolt: a white-hot spine, a hot body, the edge as a dithered glow round it.
+	private void Bolt(Vector2 a, Vector2 b, float half, float glow, float gone)
+	{
+		strokes.Add(new SpellStrokes.Stroke
+		{
+			A = a, B = b, HalfA = half, HalfB = half, SpineHalf = MathF.Max(1f, half * 0.43f),
+			Spine = 0, Body = 1, Glow = glow, Density = 0.5f, GlowTone = 3, Dissolve = gone,
+		});
 	}
 }
