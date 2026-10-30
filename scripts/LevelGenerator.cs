@@ -179,6 +179,29 @@ public sealed partial class LevelGenerator
 			},
 			PropThemes = new[] { "funerary", "bones", "mining" },
 		},
+
+		// THE SUNKEN CAVE (stage_2, .ai/endgame-castle.md 7.3, piece V2). Its own palette at last: until
+		// this block it had none, and PaletteFor handed it the Ruins' cobble and overgrowth - paving and
+		// grass under a roof of rock. Caverns (LevelGenerator.Caverns.cs): rock between winding passages
+		// and chambers, a pool standing in some chambers. The floor is `cave_floor`, a terrain used as the
+		// ground (tools/art/terrain_cave.py): worn stone a step lighter than the rock, with damp in it; on
+		// it silt where water has stood and scree fallen from the roof. Nothing grows and nothing was
+		// built: no overgrowth, no paving, no pits - a pit in a five-tile passage is a passage closed.
+		[StageEnvironmentKind.Cave] = new Palette
+		{
+			GroundTerrain = "cave_floor",
+			GroundMaterial = "graystone",
+			Blobs = new[]
+			{
+				new BlobSpec("dark_dirt", 1.4f, 1.8f, 3.0f),
+				new BlobSpec("rocky_pit", 1.6f, 1.8f, 3.2f),
+			},
+			Density = 0.0055f,
+			// Crystal for the crystals the fiction promises, the miners' leavings, and bones.
+			PropThemes = new[] { "crystal", "mining", "bones" },
+			Topology = StageTopology.Caverns,
+		},
+
 		[StageEnvironmentKind.Ice] = new Palette
 		{
 			GroundMaterial = "graystone",
