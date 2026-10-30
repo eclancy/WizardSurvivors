@@ -549,8 +549,9 @@ public static class StageEnvironmentCatalog
 			0,
 			new[] { "res://assets/bonelight/tiles/deck_fill.png" },
 			48f,
-			// The garrison's few braziers and chain-posts left on the deck (the `torture` theme).
-			propCount: 16)
+			// No scattered props either (the palette names no theme): anything standing on the deck would
+			// stand on in the drop once the front had passed it.
+			propCount: 0)
 		{
 			HazeTint = new Color(0.12f, 0.16f, 0.24f, 0.10f),
 			GlowTint = new Color(0.20f, 0.24f, 0.34f, 0.05f),

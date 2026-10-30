@@ -214,7 +214,7 @@ public partial class BridgeCollapseFront : Node2D
 		b.T = rng.RandfRange(-1f, 1f);
 		b.Life = rng.RandfRange(0.8f, 1.6f);
 		b.Age = age01 * b.Life;
-		b.Size = rng.RandfRange(3f, 7f);
+		b.Size = rng.RandfRange(4f, 9f);
 		b.Tone = rng.RandiRange(0, 2);
 		b.Drift = rng.RandfRange(-6f, 6f);
 	}
@@ -227,9 +227,13 @@ public partial class BridgeCollapseFront : Node2D
 	private static readonly Color StoneShade = new("#141A26");
 	private static readonly Color StoneDeep = new("#0B0F18");
 	private static readonly Color Occ = new("#05070C");
-	private static readonly Color[] BlockTones = { StoneLit, StoneBase, StoneShade };
+	private static readonly Color StoneHi = new("#3A4658");
+	private static readonly Color[] BlockTones = { StoneLit, StoneBase, StoneLit };
 
 	private readonly Vector2[] quad = new Vector2[4];
+	// The broken edge and one row of the face under it, reused while the deck's width is the same.
+	private Vector2[] edge = System.Array.Empty<Vector2>();
+	private Vector2[] row = System.Array.Empty<Vector2>();
 	private readonly Vector2[] quadUv = new Vector2[4];
 	private readonly Color[] quadColour = { Colors.White, Colors.White, Colors.White, Colors.White };
 
@@ -237,7 +241,7 @@ public partial class BridgeCollapseFront : Node2D
 	private const float FallenDepth = 3200f;
 	private const float FallenHalfWidth = 1800f;
 	// The broken end of the deck: its face, seen hanging into the drop, and the ragged line it broke along.
-	private const float FaceHeight = 22f;
+	private const float FaceHeight = 24f;
 	private const float RaggedStep = 12f;
 
 	public override void _Draw()
@@ -265,25 +269,32 @@ public partial class BridgeCollapseFront : Node2D
 		float half = BridgeBand.HalfWidthAt(front) + 16f;
 		if (half <= 16f)
 			return;
-		for (float t = -half; t < half; t += RaggedStep)
+		int steps = Mathf.CeilToInt(2f * half / RaggedStep);
+		if (edge.Length != steps + 1)
+			edge = new Vector2[steps + 1];
+		if (row.Length != steps + 1)
+			row = new Vector2[steps + 1];
+		for (int i = 0; i <= steps; i++)
 		{
+			float t = -half + i * RaggedStep;
 			int k = Mathf.FloorToInt(t / RaggedStep);
-			float bite = Hash01(k, 11) * 10f;
-			float bite2 = Hash01(k + 1, 11) * 10f;
-			Vector2 a = Rules.WorldAt(front - bite, t) - at;
-			Vector2 b = Rules.WorldAt(front - bite2, t + RaggedStep) - at;
-			// The face: from the edge straight down the screen into the drop, lit at its top course and
-			// fading through the deep stop to occlusion. Three bands of whole pixels.
-			Band(a, b, 0f, 3f, StoneBase);
-			Band(a, b, 3f, 9f, StoneShade);
-			Band(a, b, 9f, 15f, StoneDeep);
-			Band(a, b, 15f, FaceHeight, Occ);
-			// A joint every other step: the setts' ends in the face.
-			if ((k & 1) == 0)
-			{
-				Vector2 m = (a + b) * 0.5f;
-				DrawRect(new Rect2(Mathf.Round(m.X), Mathf.Round(m.Y) + 3f, 1f, 6f), StoneDeep);
-			}
+			edge[i] = Rules.WorldAt(front - Hash01(k, 11) * 10f, t) - at;
+		}
+		// The face: from the edge straight down the screen into the drop, lit at its top course and fading
+		// through the deep stop to occlusion - one line of the face per pixel row, the edge moved down. Lines,
+		// not polygons: a strip a few pixels tall along a ragged line is exactly what triangulation trips on.
+		for (int y = 0; y < (int)FaceHeight; y++)
+		{
+			Color tone = y < 2 ? StoneLit : y < 6 ? StoneBase : y < 12 ? StoneShade : y < 17 ? StoneDeep : Occ;
+			for (int i = 0; i <= steps; i++)
+				row[i] = edge[i] + new Vector2(0f, y + 0.5f);
+			DrawPolyline(row, tone, 1f);
+		}
+		// A joint every other step: the setts' ends in the face.
+		for (int i = 0; i < steps; i += 2)
+		{
+			Vector2 m = (edge[i] + edge[i + 1]) * 0.5f;
+			DrawRect(new Rect2(Mathf.Round(m.X), Mathf.Round(m.Y) + 3f, 1f, 6f), StoneDeep);
 		}
 
 		// The masonry falling away: blocks leaving the edge, dropping down the screen into the mist, smaller
@@ -299,7 +310,7 @@ public partial class BridgeCollapseFront : Node2D
 			var r = new Rect2(Mathf.Round(p.X), Mathf.Round(p.Y), size, size);
 			DrawRect(r, tone);
 			if (size >= 3f && u < 0.45f)
-				DrawRect(new Rect2(r.Position, new Vector2(size, 1f)), StoneLit);
+				DrawRect(new Rect2(r.Position, new Vector2(size, 1f)), StoneHi);
 		}
 	}
 
@@ -309,16 +320,6 @@ public partial class BridgeCollapseFront : Node2D
 		quad[1] = b - at;
 		quad[2] = c - at;
 		quad[3] = d - at;
-	}
-
-	// A band of the broken face between two edge points, from y0 to y1 px below them, in whole pixels.
-	private void Band(Vector2 a, Vector2 b, float y0, float y1, Color colour)
-	{
-		quad[0] = (a + new Vector2(0f, y0)).Round();
-		quad[1] = (b + new Vector2(0f, y0)).Round();
-		quad[2] = (b + new Vector2(0f, y1)).Round();
-		quad[3] = (a + new Vector2(0f, y1)).Round();
-		DrawColoredPolygon(quad, colour);
 	}
 
 	private static float Hash01(int k, int salt) =>

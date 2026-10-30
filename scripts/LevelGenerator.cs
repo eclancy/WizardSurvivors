@@ -295,9 +295,11 @@ public sealed partial class LevelGenerator
 				new BlobSpec("rocky_pit", 1.0f, 1.4f, 2.4f),
 			},
 			Density = 0.0018f,
-			// The garrison's braziers and chain-posts. Not bones: the bridge's dead are names on the
+			// No scattered props. Everything standing on the bridge is BridgeRules' (the parapets, towers and
+			// castle wall), which the front takes with the deck; a scattered brazier would stand on in the
+			// drop after the deck under it fell. And none of it is bones: the bridge's dead are names on the
 			// parapet, never bodies (3.9).
-			PropThemes = new[] { "torture" },
+			PropThemes = Array.Empty<string>(),
 			Topology = StageTopology.Band,
 		},
 

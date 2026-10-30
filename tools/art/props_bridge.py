@@ -364,28 +364,39 @@ def slit(p, x, ground_y, v0, v1):
     p.put(x, ground_y - (v0 + v1) // 2, AR[1])
 
 
+# The gatehouse's notches: the drop either side of the narrows is a strip 480 world px along the bridge and
+# (13 - 6) diagonal steps across it, 237 px. A tower fills it: an axis-aligned square whose diagonals are
+# as long as the strip is wide (side 160 world px, 80 art). It is anchored at its middle, which
+# BridgeFurniture puts at the middle of the strip, and its foot is cut where it would hang over the deck:
+# 59 art px across from its middle toward the passage (the strip's half-width), x + y = 83 in art px.
+TOWER_W = 74
+NOTCH_HALF_ART = 59
+
+
 def tower(nw):
-    """A gatehouse tower rising out of the drop beside the narrows. nw: it stands north-west of the
-    passage, anchored by its south-east corner; otherwise south-east, anchored by its north-west corner.
-    Its foot goes down into the mist; on the north-west tower that part is cut where it would lie over
-    the deck (the shore is x + y = 0 through the anchor)."""
-    W, Ht, F = 36, 50, 34
-    p = Piece(120, 160, 70, 100)
-    x0, y0 = (-W, -W) if nw else (0, 0)
+    """A gatehouse tower rising out of the drop beside the narrows, filling the strip of drop there. nw: it
+    stands north-west of the passage (the passage is south-east of it); otherwise south-east of it."""
+    W, Ht, F = TOWER_W, 58, 40
+    p = Piece(200, 240, 100, 150)
+    x0, y0 = -W // 2, -W // 2
     south = masonry(ST[2], ST[3], 4, 8, 1.0, 61 if nw else 63)
     base = flank(ST[2], ST[3], F, 1.0, 65)
+    limit = NOTCH_HALF_ART * math.sqrt(2.0) - 1.0
 
     def foot_clip(px, py, u, v):
-        return not nw or px + py < -1.0
+        # The part of the foot that would hang over the passage, which is south-east of the north-west
+        # tower; the south-east tower's foot is all over the drop.
+        return not nw or px + py < limit
 
     p.face((x0, y0 + W, 0.0), (1.0, 0.0), W, -F, 0.0, base, foot_clip)
     p.face((x0, y0 + W, 0.0), (1.0, 0.0), W, 0.0, Ht, south)
-    # A string course a third of the way up, and the slits with his light.
-    p.face((x0, y0 + W, 0.0), (1.0, 0.0), W, 17.0, 18.0, lambda u, v: ST[1])
-    slit(p, x0 + W // 2 - 1, y0 + W, 24, 33)
-    slit(p, x0 + 7, y0 + W, 36, 42)
-    slit(p, x0 + W - 9, y0 + W, 36, 42)
-    crenellated_top(p, x0, y0, W, W, Ht)
+    # String courses, the slits with his light, and a machicolation's shadow under the parapet.
+    p.face((x0, y0 + W, 0.0), (1.0, 0.0), W, 19.0, 20.0, lambda u, v: ST[1])
+    p.face((x0, y0 + W, 0.0), (1.0, 0.0), W, Ht - 5.0, Ht - 3.0, lambda u, v: OCC if int(u) % 5 < 3 else ST[3])
+    slit(p, x0 + W // 2 - 1, y0 + W, 26, 36)
+    for k in range(4):
+        slit(p, x0 + 9 + k * (W - 20) // 3, y0 + W, 40, 47)
+    crenellated_top(p, x0, y0, W, W, Ht, merlon=6, gap=4, mh=6)
     return p.finish()
 
 
@@ -493,9 +504,17 @@ def pieces():
     return out
 
 
-# Where a piece sorts, if not at its anchor: world px above it (the gate sorts at its upper-left end, so
-# everything in the yard in front of any part of it is drawn in front of it).
-SORT_DY = {"gate_shut": -int(STEP * 3 * SCALE), "gate_open": -int(STEP * 3 * SCALE)}
+# Where a piece sorts, in world px from its anchor (negative: above it). Everything stands among the bodies
+# and is y-sorted with them, so each piece sorts at the line that keeps whatever can stand beside it on the
+# right side of it: a wall whose deck is in front of it (north-west "/", north-east "\\", the castle wall)
+# sorts at its highest point, so every body on the deck is drawn in front; a wall whose deck is behind it
+# (south-east "/", south-west "\\") at its lowest, so every body is drawn behind it and it hides their boots.
+# The gate sorts at its upper-left end, so all of the yard is in front of all of it.
+SORT_DY = {
+    "parapet_nw": -STEP * SCALE, "parapet_nw_breach": -STEP * SCALE,
+    "parapet_sw": STEP * SCALE,
+    "gate_shut": -int(STEP * 3 * SCALE), "gate_open": -int(STEP * 3 * SCALE),
+}
 
 
 def main():

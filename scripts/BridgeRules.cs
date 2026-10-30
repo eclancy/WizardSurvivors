@@ -87,6 +87,7 @@ public partial class BridgeRules : ChapterRules
 	private BridgeBackdrop backdrop;
 	private BridgeFurniture furniture;
 	private Control objective;
+	private Control onboardingTip;
 	private float objectiveRedraw;
 	private float murderHoleTimer;
 	private float volleyTimer;
@@ -95,6 +96,11 @@ public partial class BridgeRules : ChapterRules
 	public override void _Ready()
 	{
 		rng.Randomize();
+		// No scattered props on the bridge. Node2DGame scatters its curated set per chunk later in its
+		// _Ready (BuildCuratedProps), and an empty theme list there means every theme, not none; everything
+		// that stands on the bridge is the furniture below, which the front takes with the deck. A brazier
+		// scattered on the deck would stand on in the drop once the deck under it fell.
+		Game.EnableCuratedProps = false;
 		if (OS.IsDebugBuild())
 		{
 			foreach (string arg in OS.GetCmdlineUserArgs())
@@ -160,6 +166,10 @@ public partial class BridgeRules : ChapterRules
 		if (objective != null && objectiveRedraw <= 0f)
 		{
 			objectiveRedraw = 0.1f;
+			// A new player's onboarding tips use the same strip of the HUD (Node2DGame.OnboardingTipTop): the
+			// bridge's line steps aside while one is up rather than printing under it.
+			onboardingTip ??= Game.GetNodeOrNull<Control>("UIOverlay/OnboardingTipLabel");
+			objective.Visible = onboardingTip == null || !onboardingTip.Visible;
 			objective.QueueRedraw();
 		}
 	}
@@ -446,13 +456,13 @@ public partial class BridgeRules : ChapterRules
 /// the first or last cell row of the water (BridgeBand). Both run through tile corners, so a piece stands on
 /// every 48 px step of the line. That is where WaterShape draws the shore, give or take its 4 px wander.
 ///
-/// HOW EACH SITS. A parapet with the drop behind it (the top-left shore, and a jog with the drop north-east)
-/// shows its inner face and is drawn UNDER every body: whatever stands at it is in front of it. A parapet with
-/// the drop in front of it (the bottom-right shore, and a jog with the drop south-west) shows its outer face and
-/// the bridge's flank going down, and is drawn OVER the bodies: whatever stands at it is behind it, so it
-/// hides their boots, as a wall in three-quarter view does. The towers, turrets and the castle wall are tall
-/// and stand among the bodies, sorted at their feet (WorldSprites.SortLift), the towers thinning round him
-/// when he is behind one (canopy_fade.gdshader, the trees' material).
+/// HOW EACH SITS. Every piece stands among the bodies and is y-sorted with them, at the sort line its
+/// manifest gives (props_bridge.py's SORT_DY): a wall with the deck in front of it (the top-left shore, a jog
+/// with the drop north-east, the castle wall) sorts at its highest point, so whatever stands at it is drawn in
+/// front of it; a wall with the deck behind it (the bottom-right shore, a jog with the drop south-west) sorts at
+/// its lowest, so it hides the boots of whatever stands at it, as a wall in three-quarter view does. The towers
+/// and the parapets then sort against each other too (a tower in the drop behind a parapet is behind it). The
+/// towers thin round him when he is behind one (canopy_fade.gdshader, the trees' material).
 /// </remarks>
 public sealed class BridgeFurniture
 {
@@ -460,8 +470,6 @@ public sealed class BridgeFurniture
 
 	private readonly BridgeRules rules;
 	private readonly Node2D root;
-	private readonly Node2D under;     // parapets whose inner face shows: under the bodies
-	private readonly Node2D over;      // parapets whose outer face shows: over the bodies
 	private readonly Node2D standing;  // towers, turrets, the wall: among the bodies
 	private readonly Dictionary<string, (AtlasTexture Texture, Vector2 Anchor, float SortDy)> pieces = new();
 	private readonly Dictionary<int, List<(Sprite2D Node, float S)>> sections = new();
@@ -480,13 +488,9 @@ public sealed class BridgeFurniture
 	{
 		this.rules = rules;
 		root = new Node2D { Name = "BridgeFurniture" };
-		under = new Node2D { Name = "Under", ZIndex = DrawLayers.Bodies - 2, ZAsRelative = false, YSortEnabled = true };
-		over = new Node2D { Name = "Over", ZIndex = DrawLayers.Bodies + 1, ZAsRelative = false, YSortEnabled = true };
 		// Nested y-sort merges with the game's, so these sort among the bodies (Node2DGame is y-sorted).
 		standing = new Node2D { Name = "Standing", YSortEnabled = true };
 		root.YSortEnabled = true;
-		root.AddChild(under);
-		root.AddChild(over);
 		root.AddChild(standing);
 		rules.Game.AddChild(root);
 		fade = new ShaderMaterial { Shader = GD.Load<Shader>("res://scenes/shaders/canopy_fade.gdshader") };
@@ -650,7 +654,7 @@ public sealed class BridgeFurniture
 				variant = id + "_banner";
 			else if (h % 18 == 3 && pieces.ContainsKey(id + "_breach"))
 				variant = id + "_breach";
-			Place(made, variant, at, side < 0 ? under : over);
+			Place(made, variant, at, standing);
 		}
 	}
 
@@ -675,13 +679,13 @@ public sealed class BridgeFurniture
 			float lo = Math.Min(vFrom, vTo), hi = Math.Max(vFrom, vTo);
 			float v0 = LatticeV(lo + 48f, e);
 			// A "\" segment runs from point v down-right to v + 96. The drop is on the narrower piece's
-			// side of the line: north-east when narrowing (inner face shows, under the bodies), south-west
-			// when widening (outer face and flank show, over them).
+			// side of the line: north-east when narrowing (the inner face shows), south-west when widening
+			// (the outer face and the flank show).
 			string id = narrowing ? "parapet_ne" : "parapet_sw";
 			if (!cliff)
 			{
 				for (float v = v0; v + 96f <= hi - 24f; v += 96f)
-					Place(made, id, new Vector2((u + v) * 0.5f, (v - u) * 0.5f), narrowing ? under : over);
+					Place(made, id, new Vector2((u + v) * 0.5f, (v - u) * 0.5f), standing);
 			}
 			// Turrets where it turns, which also cover what the water's rounding does to a corner.
 			Place(made, "turret", new Vector2((u + vFrom) * 0.5f, (vFrom - u) * 0.5f), standing);
@@ -700,18 +704,17 @@ public sealed class BridgeFurniture
 		return n * 48f;
 	}
 
-	// A gatehouse's towers stand in the drop either side of the narrows, at its middle, each with its corner
-	// on the passage's shore: the north-west one by its south-east corner, the south-east one by its
-	// north-west corner. They are blocked ground already (water) - nothing new collides.
+	// A gatehouse's towers stand in the drop either side of the narrows and fill it: the strip of drop beside
+	// the passage is the gatehouse's length along the bridge and (span K - gatehouse K) steps across, and each
+	// tower is anchored at that strip's middle. They stand on blocked ground already (water): nothing new
+	// collides, and the passage between them is exactly the deck the band left.
 	private void Towers(List<(Sprite2D Node, float S)> made, BridgeBand.Piece p)
 	{
-		float c = p.K * BridgeBand.TilePx;
-		// The point on each shore at the piece's middle, snapped to the 48 px lattice of that line.
-		// x + y = -c on the north-west shore, x + y = +c on the south-east: points (x, -c - x) and (x, c - x).
-		float xn = 48f * Mathf.Round((p.Mid * 0.70710678f - c * 0.5f) / 48f);
-		float xs = 48f * Mathf.Round((p.Mid * 0.70710678f + c * 0.5f) / 48f);
-		Place(made, "tower_nw", new Vector2(xn, -c - xn), standing, fade: true);
-		Place(made, "tower_se", new Vector2(xs, c - xs), standing, fade: true);
+		int i = Array.IndexOf(BridgeBand.Pieces, p);
+		int outer = Math.Min(BridgeBand.Pieces[i - 1].K, BridgeBand.Pieces[i + 1].K);
+		float t = (p.K + outer) * 0.5f * BridgeBand.StepPx;
+		Place(made, "tower_nw", BridgeBand.LocalAt(p.Mid, -t).Round(), standing, fade: true);
+		Place(made, "tower_se", BridgeBand.LocalAt(p.Mid, t).Round(), standing, fade: true);
 	}
 
 	// The castle wall across the far end of the gate yard (x - y = u for the last deck row's next), the gate
