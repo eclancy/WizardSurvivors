@@ -39,14 +39,28 @@ public static class CodexRows
 	// What the player calls the two lists, here so the main menu and the pause screen cannot
 	// name them two ways. The player chose these: "Spell Index" because "spell book" already means
 	// the spells you carry in a run, and the list is the catalogue of every spell and where to find
-	// the rest; "Unlocks" because every entry exists to unlock something, which "Deeds" hid.
+	// the rest. The second list was "Unlocks" (because every entry exists to unlock something, which
+	// "Deeds" hid) until Eric called it "the achievements menu" and decided on the name
+	// (.ai/achievements-and-secrets.md 4.1, decision 4): every entry still pays something and says so,
+	// and secrets are achievements now, which "Unlocks" did not say. The constant keeps its old name -
+	// the button, the panel and the pause tab all read it.
 	public const string SpellIndexTitle = "Spell Index";
 	public const string SpellIndexSubtitle = "Every spell, and how to find the ones you have not.";
-	public const string UnlocksTitle = "Unlocks";
-	public const string UnlocksSubtitle = "Finish one to earn its reward - a new spell, a boon or Arcane Energy.";
+	public const string UnlocksTitle = "Achievements";
+	public const string UnlocksSubtitle = "Each one pays something - a spell, a boon, a wizard or Arcane Energy. Some are found, not done.";
 
-	/// <summary>The Unlocks summary line: "13 of 26 unlocked".</summary>
-	public static string UnlocksSummary(int done, int total) => $"{done} of {total} unlocked";
+	/// <summary>
+	/// The achievements summary line: "41 of 88 earned  ·  6 secrets found". On a phone the two halves
+	/// go on two lines rather than wrapping wherever the width runs out.
+	/// </summary>
+	public static string UnlocksSummary(int done, int total, int secretsFound = 0, bool narrow = false)
+	{
+		string earned = $"{done} of {total} earned";
+		if (secretsFound <= 0)
+			return earned;
+		string secrets = secretsFound == 1 ? "1 secret found" : $"{secretsFound} secrets found";
+		return narrow ? $"{earned}\n{secrets}" : $"{earned}  ·  {secrets}";
+	}
 
 	/// <summary>The inks and faces of one register. Mirrored in tools/art/ui_contrast.py.</summary>
 	public sealed class Palette
@@ -65,6 +79,16 @@ public static class CodexRows
 		public Color Rule;
 		public Color BarTrack;
 		public Color BarFill;
+		/// <summary>
+		/// A hidden achievement the player has seen but not found (.ai/achievements-and-secrets.md 4.3):
+		/// the "Seen" tag. Arcane blue, the eye glyph's iris - not Done's green or Flag's warm orange,
+		/// which already mean "finished" and "needs you".
+		/// </summary>
+		public Color Seen;
+		/// <summary>The lit rim of a sealed thing's silhouette (<see cref="BuildSilhouette"/>).</summary>
+		public Color SilhouetteKeyRim;
+		public Color SilhouetteRim;
+		public Color SilhouetteFill;
 	}
 
 	// The parchment register, for the Spellbook page. The row face IS the page (flesh.hi), so a row
@@ -87,6 +111,10 @@ public static class CodexRows
 		Rule = new Color(0.847f, 0.643f, 0.518f),       // flesh.lit
 		BarTrack = new Color(0.847f, 0.643f, 0.518f),
 		BarFill = new Color(0.306f, 0.267f, 0.439f),    // violet.lit
+		Seen = new Color(0.090f, 0.255f, 0.369f),       // arcane.shade
+		SilhouetteKeyRim = new Color(0.431f, 0.267f, 0.314f), // flesh.shade (InkMeta)
+		SilhouetteRim = new Color(0.659f, 0.439f, 0.345f),    // flesh.base (Edge)
+		SilhouetteFill = new Color(0.847f, 0.643f, 0.518f),   // flesh.lit
 	};
 
 	// The stone register, for Deeds on the menu and both tabs of the pause screen.
@@ -107,6 +135,14 @@ public static class CodexRows
 		Rule = new Color(0.227f, 0.275f, 0.345f),       // stone.hi
 		BarTrack = new Color(0.227f, 0.275f, 0.345f),
 		BarFill = new Color(0.847f, 0.690f, 0.290f),    // gold.lit
+		Seen = new Color(0.416f, 0.722f, 0.910f),       // arcane.lit
+		// The character select's silhouette (CharacterVisuals) is a black fill with a stone rim, made
+		// for a lit card; on this panel the fill is darker than the ground and the rim is 1.5:1, so
+		// the shape read as a hole. Here the lit rim is the meta ink, measured at 3:1 and over by
+		// tools/art/ui_contrast.py, and the fill is the stone's own deep - a shape, not a picture.
+		SilhouetteKeyRim = new Color(0.604f, 0.643f, 0.722f), // skin.base (InkMeta)
+		SilhouetteRim = new Color(0.384f, 0.431f, 0.518f),    // skin.shade
+		SilhouetteFill = new Color(0.043f, 0.059f, 0.094f),   // stone.deep
 	};
 
 	/// <summary>Everything one row can say. Leave a field empty and its line is not built.</summary>
@@ -128,6 +164,13 @@ public static class CodexRows
 		public string Tag = string.Empty;
 		public Texture2D TagGlyph;
 		public bool TagIsDone;
+		/// <summary>The tag in the Seen ink: a hidden achievement the player has been near.</summary>
+		public bool TagIsSeen;
+		/// <summary>
+		/// A row of small glyphs under the body - a chapter's sealed secrets, one silhouette each,
+		/// showing only the kind of thing it pays.
+		/// </summary>
+		public IReadOnlyList<Texture2D> Strip;
 		/// <summary>The reward or the hint, led by <see cref="MetaGlyph"/>.</summary>
 		public string Meta = string.Empty;
 		public Texture2D MetaGlyph;
@@ -216,12 +259,17 @@ public static class CodexRows
 		return gutter;
 	}
 
+	/// <summary>The grid a section's rows sit in (<see cref="AddSection"/>), by the name it is given there.</summary>
+	public const string SectionRowsName = "Rows";
+
 	/// <summary>
 	/// A section: a Cinzel heading with its count on the right, a rule, then the rows in
-	/// <paramref name="columns"/> columns.
+	/// <paramref name="columns"/> columns. <paramref name="trailing"/>, if given, is a control right of
+	/// the count - a quiet toggle (<see cref="StyleQuietToggle"/>) that shows or hides the rows, whose
+	/// grid is the section's child named <see cref="SectionRowsName"/>.
 	/// </summary>
 	public static VBoxContainer AddSection(VBoxContainer list, string title, string count, Palette palette,
-		int columns, IEnumerable<Control> rows)
+		int columns, IEnumerable<Control> rows, Control trailing = null)
 	{
 		var section = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		section.AddThemeConstantOverride("separation", 12);
@@ -249,6 +297,11 @@ public static class CodexRows
 			tally.AddThemeColorOverride("font_color", palette.InkMeta);
 			head.AddChild(tally);
 		}
+		if (trailing != null)
+		{
+			trailing.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+			head.AddChild(trailing);
+		}
 		section.AddChild(head);
 		section.AddChild(new ColorRect
 		{
@@ -259,6 +312,7 @@ public static class CodexRows
 
 		var grid = new GridContainer
 		{
+			Name = SectionRowsName,
 			Columns = Math.Max(1, columns),
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore,
@@ -435,7 +489,7 @@ public static class CodexRows
 		titleRow.AddChild(title);
 		if (!string.IsNullOrEmpty(entry.Tag))
 			titleRow.AddChild(BuildGlyphText(entry.Tag, entry.TagGlyph,
-				entry.TagIsDone ? palette.Done : palette.Flag, expand: false));
+				entry.TagIsDone ? palette.Done : entry.TagIsSeen ? palette.Seen : palette.Flag, expand: false));
 		if (entry.Trailing != null)
 		{
 			entry.Trailing.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
@@ -445,6 +499,19 @@ public static class CodexRows
 
 		if (!string.IsNullOrEmpty(entry.Body))
 			column.AddChild(MakeText(entry.Body, ResponsiveLayout.TextRole.Label, palette.InkSoft));
+
+		if (entry.Strip != null && entry.Strip.Count > 0)
+		{
+			var strip = new HFlowContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+			strip.AddThemeConstantOverride("h_separation", 6);
+			strip.AddThemeConstantOverride("v_separation", 6);
+			foreach (Texture2D glyph in entry.Strip)
+			{
+				if (glyph != null)
+					strip.AddChild(BuildGlyph(glyph));
+			}
+			column.AddChild(strip);
+		}
 
 		if (entry.Elements != null && entry.Elements.Count > 0)
 			column.AddChild(BuildChips(entry.Elements, entry.ChipNote, palette, chipsFocusable));
@@ -533,7 +600,16 @@ public static class CodexRows
 		return count > 1 ? $"{count} unknown {kind}s" : $"Unknown {kind}";
 	}
 
-	/// <summary>The glyph in front of a deed's reward: the spell, the boon, or the purse.</summary>
+	// Where the secret glyphs live: the world map's, so a secret is drawn the same on the map card and
+	// on the achievements page (.ai/achievements-and-secrets.md 4.5).
+	private const string SecretArt = "res://assets/bonelight/ui/worldmap/";
+	private const string UnknownSpellArt = "res://assets/bonelight/ui/spells/unknown.png";
+
+	/// <summary>
+	/// The glyph in front of a deed's reward: the reward itself (.ai/achievements-and-secrets.md 4.5) -
+	/// the spell's icon, the boon's, the wizard's portrait, the stat's glyph for a found level,
+	/// <c>stat-energy</c> for Arcane Energy, the page mark for a secret that pays only the page.
+	/// </summary>
 	public static Texture2D RewardGlyph(AchievementDefinition deed, Func<string, Texture2D> spellIcon)
 	{
 		if (deed == null)
@@ -543,17 +619,116 @@ public static class CodexRows
 		if (!string.IsNullOrEmpty(deed.BoonUnlockId)
 			&& BonelightSkin.LoadTextureSafe($"res://assets/bonelight/ui/boons/{deed.BoonUnlockId}.png") is Texture2D boon)
 			return boon;
+		if (!string.IsNullOrEmpty(deed.CharacterUnlockId) && WizardPortrait(deed.CharacterUnlockId) is Texture2D wizard)
+			return wizard;
 		if (deed.CurrencyReward > 0)
 			return StatIcons.Load("energy");
+		if (AchievementFacts.SecretOf(deed) is SecretDefinition secret)
+			return SecretRewardGlyph(secret);
 		return StatIcons.Load("generic");
 	}
 
+	/// <summary>What a found secret paid, as a glyph: the stat's for a found level, the purse, the page.</summary>
+	public static Texture2D SecretRewardGlyph(SecretDefinition secret)
+	{
+		switch (secret?.MetaReward)
+		{
+			case SecretMetaReward.FoundLevel:
+				return StatIcons.Load(FoundLevelGlyph(secret.MetaRewardId));
+			case SecretMetaReward.ArcaneEnergy:
+				return StatIcons.Load("energy");
+			default:
+				return BonelightSkin.LoadTextureSafe(SecretArt + "mark-page.png");
+		}
+	}
+
+	// The four comfort stats a found level may raise (SecretCatalog.FoundLevelStats), as the glyphs
+	// the shop's Powers lines lead with.
+	private static string FoundLevelGlyph(string upgradeId) => upgradeId switch
+	{
+		"vitality" => "heart",
+		"recovery" => "regen",
+		"magnet" => "magnet",
+		"movespeed" => "speed",
+		_ => "generic",
+	};
+
+	/// <summary>A wizard's first portrait frame - his 48 cell, drawn at its own size (<see cref="BuildGlyph"/>).</summary>
+	public static Texture2D WizardPortrait(string characterId)
+	{
+		CharacterData who = CharacterRoster.GetAll().FirstOrDefault(
+			c => c.Id.Equals(characterId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+		return who?.Portrait;
+	}
+
 	/// <summary>
-	/// A deed as a row. Shared by the main menu and the pause tab so the two cannot word it
-	/// differently, which they did.
+	/// A sealed secret's glyph: the silhouette of what KIND of thing it pays and nothing more - a
+	/// spell's page for a vault, the keepsake for a keepsake, the page mark for the rest
+	/// (.ai/achievements-and-secrets.md 4.3). Never the real icon: that would name the reward.
 	/// </summary>
-	public static PanelContainer BuildDeedRow(AchievementDefinition deed, bool done, AchievementProgress progress,
-		Func<string, Texture2D> spellIcon, Palette palette, bool focusStop = true)
+	public static Texture2D SealedSecretGlyph(SecretDefinition secret, Palette palette)
+	{
+		string art = !string.IsNullOrEmpty(AchievementFacts.SpellOf(secret)) ? UnknownSpellArt
+			: secret != null && secret.IsKeepsake ? SecretArt + "keepsake.png"
+			: SecretArt + "mark-page.png";
+		return BuildSilhouette(BonelightSkin.LoadTextureSafe(art), palette);
+	}
+
+	/// <summary>
+	/// The shape of <paramref name="source"/> and nothing else, in the palette's silhouette inks: the
+	/// world map's and the character select's locked shadow (<see cref="CharacterVisuals.BuildSilhouetteFrames"/>)
+	/// with a rim measured for this page. Built per call and never cached - a static Texture2D
+	/// outlives the engine's own reference (BonelightSkin's remarks); each source is at most 64x64.
+	/// </summary>
+	public static Texture2D BuildSilhouette(Texture2D source, Palette palette)
+	{
+		Image image = source?.GetImage();
+		if (image == null || image.IsEmpty())
+			return null;
+		if (image.IsCompressed())
+			image.Decompress();
+
+		int w = image.GetWidth();
+		int h = image.GetHeight();
+		Image shadow = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
+		bool Solid(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && image.GetPixel(x, y).A >= 0.5f;
+		for (int y = 0; y < h; y++)
+		{
+			for (int x = 0; x < w; x++)
+			{
+				if (!Solid(x, y))
+					continue;
+				// Lit from the upper left like everything in the game: the edges facing the key are
+				// the bright rim, the others the dim one.
+				bool openToKey = !Solid(x, y - 1) || !Solid(x - 1, y);
+				bool edge = openToKey || !Solid(x + 1, y) || !Solid(x, y + 1);
+				shadow.SetPixel(x, y, openToKey ? palette.SilhouetteKeyRim : edge ? palette.SilhouetteRim : palette.SilhouetteFill);
+			}
+		}
+		return ImageTexture.CreateFromImage(shadow);
+	}
+
+	/// <summary>
+	/// The Spell Index's glyph for a page not yet found: the warm glint for a spell hidden in a vault -
+	/// the secret's own tell, beside "Hidden somewhere in the Sunken Cave" (decision 7) - and the lock
+	/// for every other way of earning one.
+	/// </summary>
+	public static Texture2D SpellHintGlyph(string spellId)
+	{
+		return AchievementFacts.IsVaultSpell(spellId)
+			? BonelightSkin.LoadTextureSafe(SecretArt + "secret.png") ?? StatIcons.Load("lock")
+			: StatIcons.Load("lock");
+	}
+
+	/// <summary>
+	/// A deed as a row's words: name, what it asks, a bar for a countable one, the reward led by the
+	/// reward's own glyph. Shared by the achievements page on both screens and the results screen's
+	/// "Closest unlock", so none of them can word it differently, which they did.
+	/// </summary>
+	/// <param name="save">When given, a reward the save already owns says so: "Frees Gravewell - you
+	/// already had it" (a spell bought before the shop stopped selling spells, now behind a vault).</param>
+	public static Entry DeedEntry(AchievementDefinition deed, bool done, AchievementProgress progress,
+		Func<string, Texture2D> spellIcon, bool focusStop = true, SaveData save = null)
 	{
 		var entry = new Entry
 		{
@@ -571,14 +746,59 @@ public static class CodexRows
 			entry.TagGlyph = StatIcons.Load("done");
 			entry.TagIsDone = true;
 		}
-		else if (!string.IsNullOrEmpty(progress?.Display))
+		else
 		{
-			// A countable deed gets a bar and its numbers; a yes/no one gets neither, because
-			// "0 / 1" reads as a broken counter (AchievementDefinition.GetProgress).
-			entry.Progress = progress.Fraction;
-			entry.ProgressText = progress.Display;
+			if (!string.IsNullOrEmpty(progress?.Display))
+			{
+				// A countable deed gets a bar and its numbers; a yes/no one gets neither, because
+				// "0 / 1" reads as a broken counter (AchievementDefinition.GetProgress).
+				entry.Progress = progress.Fraction;
+				entry.ProgressText = progress.Display;
+			}
+			if (OwnedRewardLine(deed, save) is string owned)
+				entry.Meta = owned;
 		}
-		return BuildRow(entry, palette);
+		return entry;
+	}
+
+	/// <summary>A deed as a row. See <see cref="DeedEntry"/>.</summary>
+	public static PanelContainer BuildDeedRow(AchievementDefinition deed, bool done, AchievementProgress progress,
+		Func<string, Texture2D> spellIcon, Palette palette, bool focusStop = true, SaveData save = null)
+	{
+		return BuildRow(DeedEntry(deed, done, progress, spellIcon, focusStop, save), palette);
+	}
+
+	/// <summary>
+	/// "Frees Gravewell - you already had it" when everything an unfinished deed pays is already the
+	/// save's (.ai/achievements-and-secrets.md 4.5) - a spell bought before the shop stopped selling
+	/// spells, now behind its vault - and null otherwise. Only an unlock can be owned: a deed that pays
+	/// Arcane Energy pays it whatever the save holds, so it never says this.
+	/// </summary>
+	public static string OwnedRewardLine(AchievementDefinition deed, SaveData save) =>
+		deed != null && save != null && AlreadyOwned(deed, save) ? $"{deed.RewardText} - you already had it" : null;
+
+	private static bool AlreadyOwned(AchievementDefinition deed, SaveData save)
+	{
+		bool any = false;
+		if (!string.IsNullOrEmpty(deed.SpellUnlockId))
+		{
+			any = true;
+			if (!GlobalStatsManager.IsSpellUnlockedForLevelUp(save, deed.SpellUnlockId))
+				return false;
+		}
+		if (!string.IsNullOrEmpty(deed.BoonUnlockId))
+		{
+			any = true;
+			if (!GlobalStatsManager.IsBoonUnlocked(save, deed.BoonUnlockId))
+				return false;
+		}
+		if (!string.IsNullOrEmpty(deed.CharacterUnlockId))
+		{
+			any = true;
+			if (!GlobalStatsManager.IsCharacterUnlocked(save, deed.CharacterUnlockId))
+				return false;
+		}
+		return any && deed.CurrencyReward <= 0;
 	}
 
 	/// <summary>
@@ -633,22 +853,7 @@ public static class CodexRows
 		if (expand)
 			row.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		if (glyph != null)
-		{
-			// The stat glyphs are drawn at 24 and the spell and boon icons at 64. Shown in the same
-			// 32 box, one is centred unscaled and the other halved - both whole multiples of their
-			// pixels, so neither smears.
-			bool native = glyph.GetWidth() <= 24;
-			row.AddChild(new TextureRect
-			{
-				Texture = glyph,
-				CustomMinimumSize = new Vector2(GlyphBox, GlyphBox),
-				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-				StretchMode = native ? TextureRect.StretchModeEnum.KeepCentered : TextureRect.StretchModeEnum.KeepAspectCentered,
-				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
-				MouseFilter = Control.MouseFilterEnum.Ignore,
-			});
-		}
+			row.AddChild(BuildGlyph(glyph));
 		Label label = MakeText(text, ResponsiveLayout.TextRole.Label, ink);
 		label.CustomMinimumSize = new Vector2(0, GlyphBox);
 		if (expand)
@@ -657,6 +862,30 @@ public static class CodexRows
 			label.AutowrapMode = TextServer.AutowrapMode.Off;
 		row.AddChild(label);
 		return row;
+	}
+
+	/// <summary>
+	/// One glyph, at a whole multiple of its own pixels so it never smears. The stat glyphs are drawn
+	/// at 24 and the page mark at 32: centred unscaled in the 32 box. The spell, boon and secret icons
+	/// are 64: halved into it. A wizard's portrait is a 48 cell, which no box of 32 can take whole, so
+	/// it keeps its own 48 - "the wizard's portrait at the row's scale"
+	/// (.ai/achievements-and-secrets.md 4.5) - and the line grows by those 16 units.
+	/// </summary>
+	private static TextureRect BuildGlyph(Texture2D glyph)
+	{
+		int width = glyph.GetWidth();
+		bool halved = width >= 64;
+		float box = halved || width <= GlyphBox ? GlyphBox : width;
+		return new TextureRect
+		{
+			Texture = glyph,
+			CustomMinimumSize = new Vector2(box, box),
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = halved ? TextureRect.StretchModeEnum.KeepAspectCentered : TextureRect.StretchModeEnum.KeepCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
 	}
 
 	private static Control BuildChips(IReadOnlyList<(Element Element, int Weight)> elements, string note, Palette palette,

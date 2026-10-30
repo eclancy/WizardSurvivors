@@ -1006,7 +1006,11 @@ public partial class _UiShot : Node
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
 			// --found-secrets=id,id: marks those stage secrets found in the in-memory save (writes off),
-			// to photograph the Unlocks page's Secrets section with something in it.
+			// to photograph the achievements page's found secrets.
+			// --seen-secrets=id,id: marks those secrets SEEN - their near tell on screen once, not yet
+			// found (.ai/achievements-and-secrets.md 4.3) - so the page's middle state, a named row with
+			// what was seen, can be photographed. Writes off. Put it after --fresh-save, which replaces
+			// the save it marks.
 			// A Boss Rush (issue #12) instead of the chapter; writes off, since its end records a best.
 			else if (arg == "--boss-rush")
 			{
@@ -1034,6 +1038,13 @@ public partial class _UiShot : Node
 				var secretsSave = GetNodeOrNull<SaveManager>("/root/SaveManager");
 				foreach (string id in arg.Substring("--found-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
 					secretsSave?.Data.RecordSecretFound(id.Trim());
+			}
+			else if (arg.StartsWith("--seen-secrets="))
+			{
+				SaveManager.WritesDisabled = true;
+				SaveData seenSave = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+				foreach (string id in arg.Substring("--seen-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+					AchievementFacts.MarkGlimpsed(seenSave, id.Trim());
 			}
 			else if (arg.StartsWith("--shore="))
 			{

@@ -4717,7 +4717,8 @@ public partial class Node2DGame : Node2D
 			Icon = icon ?? FallbackSpellHudIcon,
 			IconSilhouette = true,
 			Meta = UnlockCatalog.GetLockedHint(id, UnlockKind.Spell),
-			MetaGlyph = StatIcons.Load("lock"),
+			// The main menu's glyph: a vault's spell is led by the secret's glint, the rest by the lock.
+			MetaGlyph = CodexRows.SpellHintGlyph(id),
 			Quiet = true,
 			// A stop for the stick, as on the main menu: the pad scrolls the list by moving the
 			// selection through it, and B still closes the pause from any row (MenuBackListener).
@@ -4725,44 +4726,46 @@ public partial class Node2DGame : Node2D
 		}, CodexRows.Stone);
 	}
 
+	// The achievements page over a run (.ai/achievements-and-secrets.md 4.6): the main menu's page,
+	// built by the same AchievementsPage, as one list - this chapter first, with this run's progress,
+	// then everything else not done, then Done behind a toggle. It used to build the list a second way
+	// from the save alone, so nothing measured over a run (Survivor's clock, the Coursing's hares) ever
+	// showed the run being played. The pause screen pauses the tree, so the touch stick's full-screen
+	// STOP control cannot take the tab's taps.
+	private AchievementsPage.Result escapeAchievements;
+	private bool escapeAchievementsPadYWired;
+
 	private void ShowEscapeAchievements()
 	{
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		WireEscapeAchievementsPadY();
 		ShowStructuredEscapeDetail(CodexRows.UnlocksTitle, sections =>
 		{
-			AchievementContext context = AchievementContext.ForSave(data);
-			var open = new List<(AchievementDefinition, AchievementProgress)>();
-			var done = new List<AchievementDefinition>();
-			foreach (AchievementDefinition deed in AchievementDefinitions.Listed)
-			{
-				if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
-					done.Add(deed);
-				else
-					open.Add((deed, deed.GetProgress(context)));
-			}
-
-			Texture2D SpellIcon(string spellId)
-			{
-				foreach (var (id, path) in SpellbookResources)
-					if (id.Equals(spellId, StringComparison.OrdinalIgnoreCase))
-						return ResourceLoader.Load<SpellData>(path)?.Icon;
-				return null;
-			}
-
-			int total = open.Count + done.Count;
-			int columns = CodexRows.ColumnsFor(this);
+			// In the tree before it is built: one column or two is read from where it sits.
 			var list = CodexRows.BuildList();
-			list.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSubtitle + "\n" + CodexRows.UnlocksSummary(done.Count, total),
-				CodexRows.Stone, total > 0 ? done.Count / (float)total : 0f));
-			// In progress first: the player is mid-run and wants to know what this attempt could finish.
-			if (open.Count > 0)
-				CodexRows.AddSection(list, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
-					CodexRows.OrderInProgress(open).Select(p => (Control)CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone, focusStop: true)));
-			if (done.Count > 0)
-				CodexRows.AddSection(list, "Done", $"{done.Count}", CodexRows.Stone, columns,
-					done.Select(d => (Control)CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone, focusStop: true)));
 			sections.AddChild(list);
+			RunResult snapshot = SnapshotRunResult();
+			escapeAchievements = AchievementsPage.Build(list, AchievementContext.ForRun(data, snapshot),
+				AchievementsPage.PageMode.Pause, AchievementsPage.Filter.All, snapshot.StageId);
 		});
+	}
+
+	// Pad Y on this tab opens and closes Done (4.8), as it opens the spell details on the Run tab. The
+	// escape menu's MenuBackListener has one PadY; it is wrapped here once, the first time the tab is
+	// shown, and hands every other tab to what it did before.
+	private void WireEscapeAchievementsPadY()
+	{
+		if (escapeAchievementsPadYWired || escapeMenu?.GetNodeOrNull<MenuBackListener>(MenuBackListener.NodeName) is not MenuBackListener back)
+			return;
+		Action before = back.PadY;
+		back.PadY = () =>
+		{
+			if (escapeActiveTitle == CodexRows.UnlocksTitle)
+				escapeAchievements?.ToggleDone();
+			else
+				before?.Invoke();
+		};
+		escapeAchievementsPadYWired = true;
 	}
 
 	private void AppendCharacterPassive(StringBuilder builder)
@@ -6836,6 +6839,31 @@ public partial class Node2DGame : Node2D
 			EquippedSpells = BuildSpellSnapshot(),
 			CharacterId = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx)?.Id ?? string.Empty
 		};
+	}
+
+	/// <summary>
+	/// The run so far, as the RunResult its end would write - what <see cref="BuildRunResult"/> fills,
+	/// and the telemetry and run events <see cref="FinishRunAndReward"/> folds in - without ending
+	/// anything. The pause screen's achievements tab measures against it, so a deed measured over one
+	/// run shows this run (.ai/achievements-and-secrets.md 4.4).
+	/// </summary>
+	/// <remarks>
+	/// A defeat with no boss, on purpose: a snapshot is not a victory and has beaten no one, so it can
+	/// never make a chapter's deed or Veteran read as done before the run has earned it. Nothing is
+	/// written - FinishRunAndReward records the loadout's element counts as a last peak before it reads
+	/// them, and a snapshot folds them into its own copy instead.
+	/// </remarks>
+	private RunResult SnapshotRunResult()
+	{
+		RunResult snapshot = BuildRunResult(RunOutcome.Defeat, string.Empty);
+		GameStats.ApplyTelemetryToRunResult(snapshot);
+		RunEvents.ApplyToRunResult(snapshot, timeElapsed);
+		foreach (KeyValuePair<string, int> held in snapshot.ElementCounts)
+		{
+			if (!snapshot.PeakElementCounts.TryGetValue(held.Key, out int peak) || held.Value > peak)
+				snapshot.PeakElementCounts[held.Key] = held.Value;
+		}
+		return snapshot;
 	}
 
 	private void UpdateOnboardingTips(float deltaSeconds)
