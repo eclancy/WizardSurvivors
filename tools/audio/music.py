@@ -1775,8 +1775,7 @@ def read_wav(path):
         if w.getnchannels() != 1 or w.getsampwidth() != 2:
             raise SystemExit("%s: expected 16-bit mono" % path)
         sr = w.getframerate()
-        raw = array.array("h")
-        raw.fromstring(w.readframes(w.getnframes()))
+        raw = S.frombytes(array.array("h"), w.readframes(w.getnframes()))
     finally:
         w.close()
     return [v / 32768.0 for v in raw], sr
@@ -1965,6 +1964,12 @@ def journeys(src_dir, out_dir):
         print("wrote %s - the theme twice (%.1f s a loop), a run starting at %.0f s; %.0f s"
               % (os.path.relpath(r[0], ROOT), r[1], r[2], r[3]))
     for piece in CHAPTERS:
+        # A chapter the game plays differently brings its own reel (music_throne.py: no boss loop,
+        # and the pulse leaving for the final boss's second phase).
+        custom = getattr(piece, "journey", None)
+        if custom is not None:
+            custom(src_dir, out_dir)
+            continue
         r = chapter_journey(piece, src_dir, out_dir, boss)
         if r:
             print("wrote %s - bed 0:00, +pulse %.0f s, +lead %.0f s, boss %.0f s; %.0f s"

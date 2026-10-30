@@ -142,8 +142,7 @@ def load(name):
         if not os.path.isfile(path):
             raise SystemExit("missing %s - run python tools/audio/build.py first" % path)
         w = wave.open(path, "rb")
-        raw = array.array("h")
-        raw.fromstring(w.readframes(w.getnframes()))
+        raw = S.frombytes(array.array("h"), w.readframes(w.getnframes()))
         w.close()
         _sounds[name] = [v / 32768.0 for v in raw]
     return _sounds[name]
@@ -456,8 +455,7 @@ def load_music(names, seconds, music_dir=MUSIC_DIR):
             continue
         w = wave.open(path, "rb")
         sr = w.getframerate()
-        raw = array.array("h")
-        raw.fromstring(w.readframes(w.getnframes()))
+        raw = S.frombytes(array.array("h"), w.readframes(w.getnframes()))
         w.close()
         src = [v / 32768.0 for v in raw]
         step = sr / float(S.SR)
