@@ -3975,8 +3975,14 @@ public partial class _UiShot : Node
 
 		// A level-up from an orb the warmup left pauses the tree, and the probe with it; the tool's own
 		// shutter loop dismisses it (run with a long --frames so it is still watching).
-		private bool InFrostShardPool() => Hero.GetDealableCandidates()
-			.Any(o => o.SpellId.Equals("frost_shard", System.StringComparison.OrdinalIgnoreCase));
+		private bool InFrostShardPool() => InSpellPool();
+
+		// The vault's own spell (its catalog entry's SpellUnlockId): Frost Shard for the Geode Heart.
+		private string VaultSpellId => vault?.Definition?.SpellUnlockId ?? "frost_shard";
+		private string VaultSpellName => vault?.Definition?.SpellName ?? "Frost Shard";
+
+		private bool InSpellPool() => Hero.GetDealableCandidates()
+			.Any(o => o.SpellId.Equals(VaultSpellId, System.StringComparison.OrdinalIgnoreCase));
 
 		// Everything but the probe's own bodies goes, every frame; they are put back where they stand.
 		private void Hold()
@@ -3998,12 +4004,17 @@ public partial class _UiShot : Node
 				faraway.GlobalPosition = farAt;
 				keep.Add(faraway);
 			}
+			// A vault's own bodies (the Pinfold's guards) are its branch's to keep or kill.
+			foreach (Enemy e in KeptByVaultsA())
+				if (e != null && IsInstanceValid(e))
+					keep.Add(e);
 			foreach (Enemy e in EnemyRegistry.Snapshot)
 				if (e != null && IsInstanceValid(e) && !keep.Contains(e))
 					e.QueueFree();
 			Hero.MaxHP = System.Math.Max(Hero.MaxHP, 20);
 			Hero.CurrentHP = Hero.MaxHP;
-			// Once there, he stands where he was put: the tool's kiting bot would walk him off.
+			// Once there, he stands where he was put: the tool's kiting bot would walk him off. A branch
+			// that walks him (following the hart, gathering the shards) moves `stand` with him.
 			if (step >= 2)
 				Hero.GlobalPosition = stand;
 		}
@@ -4034,8 +4045,10 @@ public partial class _UiShot : Node
 					vault = Director.Vault as SecretVault;
 					crystal = vault?.GetNodeOrNull<Breakable>("Crystal");
 					save = Director.GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-					Check($"the chapter's vault was placed ({Director.Vault?.SecretId})", vault != null && crystal != null && save != null);
-					if (vault == null || crystal == null || save == null)
+					// A vault that breaks has its Crystal; the others have a branch of their own (WorkVaultsA).
+					Check($"the chapter's vault was placed ({Director.Vault?.SecretId})", vault != null && save != null
+						&& (crystal != null || HasVaultsABranch()));
+					if (vault == null || save == null || (crystal == null && !HasVaultsABranch()))
 					{
 						Finish();
 						return;
@@ -4047,10 +4060,13 @@ public partial class _UiShot : Node
 					Check($"it is five to seven chunks out ({chunks:0.00})", chunks >= SecretDirector.VaultMinChunks - 0.3f && chunks <= SecretDirector.VaultMaxChunks + 1.1f);
 					Check("it is never a target: not in \"enemies\", nor anything in it",
 						!vault.IsInGroup("enemies") && !vault.FindChildren("*", "", true, false).Any(n => n.IsInGroup("enemies")));
-					Check("its foot is solid in the navigation grid (a fence's flag)", Director.Game.Terrain?.IsFenceAtWorld(vault.GlobalPosition) == true);
+					// Only a vault that stops feet is solid ground (the crystal's foot, the forge); the hart and the
+					// star are walked over.
+					foreach (var (centre, _) in vault.SolidFootprints)
+						Check($"its solid ground is solid in the navigation grid (a fence's flag) at {centre}", Director.Game.Terrain?.IsFenceAtWorld(centre) == true);
 					Check("not seen before he has been near it", !Director.IsGlimpsed(vault.SecretId));
 					if (!hadBefore)
-						Check("Frost Shard is not in the level-up pool before it is found", !InFrostShardPool());
+						Check($"{VaultSpellName} is not in the level-up pool before it is found", !InSpellPool());
 					stand = vault.GlobalPosition + new Vector2(0f, 230f);
 					step++;
 					return;
@@ -4095,8 +4111,14 @@ public partial class _UiShot : Node
 					// Per area: the inner disc (less the footprint) is a third of the outer annulus's area.
 					Check("the far tell thickens toward it (density within a chunk > from one to two)",
 						inner + cracked > 0 && (inner + cracked) / 1f > (outer + crackedFar) / 3f);
-					Check("the cracked clusters are the near ones", cracked > 0 && crackedFar == 0);
+					Check("the near pieces are only near (the cracked clusters, the fresh prints)", cracked > 0 && crackedFar == 0);
 					Shot("standing at its foot, whole");
+					if (crystal == null)
+					{
+						// Not a thing to break: the vault's own branch from here (_UiShot.VaultsA.cs).
+						step = 100;
+						return;
+					}
 					// Three bodies within its reach, two witnesses inside the freeze but out of reach, and
 					// one beyond the reach whose hits must count for nothing.
 					Vector2 foot = vault.GlobalPosition;
@@ -4162,24 +4184,39 @@ public partial class _UiShot : Node
 					return;
 				}
 				case 6:
-				{
-					Shot("the light reached him: the toast");
-					Check("the vault is opened for the run", vault.IsOpened);
-					Check("it is found on the save", save.HasFoundSecret(vault.SecretId));
-					Check("its deed is recorded", GlobalStatsManager.IsAchievementUnlocked(save, AchievementDefinitions.SecretDeedId(vault.SecretId)));
-					Check("Frost Shard is owned on the save", GlobalStatsManager.IsSpellUnlockedForLevelUp(save, "frost_shard"));
-					Check("Frost Shard joins the level-up pool in this run", InFrostShardPool());
-					Check("and is not put into the run (not in the loadout)",
-						!Hero.GetEquippedSpells().Any(s => s != null && s.Id.Equals("frost_shard", System.StringComparison.OrdinalIgnoreCase)));
-					int chests = Director.Game.GetChildren().Count(c => c is ChestReward);
-					if (hadBefore)
-						Check($"found before: a chest from the budget instead ({chestsBefore} -> {chests}, paid {Director.ChestsPaid})", chests == chestsBefore + 1 && Director.ChestsPaid == 1);
-					else
-						Check($"found for the first time: no chest, the spell is the reward ({chestsBefore} -> {chests})", chests == chestsBefore && Director.ChestsPaid == 0);
-					Finish();
+					CheckPaid();
 					return;
-				}
+				default:
+					// A vault with another verb: its branch, from step 100 (_UiShot.VaultsA.cs).
+					if (!WorkVaultsA(dt))
+					{
+						Check($"there is a probe branch for {vault?.SecretId}", false);
+						Finish();
+					}
+					return;
 			}
+		}
+
+		// The end of every vault's walk: the light has reached him and the toast is up. What 6.2 and 6.4
+		// promise - opened, found, its deed, its spell owned and in the pool and not in the loadout - and
+		// the chest only on a save that had found it before.
+		private void CheckPaid()
+		{
+			string spell = VaultSpellId;
+			Shot("the light reached him: the toast");
+			Check("the vault is opened for the run", vault.IsOpened);
+			Check("it is found on the save", save.HasFoundSecret(vault.SecretId));
+			Check("its deed is recorded", GlobalStatsManager.IsAchievementUnlocked(save, AchievementDefinitions.SecretDeedId(vault.SecretId)));
+			Check($"{VaultSpellName} is owned on the save", GlobalStatsManager.IsSpellUnlockedForLevelUp(save, spell));
+			Check($"{VaultSpellName} joins the level-up pool in this run", InSpellPool());
+			Check("and is not put into the run (not in the loadout)",
+				!Hero.GetEquippedSpells().Any(s => s != null && s.Id.Equals(spell, System.StringComparison.OrdinalIgnoreCase)));
+			int chests = Director.Game.GetChildren().Count(c => c is ChestReward);
+			if (hadBefore)
+				Check($"found before: a chest from the budget instead ({chestsBefore} -> {chests}, paid {Director.ChestsPaid})", chests == chestsBefore + 1 && Director.ChestsPaid == 1);
+			else
+				Check($"found for the first time: no chest, the spell is the reward ({chestsBefore} -> {chests})", chests == chestsBefore && Director.ChestsPaid == 0);
+			Finish();
 		}
 	}
 
