@@ -388,14 +388,15 @@ public partial class WorldMap : Control
 		else if (!open)
 		{
 			cardBox.AddChild(GlyphLine("lock", stage.LockedHint, InkFlag, "CardState"));
-			if (stage.Gate == StageGate.CampaignComplete && stage.IsPlayable)
+			if (stage.Gate == StageGate.PreviousBossAndWizards && stage.IsPlayable)
 			{
-				// The one gate the player cannot open by beating one thing, and the one place it is
-				// written down with its count (the stage list lost this when it hid closed chapters).
-				int spells = GlobalStatsManager.RemainingSpellCount(save);
-				int wizards = GlobalStatsManager.RemainingWizardCount(save);
-				cardBox.AddChild(MakeText($"Still held: {Plural(spells, "spell")} and {Plural(wizards, "wizard")}",
-					ResponsiveLayout.TextRole.Label, InkSoft, "CardGoal"));
+				// A gate chapter: the one gate the player cannot open by beating one thing, and the one
+				// place it is written down with its count. It counts wizards since schema 19, not spells
+				// (.ai/achievements-and-secrets.md 2.5) - only those freed before this chapter.
+				int wizards = GlobalStatsManager.RemainingGateWizardCount(save, stage);
+				if (wizards > 0)
+					cardBox.AddChild(MakeText($"Still held: {Plural(wizards, "wizard")}",
+						ResponsiveLayout.TextRole.Label, InkSoft, "CardGoal"));
 			}
 		}
 		else

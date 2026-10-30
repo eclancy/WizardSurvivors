@@ -1133,8 +1133,9 @@ public partial class _UiShot : Node
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
 			// --unlock-wizards: every wizard owned, in memory only (writes are off above), so a newly
 			// added one can be photographed on the character select as a player who has earned him sees it.
-			// --campaign-complete: every spell and wizard owned, in memory only, which is what opens
-			// the final chapter (GlobalStatsManager.IsCampaignComplete) - for the stage list's last state.
+			// --campaign-complete: every spell and wizard owned, and the boss before each gate chapter
+			// beaten, in memory only, which is what opens them (GlobalStatsManager.IsGateMet, since
+			// schema 19 the previous boss and the wizards) - for the stage list's last state.
 			else if (arg == "--campaign-complete")
 			{
 				SaveData all = CurrentSave();
@@ -1142,6 +1143,13 @@ public partial class _UiShot : Node
 					GlobalStatsManager.UnlockSpell(all, id);
 				foreach (string id in UnlockCatalog.AllWizardIds)
 					GlobalStatsManager.UnlockCharacter(all, id);
+				foreach (StageDefinition gate in StageCatalog.GateChapters)
+				{
+					StageDefinition before = StageCatalog.PreviousChapter(gate);
+					BossDefinition boss = before != null ? BossCatalog.ForStageIndex(before.Index) : null;
+					if (boss != null && !all.Lifetime.HasDefeatedBoss(boss.Id))
+						all.Lifetime.BossesDefeated.Add(boss.Id);
+				}
 			}
 			else if (arg == "--unlock-wizards")
 			{

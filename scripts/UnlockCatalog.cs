@@ -9,11 +9,20 @@ public enum UnlockSource
 {
 	/// <summary>Available from the first run. Never gated.</summary>
 	Starter,
-	/// <summary>Granted when the achievement named by <see cref="UnlockDefinition.SourceId"/> completes.</summary>
+	/// <summary>
+	/// Granted when the achievement named by <see cref="UnlockDefinition.SourceId"/> completes. Since
+	/// schema 19 (.ai/achievements-and-secrets.md) every spell that is not a starter comes this way - a
+	/// Feat, a chapter's Road deed, or a secret found in the world - and so does every wizard.
+	/// </summary>
 	Achievement,
-	/// <summary>Bought with Arcane Energy in the main menu shop.</summary>
+	/// <summary>Bought with Arcane Energy in the main menu shop. Boons only since schema 19: the shop sells no spells.</summary>
 	Purchase,
-	/// <summary>Found in the world at the discovery site named by <see cref="UnlockDefinition.SourceId"/>.</summary>
+	/// <summary>
+	/// RETIRED at schema 19: no entry uses it. A side event's unlock is now the reward of that event's
+	/// Road deed (<see cref="UnlockSource.Achievement"/>), and the site survives only as the deed's
+	/// trigger, kept on <see cref="UnlockDefinition.SiteId"/>. Left in the enum so the code that still
+	/// names it compiles, and so <c>RegressionChecks.ValidateUnlockCatalog</c> can refuse it by name.
+	/// </summary>
 	Discovery,
 }
 
@@ -36,8 +45,16 @@ public sealed class UnlockDefinition
 	public UnlockKind Kind { get; init; }
 	public UnlockSource Source { get; init; }
 
-	/// <summary>Achievement id or discovery site id. Empty for Starter and Purchase.</summary>
+	/// <summary>The achievement id that grants it. Empty for Starter and Purchase.</summary>
 	public string SourceId { get; init; } = string.Empty;
+
+	/// <summary>
+	/// For something a chapter's side event pays: the event's site id, as <c>SideEventDirector.ForStage</c>
+	/// maps it. Its <see cref="SourceId"/> is that event's Road deed
+	/// (<see cref="AchievementDefinitions.EventDeedId"/>), and the deed reads its reward from here - so what
+	/// a site pays is written once, on this entry, and nowhere else. Empty for anything else.
+	/// </summary>
+	public string SiteId { get; init; } = string.Empty;
 
 	/// <summary>Arcane Energy price. Only read when <see cref="Source"/> is Purchase.</summary>
 	public int PurchaseCost { get; init; }
@@ -63,8 +80,8 @@ public sealed class UnlockDefinition
 	public string RevealStageId { get; init; } = string.Empty;
 
 	/// <summary>
-	/// A character who is not one of the imprisoned WIZARDS, so the final chapter's gate - "every spell
-	/// recovered and every wizard freed" - does not count him (<see cref="UnlockCatalog.AllWizardIds"/>).
+	/// A character who is not one of the imprisoned WIZARDS, so the final chapter's gate - "the previous
+	/// boss beaten and every wizard freed" - does not count him (<see cref="UnlockCatalog.AllWizardIds"/>).
 	/// Laelaps, the hound: freeing him is an optional deed in one chapter, and counting him would make
 	/// that deed mandatory for the finale and close the Emberdeep, live, to every save that had opened it
 	/// - the reason schemas 10, 12, 14, 15 and 16 had to grant what they added. Characters only.
@@ -133,8 +150,15 @@ public static class UnlockCatalog
 		// ValidateUnlockCatalog checks in both directions - an achievement granting a spell that
 		// claims a different source, or a spell pointing at an achievement that does not exist,
 		// are both the same silent dead end the old economy was made of.
+		//
+		// EVERY SPELL THAT IS NOT A STARTER IS EARNED (Eric, 2026-10-29; .ai/achievements-and-secrets.md):
+		// eleven Feats, nine Road deeds of the chapters, and nine spell vaults hidden in the world. The
+		// shop sells no spells. What moved at schema 19, and why, is that doc's section 2.2.
 		FromAchievement("arcane_explosion", "first_blood", "Defeat your first enemy."),
-		FromAchievement("frost_shard", "survivor", "Survive ten minutes in a single run."),
+		// Darkness's only pure carrier, sold until schema 19 so the element could be built early. Ten
+		// minutes is the first good run, so it stays early as a Feat. Survivor paid Frost Shard before;
+		// Frost Shard is the Geode Heart's now (below).
+		FromAchievement("hollow_star", "survivor", "Survive ten minutes in a single run."),
 		FromAchievement("meteor_swarm", "veteran", "Clear a chapter without falling."),
 		FromAchievement("solar_flare", "max_level", "Reach level 20 in a single run."),
 		FromAchievement("cyclone_slash", "elementalist", "Reach 4 instances of any element."),
@@ -151,54 +175,38 @@ public static class UnlockCatalog
 		FromAchievement("riptide", "cave_choir_silenced", "Defeat the boss of the Sunken Cave."),
 		FromAchievement("mirefoot", "swamp_cleansed", "Defeat the boss of the Blighted Swamp."),
 		FromAchievementBoon("rimebriar", "waste_thawed", "Defeat the boss of the Frozen Waste."),
+		// The Long Coil's deed pays two things: the boon it always paid, and Fireball. Fireball was the
+		// Warden of the Deep's, in the Emberdeep - behind the old final gate, which counted every spell,
+		// so no save written since schema 8 could ever open the Emberdeep (.ai/achievements-and-secrets.md
+		// 1.4). The big slow blast is a late shape, and chapter 9 is the latest place before the gate.
+		FromAchievement("fireball", "sands_unwound", "Defeat the boss of the Scorched Sands."),
 		FromAchievementBoon("sunsteel_filament", "sands_unwound", "Defeat the boss of the Scorched Sands."),
-		FromAchievement("fireball", "emberdeep_ended", "Defeat the boss of the Emberdeep."),
-		// The two early chapters (.ai/campaign.md). Boons, not spells: a boon is outside the
-		// campaign gate (IsCampaignComplete counts spells and wizards), so adding these never closes
-		// the Emberdeep to a save that had opened it. Both were PurchaseBoon entries that no screen
-		// sells - cards no new save could ever be dealt - and they have a source at last.
+		// The two early chapters (.ai/campaign.md). Boons, not spells: chosen when the final gate still
+		// counted every spell (it counts wizards now), and kept, since a boon is what those chapters'
+		// elements were short of. Both were PurchaseBoon entries that no screen sold - cards no new save
+		// could ever be dealt - and they have a source at last.
 		FromAchievementBoon("thornseed", "fields_hurdled", "Defeat the boss of the Fallow Fields."),
 		FromAchievementBoon("shadegrease", "circle_unclosed", "Defeat the boss of the Broken Circle."),
 
-		// Bought with Arcane Energy. Roughly priced by how much a run changes when the spell shows
-		// up: a second damage option is cheap, a whole defensive layer is not.
-		Purchase("molten_shard", 110),
-		// The first pure Water spell. Sold rather than awarded because Water had no guaranteed
-		// carrier at all and an achievement gate would have left the element unreachable until
-		// the player happened to satisfy it.
-		// The three archetypes the roster had never had: a spell paid for by movement, an
-		// autonomous one, and a trap. Priced above the plain damage options because each one
-		// changes how a run is played rather than how hard it hits.
-		Purchase("gravewell", 150),
-		// The pull spell, and the first pure Darkness spell (issue #64). Sold for the same reason
-		// Riptide is: an element with no pure carrier cannot reach its capstone, and gating the
-		// only one behind an achievement would leave Darkness unbuildable until it was earned.
-		Purchase("hollow_star", 160),
-		Purchase("kindled_ward", 170),
-		Purchase("hunters_draw", 140),
-		// The weather spell: a rain round the player that aims at nothing (.ai/spell-roster.md,
-		// "Starfall"). Sold beside the other archetypes rather than gated on an achievement - Light
-		// already has its pure spell, so this is a new way to play, not a missing carrier - and priced
-		// with Gravewell, the other spell whose aim is the ground rather than an enemy.
-		Purchase("starfall", 150),
-		// The summon: a hound that fights at the wizard's side (.ai/spell-roster.md, "Familiar"). Sold
-		// beside the other archetypes - Arcane already has its pure spell, so this is a new way to play
-		// rather than a missing carrier - and priced with Kindled Ward, the other spell that goes and
-		// does its work somewhere the wizard is not.
-		Purchase("familiar", 170),
-		// The facing family (.ai/spell-roster.md, "The facing family"): two spells that go the
-		// way the player faces. Sold beside the other archetypes - walking becomes aiming, which changes
-		// how a run is played - rather than gated on an achievement: Lightning has its pure spell and
-		// Ice and Wind their carriers, so neither is a missing carrier an achievement would hold back.
-		// The sweep is priced with the archetypes; the runes, the plainer of the two, under them.
-		Purchase("stormsweep", 160),
-		Purchase("sleet_runes", 130),
-		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a
-		// five-second cooldown and a blast wide enough to be worth waiting for - which is a
-		// later-game shape, so it is priced like one.
+		// THE SPELL VAULTS (.ai/achievements-and-secrets.md 6.4): one secret in each chapter before the
+		// gate that pays a spell, once ever, through its derived deed (SecretCatalog.AsAchievement). Eight
+		// of the nine were sold in the shop until schema 19, and every copy anyone bought stays bought;
+		// Frost Shard was Survivor's, and is Eric's giant crystal's now. The hint names the chapter and
+		// never the place or the verb (decision 5) - it is the Spell Index's line for a locked spell, and
+		// RegressionChecks holds it to the deed's SealedLine.
+		FromSecret("hunters_draw", "pale_hart", "Hidden somewhere in the Enchanted Forest."),
+		FromSecret("familiar", "pinfold", "Hidden somewhere in the Fallow Fields."),
+		FromSecret("starfall", "fallen_star", "Hidden somewhere in the Broken Circle."),
+		FromSecret("frost_shard", "geode_heart", "Hidden somewhere in the Sunken Cave."),
+		FromSecret("molten_shard", "cold_forge", "Hidden somewhere in the Cursed Dungeon."),
+		FromSecret("gravewell", "swallow_hole", "Hidden somewhere in the Blighted Swamp."),
+		FromSecret("kindled_ward", "broken_ward", "Hidden somewhere in the Mystic Ruins."),
+		FromSecret("sleet_runes", "buried_runes", "Hidden somewhere in the Frozen Waste."),
+		FromSecret("stormsweep", "fulgurite", "Hidden somewhere in the Scorched Sands."),
 
 		// Boons fill the shop that passive spells used to. Priced by how much a run changes when
-		// one turns up: a stat nudge is cheap, a whole defensive layer is not.
+		// one turns up: a stat nudge is cheap, a whole defensive layer is not. The three boons are
+		// all the shop still sells of the catalog (piece A3 decides where they sit).
 		PurchaseBoon("quicksilver_bead", 110),
 		PurchaseBoon("deepwater_pearl", 120),
 		PurchaseBoon("saltbound_chain", 140),
@@ -218,8 +226,10 @@ public static class UnlockCatalog
 
 		// FOUND IN THE WORLD (.ai/side-events.md). Each chapter's side event is a place where the
 		// dark wizard keeps something he took; winning it carries the thing out. The site id is the
-		// event's, as SideEventDirector maps it. These are the first Discovery entries - the source
-		// was declared from the start and had nothing in it.
+		// event's, as SideEventDirector maps it. These were the Discovery entries until schema 19; each
+		// is now the reward of its event's Road deed (AchievementDefinitions.EventDeedId), which is
+		// derived from this site - so the deeds list shows every one of them, which it never did - and
+		// is still granted the moment the event is won (DiscoveryRewards -> AchievementManager.CompleteNow).
 		//
 		// The two rescued wizards are SECRET until the chapter that holds them opens. Before that
 		// the player has no way to know a prisoner exists, so a silhouette and a hint naming a place
@@ -228,16 +238,16 @@ public static class UnlockCatalog
 		// the moment the chapter opens; the character select now agrees with it.
 		// RegressionChecks.ValidateUnlockCatalog holds the reveal chapter to the one whose side
 		// event pays the wizard out.
-		DiscoveryCharacter("tituba", "gaolers_key", "Freed from a cell in the Cursed Dungeon.", secretUntilStage: "stage_1"),
-		DiscoveryCharacter("vainamoinen", "the_thaw", "Thawed out of the ice in the Frozen Waste.", secretUntilStage: "stage_5"),
-		DiscoverySpell("iron_palisade", "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
-		DiscoverySpell("contagion", "bog_lanterns", "Kept by whatever tends the lanterns in the Blighted Swamp."),
-		DiscoverySpell("bramble_seed", "the_grove", "Grown back in the corrupted grove of the Enchanted Forest."),
+		FromEvent("tituba", UnlockKind.Character, "gaolers_key", "Freed from a cell in the Cursed Dungeon.", secretUntilStage: "stage_1"),
+		FromEvent("vainamoinen", UnlockKind.Character, "the_thaw", "Thawed out of the ice in the Frozen Waste.", secretUntilStage: "stage_5"),
+		FromEvent("iron_palisade", UnlockKind.Spell, "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
+		FromEvent("contagion", UnlockKind.Spell, "bog_lanterns", "Kept by whatever tends the lanterns in the Blighted Swamp."),
+		FromEvent("bramble_seed", UnlockKind.Spell, "the_grove", "Grown back in the corrupted grove of the Enchanted Forest."),
 		// The early chapters' side events (.ai/campaign.md) pay relics, not people - see there for
 		// why a new wizard is a decision for later. The coin thrown into the last well the dark wizard
 		// has not fouled, and a fleck of the wizards' own warded circle, still lit.
-		DiscoveryBoon("wishing_coin", "the_well", "Drawn up from the well in the Fallow Fields."),
-		DiscoveryBoon("gilded_mote", "the_moot", "Left burning in the stones of the Broken Circle."),
+		FromEvent("wishing_coin", UnlockKind.Boon, "the_well", "Drawn up from the well in the Fallow Fields."),
+		FromEvent("gilded_mote", UnlockKind.Boon, "the_moot", "Left burning in the stones of the Broken Circle."),
 		// FREED BY COLLECTING. John Dee's library at Mortlake was looted while he was abroad, and the
 		// dark wizard keeps him the same way - scattered through the chests the player opens. The
 		// collector is earned by collecting: lifetime chests, a stat every save already has.
@@ -301,52 +311,52 @@ public static class UnlockCatalog
 		OutsideCampaignGate = outsideCampaignGate,
 	};
 
-	private static UnlockDefinition DiscoveryBoon(string boonId, string siteId, string hint) => new()
-	{
-		Id = boonId,
-		Kind = UnlockKind.Boon,
-		Source = UnlockSource.Discovery,
-		SourceId = siteId,
-		LockedHint = hint,
-	};
-
-	private static UnlockDefinition DiscoverySpell(string spellId, string siteId, string hint) => new()
-	{
-		Id = spellId,
-		Kind = UnlockKind.Spell,
-		Source = UnlockSource.Discovery,
-		SourceId = siteId,
-		LockedHint = hint,
-	};
-
+	/// <summary>
+	/// Something a chapter's side event pays: the reward of that event's Road deed, whose id is made
+	/// from the site (<see cref="AchievementDefinitions.EventDeedPrefix"/>). A const prefix rather than a
+	/// call into AchievementDefinitions, which reads this catalog while it builds its own list.
+	/// </summary>
 	/// <param name="secretUntilStage">
-	/// A stage id makes the wizard secret until that chapter opens (see <see cref="UnlockDefinition.IsSecret"/>).
+	/// A stage id makes a wizard secret until that chapter opens (see <see cref="UnlockDefinition.IsSecret"/>).
 	/// </param>
-	private static UnlockDefinition DiscoveryCharacter(string characterId, string siteId, string hint,
+	private static UnlockDefinition FromEvent(string id, UnlockKind kind, string siteId, string hint,
 		string secretUntilStage = "") => new()
 	{
-		Id = characterId,
-		Kind = UnlockKind.Character,
-		Source = UnlockSource.Discovery,
-		SourceId = siteId,
+		Id = id,
+		Kind = kind,
+		Source = UnlockSource.Achievement,
+		SourceId = AchievementDefinitions.EventDeedPrefix + siteId,
+		SiteId = siteId,
 		LockedHint = hint,
 		IsSecret = !string.IsNullOrWhiteSpace(secretUntilStage),
 		RevealStageId = secretUntilStage ?? string.Empty,
 	};
 
-	/// <summary>Everything a discovery site gives. Read by DiscoveryRewards when its event is won.</summary>
-	public static IEnumerable<UnlockDefinition> ForDiscoverySite(string siteId) =>
-		Definitions.Where(d => d.Source == UnlockSource.Discovery
-			&& d.SourceId.Equals(siteId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
-
-	private static UnlockDefinition Purchase(string spellId, int cost) => new()
+	/// <summary>
+	/// A spell a vault pays (.ai/achievements-and-secrets.md 6.4): the reward of the deed derived from
+	/// the secret (<see cref="SecretCatalog.AsAchievement"/>), whose id is made from the secret's.
+	/// </summary>
+	private static UnlockDefinition FromSecret(string spellId, string secretId, string hint) => new()
 	{
 		Id = spellId,
 		Kind = UnlockKind.Spell,
-		Source = UnlockSource.Purchase,
-		PurchaseCost = cost,
-		LockedHint = $"Buy it in Arcane Upgrades for {cost} Arcane Energy.",
+		Source = UnlockSource.Achievement,
+		SourceId = AchievementDefinitions.SecretDeedPrefix + secretId,
+		LockedHint = hint,
 	};
+
+	/// <summary>
+	/// Everything a side event's site gives. Read by the site's derived Road deed, by DiscoveryRewards
+	/// (whether the event pays a chest instead) and by the world map's chapter card. The name is the
+	/// old one: a "discovery site" is still what the world calls the place an event stands.
+	/// </summary>
+	public static IEnumerable<UnlockDefinition> ForDiscoverySite(string siteId) =>
+		Definitions.Where(d => !string.IsNullOrEmpty(d.SiteId)
+			&& d.SiteId.Equals(siteId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+
+	/// <summary>The deed that grants this unlock, or null for a starter or a purchase.</summary>
+	public static AchievementDefinition SourceDeedOf(UnlockDefinition definition) =>
+		definition?.Source == UnlockSource.Achievement ? AchievementDefinitions.GetById(definition.SourceId) : null;
 
 	public static IReadOnlyList<UnlockDefinition> All => Definitions;
 
@@ -372,14 +382,19 @@ public static class UnlockCatalog
 	/// </remarks>
 	public static bool IsStarter(string id, UnlockKind kind) => Get(id, kind)?.Source == UnlockSource.Starter;
 
-	/// <summary>Every spell the player is expected to own eventually. Drives the final-stage gate.</summary>
+	/// <summary>
+	/// Every spell the player is expected to own eventually: what The Grimoire Restored counts. The
+	/// final gate counted it until schema 19; it counts wizards now (GlobalStatsManager.GateWizardIds).
+	/// </summary>
 	public static IEnumerable<string> AllSpellIds =>
 		Definitions.Where(d => d.Kind == UnlockKind.Spell).Select(d => d.Id);
 
 	/// <summary>
 	/// Every wizard, excluding the development sandbox entry and anyone outside the campaign gate (a
-	/// character who is not a wizard - <see cref="UnlockDefinition.OutsideCampaignGate"/>). The final
-	/// chapter's gate and every save migration that re-derives it read this.
+	/// character who is not a wizard - <see cref="UnlockDefinition.OutsideCampaignGate"/>). Each
+	/// wizard-gated chapter counts the ones whose rescue comes before it
+	/// (<see cref="GlobalStatsManager.GateWizardIds"/>). The save migrations read frozen copies, never
+	/// this, so a wizard added later cannot change what an old step did.
 	/// </summary>
 	public static IEnumerable<string> AllWizardIds =>
 		AllCharacterIds.Where(id => Get(id, UnlockKind.Character)?.OutsideCampaignGate != true);
@@ -397,6 +412,11 @@ public static class UnlockCatalog
 	public static IEnumerable<UnlockDefinition> PurchasableBoons =>
 		All.Where(d => d.Kind == UnlockKind.Boon && d.Source == UnlockSource.Purchase);
 
+	/// <summary>
+	/// Empty since schema 19: the shop sells no spells (.ai/achievements-and-secrets.md 2.4), and
+	/// ValidateUnlockCatalog refuses a spell sourced any way but Starter or Achievement. Kept for the
+	/// shop's shelf, which reads it until piece A3 takes the shelf out; an empty shelf draws nothing.
+	/// </summary>
 	public static IEnumerable<UnlockDefinition> PurchasableSpells =>
 		Definitions.Where(d => d.Kind == UnlockKind.Spell && d.Source == UnlockSource.Purchase);
 
