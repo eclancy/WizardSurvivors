@@ -5,21 +5,13 @@ session on his PC; every cloud agent was stopped and its work pushed. **A snapsh
 truth:** check `git log` and the branches before acting on it, and delete this file once everything
 below has landed or been dropped.
 
-## 1. Release first
+## 1. Released
 
-Nothing since **0.8.1** is released. `main` builds, passes the startup validator, and is ready to
-ship. Eric's commit 42b85e1 already set `config/version` to 0.9.1 and the Android `version/code` to
-901 by hand, so `release.sh 0.9.1` refuses (901 is not above 901). Release the next number:
-
-```sh
-git checkout main && git pull
-bash tools/release/release.sh --dry-run 0.9.2
-bash tools/release/release.sh 0.9.2 "A world map replaces the chapter list: walk your wizard along the road between chapters and see what each one still hides. Every spell redrawn as crisp pixel art. Twenty-six spells have new evolutions that change how they look and play, not just their numbers. The game now starts fullscreen on PC (F11 toggles)."
-```
-
-It must run on the Windows PC: it needs Inno Setup, the Android release keystore and its secret
-(`%APPDATA%\Godot\keystores`), the Android SDK and the full export templates (`.ai/releasing.md`).
-The CS0162 "unreachable code" warnings during its build are old and harmless.
+**0.9.2 is released** (`Release v0.9.2`, 614ad5e, tag `v0.9.2`): the world map, the pixel-art pass,
+the new evolutions, fullscreen on PC and the pity bonus removed. The next release is 0.9.3 or 0.10.0
+(`bash tools/release/release.sh X.Y.Z "..."`, on the Windows PC only: Inno Setup, the Android
+release keystore and the Android SDK live there; `.ai/releasing.md`). The CS0162 "unreachable code"
+warnings during its build are old and harmless.
 
 ## 2. Two branches: `main` ships, `main-ff86ni` is the development branch
 
