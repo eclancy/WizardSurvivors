@@ -543,7 +543,6 @@
    "placement": "floor", "usageClass": "tile", "collision": "decoration",
    "hazard": false, "blocking": false, "width": 48, "height": 48,
    "autotile": {"terrain": "cave_wall", "role": "patch_v"}},
-<<<<<<< HEAD
   {"id": "court_wall_fill", "fileName": "court_wall_fill.png", "path": "assets/bonelight/tiles/court_wall_fill.png",
    "placement": "floor", "usageClass": "tile", "collision": "decoration",
    "hazard": false, "blocking": false, "width": 48, "height": 48,
@@ -772,7 +771,6 @@
    "placement": "floor", "usageClass": "tile", "collision": "decoration",
    "hazard": false, "blocking": false, "width": 48, "height": 48,
    "autotile": {"terrain": "court_wall", "role": "patch_v"}},
-=======
   {"id": "ruin_wall_fill", "fileName": "ruin_wall_fill.png", "path": "assets/bonelight/tiles/ruin_wall_fill.png",
    "placement": "floor", "usageClass": "tile", "collision": "decoration",
    "hazard": false, "blocking": false, "width": 48, "height": 48,
@@ -1016,7 +1014,6 @@
    "placement": "floor", "usageClass": "tile", "collision": "decoration",
    "hazard": false, "blocking": false, "width": 48, "height": 48,
    "autotile": {"terrain": "ruin_wall", "role": "patch_v"}},
->>>>>>> 09208cf
   {"id": "grass_fill", "fileName": "grass_fill.png", "path": "assets/bonelight/tiles/grass_fill.png",
    "placement": "floor", "usageClass": "tile", "collision": "decoration",
    "hazard": false, "blocking": false, "width": 48, "height": 48,
