@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using WizardSurvivors.scripts;
 
 /// <summary>
 /// The drawn bow that hovers at the player's shoulder while Hunter's Draw is charging, and the mark
@@ -21,9 +22,17 @@ using System;
 /// body that close in as the draw deepens and lock tight at full draw. That is a mark on ONE enemy,
 /// not an area marker: the spell has no area, and nothing is drawn on the ground.
 ///
+/// PIXEL ART (2026-10-29). It was antialiased polylines on translucent outlines, a smooth polygon head and
+/// two soft circles for the full-draw glow, turned with the aim onto a rotated grid; the brackets were
+/// antialiased polylines too. The bow is now one quad drawn by scenes/shaders/bow_draw.gdshader, which
+/// snaps every fragment to the world's 2 px cell and measures the limbs, string, arrow and glow in the
+/// bow's frame from the same numbers as before - so the pose still bends continuously with the charge -
+/// in opaque Earth, bone, Metal and Wind tones on an art pixel of occlusion. The brackets are whole art
+/// pixels: grid-snapped rectangles, an art pixel of occlusion under one (two at full draw) of ink.
+///
 /// Drawn procedurally rather than from a sprite sheet: the pose has to interpolate continuously
 /// with charge, which a handful of animation frames cannot do. Nothing here allocates per frame -
-/// the point arrays are fields, and the mark is one child node drawn on its own.
+/// the bow's numbers are shader parameters, and the mark is one child node drawn on its own.
 /// </summary>
 public partial class BowDrawVisual : Node2D
 {
@@ -45,18 +54,25 @@ public partial class BowDrawVisual : Node2D
 	// Long enough that at full draw the head sits just past the riser, as a real drawn arrow does.
 	[Export] public float ArrowLength { get; set; } = 52f;
 
-	[Export] public Color LimbColor { get; set; } = new Color(0.74f, 0.52f, 0.27f, 1f);
-	// Fainter than the arrow. The string is the least important line in the drawing and a bright one
-	// competes with the arrow and turns the whole thing into a triangle.
-	[Export] public Color StringColor { get; set; } = new Color(0.88f, 0.90f, 0.95f, 0.75f);
-	[Export] public Color ArrowColor { get; set; } = new Color(0.66f, 0.93f, 1.0f, 1f);
-	[Export] public Color FullDrawColor { get; set; } = new Color(0.60f, 1.0f, 0.85f, 1f);
-	// The arrow while stopping would only relax the bow: there, but not yet a threat.
-	[Export] public Color ArrowIdleColor { get; set; } = new Color(0.62f, 0.70f, 0.76f, 0.85f);
+	// The brackets' inks, by the charge (bow_draw.gdshader's arrow): Metal's edge while stopping would
+	// only relax the bow, Wind's mid once it would loose, Wind's hot at full draw, flashing white with
+	// the strain. Occlusion, not black (.ai/art-direction.md), is the backing every one sits on.
+	private static readonly Color Occlusion = new Color(0.020f, 0.027f, 0.047f);  // #05070C
+	private static readonly Color MetalEdge = new Color(0.369f, 0.447f, 0.565f);  // metal edge #5E7290
+	private static readonly Color WindMid = new Color(0.706f, 0.933f, 0.878f);    // wind mid #B4EEE0
+	private static readonly Color WindHot = new Color(0.918f, 0.988f, 0.965f);    // wind hot #EAFCF6
+	private static readonly Color Core = new Color(1f, 1f, 1f);                   // metal core #FFFFFF
 
-	// Occlusion, not black (.ai/art-direction.md): the backing every line sits on, so the bow holds
-	// on sand and snow as well as on dungeon stone.
-	private static readonly Color Outline = new Color(0.02f, 0.03f, 0.05f, 0.9f);
+	private static Shader bowShader;
+	private static readonly StringName ParamBowRadius = "bow_radius";
+	private static readonly StringName ParamHalfAngle = "half_angle";
+	private static readonly StringName ParamCharge = "charge";
+	private static readonly StringName ParamPull = "pull";
+	private static readonly StringName ParamArrowLength = "arrow_length";
+	private static readonly StringName ParamInk = "ink";
+	private static readonly StringName ParamStrain = "strain";
+	private static readonly StringName ParamFull = "full";
+	private ShaderMaterial material;
 
 	// 0 when relaxed, 1 at full draw.
 	private float charge;
@@ -72,17 +88,18 @@ public partial class BowDrawVisual : Node2D
 	private bool hasTarget;
 	private Rect2 targetBody;
 
-	// Reused every frame. 17 points is a smooth arc at this size; 13 showed its corners once doubled.
-	private readonly Vector2[] limbPoints = new Vector2[17];
-	private readonly Vector2[] head = new Vector2[3];
-	private readonly Vector2[] headBacking = new Vector2[3];
-	private readonly Vector2[] corner = new Vector2[3];
-
 	public override void _Ready()
 	{
 		// Above the player sprite but below the HUD, so the bow never disappears behind the robe.
 		ZIndex = 3;
 		Visible = false;
+
+		bowShader ??= GD.Load<Shader>("res://scenes/shaders/bow_draw.gdshader");
+		material = new ShaderMaterial { Shader = bowShader };
+		Material = material;
+		material.SetShaderParameter(ParamBowRadius, BowRadius);
+		material.SetShaderParameter(ParamHalfAngle, Mathf.DegToRad(BowHalfAngleDegrees));
+		material.SetShaderParameter(ParamArrowLength, ArrowLength);
 
 		mark = new Node2D
 		{
@@ -121,7 +138,11 @@ public partial class BowDrawVisual : Node2D
 		Visible = charge > 0.01f;
 		Position = new Vector2(MathF.Cos(aimAngle) * ForwardOffset, MathF.Sin(aimAngle) * ForwardOffsetVertical + ShoulderOffset);
 		Rotation = aimAngle;
-		QueueRedraw();
+		material.SetShaderParameter(ParamCharge, charge);
+		material.SetShaderParameter(ParamPull, MaxStringPull * charge);
+		material.SetShaderParameter(ParamInk, InkLevel());
+		material.SetShaderParameter(ParamStrain, Strain);
+		material.SetShaderParameter(ParamFull, charge >= 0.999f);
 
 		hasTarget = Visible && target != null && IsInstanceValid(target);
 		if (mark != null)
@@ -129,7 +150,9 @@ public partial class BowDrawVisual : Node2D
 			mark.Visible = hasTarget;
 			if (hasTarget)
 			{
-				mark.GlobalPosition = target.GlobalPosition;
+				// On the art grid, so the brackets' pixels line up with the body's.
+				Vector2 at = target.GlobalPosition;
+				mark.GlobalPosition = new Vector2(MathF.Round(at.X / WhipLimb.Grid) * WhipLimb.Grid, MathF.Round(at.Y / WhipLimb.Grid) * WhipLimb.Grid);
 				targetBody = BodyOf(target);
 				mark.QueueRedraw();
 			}
@@ -145,7 +168,6 @@ public partial class BowDrawVisual : Node2D
 		Visible = false;
 		if (mark != null)
 			mark.Visible = false;
-		QueueRedraw();
 	}
 
 	// The enemy's body, relative to its origin and at its current scale, from the same measurement
@@ -174,116 +196,65 @@ public partial class BowDrawVisual : Node2D
 	// its own. Nothing else on screen would tell the player that is coming.
 	private float Strain => charge >= 0.999f ? 0.5f + 0.5f * MathF.Sin(holdSeconds * 12f) : 0f;
 
-	private Color ArrowInk()
+	// The arrow's ink (bow_draw.gdshader): 0 while stopping would only relax the bow, 1 once it would
+	// loose, dithering toward 2 as the draw deepens, and 2 at full draw.
+	private float InkLevel()
 	{
 		if (charge < looseCharge)
-			return ArrowIdleColor;
-		return ArrowColor.Lerp(FullDrawColor, MathF.Max((charge - looseCharge) / MathF.Max(0.01f, 1f - looseCharge) * 0.4f, Strain));
+			return 0f;
+		if (charge >= 0.999f)
+			return 2f;
+		return 1f + 0.6f * (charge - looseCharge) / MathF.Max(0.01f, 1f - looseCharge);
 	}
 
+	// One quad over the bow at its deepest draw and the arrow on it; the shader decides every pixel.
 	public override void _Draw()
 	{
-		if (charge <= 0.01f)
-			return;
-
-		bool fullyDrawn = charge >= 0.999f;
-		float strain = Strain;
-		Color limb = LimbColor.Lerp(FullDrawColor, strain * 0.5f);
-		Color arrow = ArrowInk();
-
-		// The bow is drawn in local space with +X as the aim direction, so the riser sits ahead of
-		// the origin and the arrow flies out along +X. The node's Rotation does the aiming.
-		float halfAngle = Mathf.DegToRad(BowHalfAngleDegrees);
-		for (int i = 0; i < limbPoints.Length; i++)
-		{
-			float t = i / (float)(limbPoints.Length - 1);
-			float angle = Mathf.Lerp(-halfAngle, halfAngle, t);
-			// Deeper draw bends the limbs back toward the archer, so the bow visibly loads up.
-			float radius = BowRadius * (1f - 0.18f * charge * MathF.Cos(angle));
-			limbPoints[i] = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius;
-		}
-
-		Vector2 topTip = limbPoints[0];
-		Vector2 bottomTip = limbPoints[^1];
-		// The nock is pulled back along -X, away from the aim direction.
-		Vector2 nock = new Vector2(-MaxStringPull * charge, 0f);
-		Vector2 tip = nock + new Vector2(ArrowLength, 0f);
-		const float headLength = 12f;
-		const float headHalfWidth = 6.5f;
-		Vector2 headBase = tip - new Vector2(headLength, 0f);
-
-		// Every backing first, then every ink over it, so no outline cuts across a line drawn before
-		// it - the limbs, string and arrow read as one object rather than three stacked stickers.
-		DrawPolyline(limbPoints, Outline, 9f, true);
-		DrawLine(topTip, nock, new Color(Outline, 0.6f), 3.6f, true);
-		DrawLine(nock, bottomTip, new Color(Outline, 0.6f), 3.6f, true);
-		DrawLine(nock + new Vector2(-2f, 0f), headBase, Outline, 7.5f, true);
-		headBacking[0] = tip + new Vector2(3.5f, 0f);
-		headBacking[1] = headBase + new Vector2(-2f, -headHalfWidth - 2.5f);
-		headBacking[2] = headBase + new Vector2(-2f, headHalfWidth + 2.5f);
-		DrawColoredPolygon(headBacking, Outline);
-		// The fletching's backing, two feathers splayed back from the nock.
-		DrawLine(nock + new Vector2(9f, 0f), nock + new Vector2(1f, -6f), Outline, 5.5f, true);
-		DrawLine(nock + new Vector2(9f, 0f), nock + new Vector2(1f, 6f), Outline, 5.5f, true);
-
-		// The limbs: wood, with a lit edge on the side away from the archer.
-		DrawPolyline(limbPoints, limb, 5f, true);
-		DrawPolyline(limbPoints, limb.Lightened(0.35f), 1.5f, true);
-
-		DrawLine(topTip, nock, StringColor, 1.7f, true);
-		DrawLine(nock, bottomTip, StringColor, 1.7f, true);
-
-		// The arrow is the one line that has to be unmistakable - it is the aim indicator - so it is
-		// the brightest thing in the drawing and the only one with a filled head.
-		DrawLine(nock, headBase + new Vector2(1f, 0f), arrow, 3.6f, true);
-		head[0] = tip;
-		head[1] = headBase + new Vector2(0f, -headHalfWidth);
-		head[2] = headBase + new Vector2(0f, headHalfWidth);
-		DrawColoredPolygon(head, arrow);
-		DrawLine(nock + new Vector2(9f, 0f), nock + new Vector2(1f, -6f), arrow, 2.6f, true);
-		DrawLine(nock + new Vector2(9f, 0f), nock + new Vector2(1f, 6f), arrow, 2.6f, true);
-
-		// Fully drawn: the head burns. A small halo on the point of the arrow, throbbing with the
-		// strain, rather than a ring round the bow - a ring this size would read as an area.
-		if (fullyDrawn)
-		{
-			float glow = 0.35f + 0.45f * strain;
-			DrawCircle(tip - new Vector2(headLength * 0.4f, 0f), 9f + 3f * strain, new Color(FullDrawColor, glow * 0.35f));
-			DrawCircle(tip - new Vector2(headLength * 0.4f, 0f), 4.5f, new Color(1f, 1f, 1f, glow));
-		}
+		float back = MaxStringPull + 10f;
+		float front = MathF.Max(BowRadius, ArrowLength - 0f) + 8f;
+		float half = BowRadius + 8f;
+		DrawRect(new Rect2(-back, -half, back + front, half * 2f), Colors.White);
 	}
 
-	// The hunter's mark: four corner brackets round the target's body. Wide and faint when the draw
-	// has only begun, closing in as it deepens, tight and throbbing at full draw - so the mark says
-	// both which enemy and how hard, and a glance at the swarm finds it without looking at the bow.
+	// The hunter's mark: four corner brackets round the target's body. Wide when the draw has only
+	// begun, closing in as it deepens, tight and throbbing at full draw - so the mark says both which
+	// enemy and how hard, and a glance at the swarm finds it without looking at the bow. Whole art
+	// pixels: each arm a grid-snapped rectangle, an art pixel of occlusion under the ink.
 	private void DrawMark()
 	{
 		if (!hasTarget || charge <= 0.01f)
 			return;
 
+		bool fullyDrawn = charge >= 0.999f;
 		float strain = Strain;
-		Color ink = ArrowInk();
+		Color ink = charge < looseCharge ? MetalEdge : fullyDrawn ? (strain > 0.6f ? Core : WindHot) : WindMid;
+		float g = WhipLimb.Grid;
 		float gap = Mathf.Lerp(14f, 3f, charge);
 		Rect2 box = targetBody.Grow(gap);
-		float arm = MathF.Min(11f, MathF.Min(box.Size.X, box.Size.Y) * 0.3f);
-		float width = charge >= 0.999f ? 3.4f + 1.2f * strain : 3f;
+		Vector2 from = Snap(box.Position);
+		Vector2 to = Snap(box.End);
+		float arm = MathF.Max(g * 2f, Snap(MathF.Min(11f, MathF.Min(to.X - from.X, to.Y - from.Y) * 0.3f)));
+		float width = fullyDrawn ? g * 2f : g;
 
 		for (int pass = 0; pass < 2; pass++)
 		{
-			Color c = pass == 0 ? Outline : ink;
-			float w = pass == 0 ? width + 3f : width;
-			Bracket(box.Position, new Vector2(1f, 0f), new Vector2(0f, 1f), arm, c, w);
-			Bracket(new Vector2(box.End.X, box.Position.Y), new Vector2(-1f, 0f), new Vector2(0f, 1f), arm, c, w);
-			Bracket(new Vector2(box.Position.X, box.End.Y), new Vector2(1f, 0f), new Vector2(0f, -1f), arm, c, w);
-			Bracket(box.End, new Vector2(-1f, 0f), new Vector2(0f, -1f), arm, c, w);
+			Color c = pass == 0 ? Occlusion : ink;
+			float grow = pass == 0 ? g : 0f;
+			Bracket(from, new Vector2(1f, 0f), new Vector2(0f, 1f), arm, width, grow, c);
+			Bracket(new Vector2(to.X, from.Y), new Vector2(-1f, 0f), new Vector2(0f, 1f), arm, width, grow, c);
+			Bracket(new Vector2(from.X, to.Y), new Vector2(1f, 0f), new Vector2(0f, -1f), arm, width, grow, c);
+			Bracket(to, new Vector2(-1f, 0f), new Vector2(0f, -1f), arm, width, grow, c);
 		}
 	}
 
-	private void Bracket(Vector2 at, Vector2 alongX, Vector2 alongY, float arm, Color color, float width)
+	private static float Snap(float v) => MathF.Round(v / WhipLimb.Grid) * WhipLimb.Grid;
+
+	private static Vector2 Snap(Vector2 v) => new Vector2(Snap(v.X), Snap(v.Y));
+
+	// One corner: an arm along each edge from the corner, `width` thick on the inside of the box.
+	private void Bracket(Vector2 at, Vector2 alongX, Vector2 alongY, float arm, float width, float grow, Color color)
 	{
-		corner[0] = at + alongX * arm;
-		corner[1] = at;
-		corner[2] = at + alongY * arm;
-		mark.DrawPolyline(corner, color, width, true);
+		mark.DrawRect(new Rect2(at, Vector2.Zero).Expand(at + alongX * arm + alongY * width).Grow(grow), color);
+		mark.DrawRect(new Rect2(at, Vector2.Zero).Expand(at + alongY * arm + alongX * width).Grow(grow), color);
 	}
 }

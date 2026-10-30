@@ -17,6 +17,12 @@ namespace WizardSurvivors.scripts;
 ///
 /// One node per volley, with every drop decided at birth into fixed arrays, so nothing is allocated while
 /// it falls. In the air (DrawLayers.Air): it is arrows in flight over the bodies.
+///
+/// Pixel art (2026-10-29): every arrow was stroked lines and polygons over a translucent outline. Each is
+/// now one quad of scenes/shaders/hunters_arrow.gdshader (mode B) - the arrow the bow looses, a Metal
+/// head and a Wind shaft on the world's 2 px grid, backed by an art pixel of occlusion - laid round its
+/// point with its heading, how much of it is in the ground and how much of it is left in its vertex
+/// colour. A falling arrow's point comes down exactly on the spot it strikes, and stays buried there.
 /// </remarks>
 public partial class ArrowRain : Node2D
 {
@@ -41,13 +47,22 @@ public partial class ArrowRain : Node2D
 	private readonly Vector2[] land = new Vector2[MaxDrops];
 	private readonly float[] landAt = new float[MaxDrops];
 	private readonly bool[] struck = new bool[MaxDrops];
-	private readonly Vector2[] fletch = new Vector2[3];
-	private readonly Vector2[] head = new Vector2[3];
 	private float age;
 	private Vector2 fallDirection;
 
-	private static readonly Color Outline = new Color(0.02f, 0.03f, 0.05f, 0.9f);
-	private static readonly Color Shaft = new Color(0.66f, 0.93f, 1.0f, 1f);
+	// The rain's arrows: shorter than the one on the bow, since a falling arrow is seen end-on-ish.
+	private const float RainArrowLength = 34f;
+	// How deep a standing arrow is in the ground: its head and a little of its shaft.
+	private const float StandBury = 14f;
+	private static Shader arrowShader;
+	private static readonly StringName ParamWorldQuads = "world_quads";
+	private static readonly StringName ParamArrowLength = "arrow_length";
+	private static readonly StringName ParamGilded = "gilded";
+	private ShaderMaterial material;
+	private bool configured;
+	private readonly Vector2[] quad = new Vector2[4];
+	private readonly Color[] quadColours = new Color[4];
+	private readonly Vector2[] quadUv = new Vector2[4];
 
 	/// <summary>
 	/// A rain from a volley of <paramref name="arrows"/> loosed at <paramref name="from"/>, falling over
@@ -81,10 +96,24 @@ public partial class ArrowRain : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		arrowShader ??= GD.Load<Shader>("res://scenes/shaders/hunters_arrow.gdshader");
+		material = new ShaderMaterial { Shader = arrowShader };
+		Material = material;
+		material.SetShaderParameter(ParamWorldQuads, true);
+		material.SetShaderParameter(ParamArrowLength, RainArrowLength);
 	}
 
 	public override void _Process(double delta)
 	{
+		// The spell is handed over after Loose returns. The arrows paint themselves, so the multiply tint
+		// the caster gives the node is dropped (it would land in the arrows' vertex colours, which carry
+		// their numbers); a Legendary's gold is the shader's own.
+		if (!configured)
+		{
+			configured = true;
+			Modulate = Colors.White;
+			material.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
+		}
 		age += (float)delta;
 		for (int i = 0; i < drops; i++)
 		{
@@ -127,7 +156,10 @@ public partial class ArrowRain : Node2D
 
 	public override void _Draw()
 	{
-		DrawSetTransformMatrix(GlobalTransform.AffineInverse());
+		// Not before the tint is dropped: it would be multiplied into the arrows' numbers.
+		if (!configured)
+			return;
+		Transform2D toLocal = GlobalTransform.AffineInverse();
 
 		// The volley going up: the arrows leave the bow straight up and out of sight.
 		if (age < BoltEvolutions.RainRiseSeconds)
@@ -136,8 +168,8 @@ public partial class ArrowRain : Node2D
 			for (int i = 0; i < climbing; i++)
 			{
 				float x = (i - (climbing - 1) * 0.5f) * 7f;
-				Vector2 tip = origin + new Vector2(x, -36f - ClimbSpeed * age);
-				DrawArrow(tip, Vector2.Up, 1f - t * t);
+				Vector2 point = origin + new Vector2(x, -44f - ClimbSpeed * age);
+				DrawArrow(toLocal, point, Vector2.Up, 1f - t * t, 0f);
 			}
 		}
 
@@ -148,46 +180,31 @@ public partial class ArrowRain : Node2D
 				continue;
 			if (untilLanding > 0f)
 			{
-				// Coming down: from up and behind, onto its spot.
+				// Coming down: from up and behind, its point onto its spot.
 				float p = 1f - untilLanding / FallSeconds;
-				Vector2 tip = land[i] + FallFrom * (1f - p);
-				DrawArrow(tip, fallDirection, 1f);
+				DrawArrow(toLocal, land[i] + FallFrom * (1f - p), fallDirection, 1f, 0f);
 			}
 			else if (-untilLanding < StandSeconds)
 			{
-				// Standing in the ground, half buried, fading.
-				float fade = 1f - (-untilLanding) / StandSeconds;
-				DrawArrow(land[i] + fallDirection * 6f, fallDirection, fade, 0.55f);
+				// Standing in the ground where it struck, its head buried, dissolving.
+				float left = 1f - (-untilLanding) / StandSeconds;
+				DrawArrow(toLocal, land[i], fallDirection, left, StandBury);
 			}
 		}
 	}
 
-	private void DrawArrow(Vector2 tip, Vector2 heading, float alpha, float showLength = 1f)
+	// One arrow's quad, laid round its point in world space (hunters_arrow.gdshader, mode B).
+	private void DrawArrow(Transform2D toLocal, Vector2 point, Vector2 heading, float left, float bury)
 	{
-		const float length = 26f;
-		Vector2 tail = tip - heading * length * showLength;
-		Vector2 across = heading.Orthogonal();
-		Color outline = Outline with { A = Outline.A * alpha };
-		DrawLine(tip, tail - heading * 2f, outline, 5f);
-		DrawLine(tip, tail, Shaft with { A = alpha }, 2.4f);
-		// The fletching sweeps back from the shaft, so its point runs the way the arrow flies. Drawn the
-		// other way round (as it first was) it is a second head at the tail, and in the first post-merge
-		// screenshot every arrow coming down on the pack read as one going up.
-		fletch[0] = tail + across * 4.5f;
-		fletch[1] = tail + heading * 7f;
-		fletch[2] = tail - across * 4.5f;
-		DrawPolyline(fletch, outline, 4f);
-		DrawPolyline(fletch, Shaft.Lightened(0.2f) with { A = alpha }, 2f);
-		if (showLength < 1f)
-			return;
-		// The head: the one part that says which way it is going, so it is solid and outlined.
-		head[0] = tip + heading * 7.5f;
-		head[1] = tip - heading * 5.5f + across * 6.5f;
-		head[2] = tip - heading * 5.5f - across * 6.5f;
-		DrawColoredPolygon(head, outline);
-		head[0] = tip + heading * 5f;
-		head[1] = tip - heading * 4f + across * 4.5f;
-		head[2] = tip - heading * 4f - across * 4.5f;
-		DrawColoredPolygon(head, Shaft.Lightened(0.35f) with { A = alpha });
+		float half = RainArrowLength + 8f;
+		Color data = new Color(Mathf.PosMod(heading.Angle(), Mathf.Tau) / Mathf.Tau, bury / 64f, Mathf.Clamp(left, 0f, 1f), 0f);
+		quadColours[0] = quadColours[1] = quadColours[2] = quadColours[3] = data;
+		quadUv[0] = new Vector2(-half, -half);
+		quadUv[1] = new Vector2(half, -half);
+		quadUv[2] = new Vector2(half, half);
+		quadUv[3] = new Vector2(-half, half);
+		for (int v = 0; v < 4; v++)
+			quad[v] = toLocal * (point + quadUv[v]);
+		DrawPrimitive(quad, quadColours, quadUv);
 	}
 }

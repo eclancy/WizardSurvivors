@@ -1,25 +1,17 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/effects/hunters-arrow.png" id="2_arrow"]
+[ext_resource type="Script" path="res://scripts/HuntersArrowLook.cs" id="2_look"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_huntersarrow"]
 radius = 6.0
 
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_huntersarrow"]
-lifetime_randomness = 0.4
-particle_flag_disable_z = true
-emission_shape = 1
-emission_sphere_radius = 2.0
-direction = Vector3(-1, 0, 0)
-spread = 8.0
-initial_velocity_min = 20.0
-initial_velocity_max = 45.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.3
-scale_max = 0.9
-color = Color(0.85, 0.97, 1.0, 0.9)
-
+; The arrow draws itself (scripts/HuntersArrowLook.cs, scenes/shaders/hunters_arrow.gdshader): the
+; arrow the bow had on the string - a Metal head on a Wind shaft, backed by an art pixel of
+; occlusion - on the world's 2 px grid, its point on the front of the bolt's hit circle (ElementalBolt
+; sets this circle to HitRadius in _Ready; the 6.0 here is the editor's default), with a wake of wind
+; streaks behind it. It was a sprite at a fractional 1.5 scale under an over-bright tint, trailed by
+; translucent particles.
 [node name="HuntersArrow" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
@@ -28,17 +20,8 @@ BaseSpeed = 620.0
 BaseDuration = 2.5
 BasePierce = 1
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
-position = Vector2(-38, 0)
-scale = Vector2(1.5, 1.5)
-texture = ExtResource("2_arrow")
-modulate = Color(0.85, 1.35, 1.75, 1)
+[node name="Look" type="Node2D" parent="."]
+script = ExtResource("2_look")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_huntersarrow")
-
-[node name="TrailParticles" type="GPUParticles2D" parent="."]
-position = Vector2(-70, 0)
-amount = 10
-lifetime = 0.35
-process_material = SubResource("ParticleProcessMaterial_huntersarrow")
