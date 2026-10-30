@@ -3298,6 +3298,13 @@ public static class RegressionChecks
 		int bigger = DropTable.GreaterOrbValue;
 		if (bigger <= 2)
 			warnings.Add($"A bigger XP orb is worth {bigger}, no more than the ordinary orb it replaces.");
+		// The Gleaning Bell is a find, one or two a run (.ai/passives-and-items.md 8i): the first carrier's
+		// chance must be a real chance and not a certainty, the climb must climb, and the spacing must hold.
+		float bell = DropTable.GleaningBellBaseChance, bellStep = DropTable.GleaningBellChanceStep;
+		float bellApart = DropTable.GleaningBellMinSecondsApart, bellToss = DropTable.GleaningBellTossSeconds;
+		if (bell <= 0f || bell >= 0.25f || bellStep <= 0f || bellStep >= 0.1f || bellApart <= 0f || bellToss <= 0f)
+			warnings.Add($"DropTable's Gleaning Bell numbers are out of range: a first chance of {bell:0.000} (want (0, 0.25)), "
+				+ $"a step of {bellStep:0.000} (want (0, 0.1)), {bellApart:0} s apart and a {bellToss:0.00} s toss (both above 0).");
 
 		// Schema 12: a save that had everything at 11 is credited with John Dee; one that did not is not.
 		var complete = new SaveData { SchemaVersion = 11 };

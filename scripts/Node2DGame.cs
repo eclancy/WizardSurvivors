@@ -6078,6 +6078,10 @@ public partial class Node2DGame : Node2D
 		if (carrier == null || player == null || !IsInstanceValid(player) || bossFightActive || runFinished)
 			return;
 
+		// The Gleaning Bell rides on the same bodies, rolled on its own whether or not the chest pays
+		// (Node2DGame.GleaningBell.cs).
+		TryDropGleaningBell(carrier.GlobalPosition);
+
 		if (carrier.ChestSource == ChestSourceElite)
 		{
 			bool pays = !firstEliteChestPaid || spawnRng.Randf() < player.GetEliteChestChance();
