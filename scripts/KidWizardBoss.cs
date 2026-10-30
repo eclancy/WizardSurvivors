@@ -54,6 +54,8 @@ public partial class KidWizardBoss : BossEnemy
 		{
 			Shape = TelegraphShape.Cone,
 			HalfAngleDegrees = Mathf.Max(6f, MissileSpreadDegrees * 0.5f + 5f),
+			// A fan of missiles, not a strike: the reticle over him, the wedge on the ground.
+			GlyphOverride = TelegraphGlyph.Shot,
 		};
 
 	protected override void OnPhaseEntered(int phase)

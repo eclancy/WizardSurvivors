@@ -24,8 +24,9 @@ public enum TelegraphShape
 }
 
 /// <summary>
-/// A telegraphed hit anchored on its owner: wait out a cooldown, grow a warning shape for the
-/// wind-up, then damage whatever is standing inside it when it lands.
+/// A telegraphed hit anchored on its owner: wait out a cooldown, mark the shape on the ground for the
+/// wind-up (an opaque dashed outline, with the icon over the attacker as the clock), then damage
+/// whatever is standing inside it when it lands.
 /// </summary>
 /// <remarks>
 /// <see cref="AttackTelegraph"/> was extracted when its wind-up clock had been written twice. This
@@ -66,20 +67,22 @@ public sealed class GroundSlamAttack
 	/// <summary>Damage dealt to a target inside the shape when the attack lands.</summary>
 	public int Damage { get; set; }
 
-	/// <summary>Colour of the growing warning, so two attackers can be told apart mid-fight.</summary>
+	/// <summary>Colour of the dashed outline on the ground, so two attackers can be told apart mid-fight.</summary>
 	public Color WarningColor { get; set; }
 
+	/// <summary>
+	/// The glyph over the attacker (<see cref="TelegraphIcon"/>), when the shape's own would be wrong: a
+	/// fan of missiles on a cone is a Shot, an exploder's ring a Burst. Null takes the shape's.
+	/// </summary>
+	public TelegraphGlyph? GlyphOverride { get; set; }
+
+	/// <summary>What the icon over the attacker shows: a lane is a charge (Leap); a ring or a wedge is struck (Slam).</summary>
+	public TelegraphGlyph Glyph => GlyphOverride ?? (Shape == TelegraphShape.Line ? TelegraphGlyph.Leap : TelegraphGlyph.Slam);
+
 	private readonly AttackTelegraph telegraph;
-	// Seconds left on the fading impact shape. Negative means there is nothing to draw.
+	// Seconds left on the strike's dissolving outline. Negative means there is nothing to draw.
 	private float impactFlashRemaining = -1f;
 	private const float ImpactFlashSeconds = 0.28f;
-
-	// Cone fan and lane quad, allocated once. This draws every frame of every wind-up in a scene
-	// that already has a swarm in it, and a per-frame Vector2[] per attacker is exactly the kind of
-	// allocation the project bans in swarm-heavy effects.
-	private const int ConeSegments = 14;
-	private readonly Vector2[] coneBuffer = new Vector2[ConeSegments + 2];
-	private readonly Vector2[] quadBuffer = new Vector2[4];
 
 	public GroundSlamAttack(float intervalSeconds, float windUpSeconds, float radius, int damage, Color warningColor)
 	{
@@ -206,14 +209,21 @@ public sealed class GroundSlamAttack
 	}
 
 	/// <summary>
-	/// Paints the warning while winding up, then the fading impact flash. Call from the owner's
-	/// <c>DrawGroundTells</c> (or another node on the floor layer), so the ring is under the bodies.
+	/// Marks the ground while winding up, then the strike. Call from the owner's
+	/// <c>DrawGroundTells</c> (or another node on the floor layer), so the outline is under the bodies.
 	/// </summary>
 	/// <remarks>
-	/// Drawn in the owner's local space, where the owner sits at the origin. <see cref="Facing"/> is
-	/// a world direction and is used unrotated, which is correct for every actor in this game:
-	/// enemies face by flipping their sprite, never by rotating the node, so local and world
-	/// directions are the same thing here.
+	/// THE OUTLINE, NOT A BUILD-UP (Eric, playing 0.9.2: "the attacks on enemies that are telegraphed
+	/// through transparent buildups animations are weird... if you need to telegraph an attack, do so
+	/// with icon animation"). This used to be a translucent sheet with a rim, growing from a third of
+	/// the reach to all of it. Now the full shape is an opaque dashed outline from the first frame
+	/// (<see cref="TelegraphOutline"/>), and "how much longer" is the icon over the attacker
+	/// (<see cref="Glyph"/>, <see cref="TelegraphIcon"/>), which the outline blinks with at the end.
+	///
+	/// Drawn round the canvas's own origin, which is the owner's position: the point
+	/// <see cref="Contains"/> measures from. <see cref="Facing"/> is a world direction and is used
+	/// unrotated, which is correct for every actor in this game: enemies face by flipping their sprite,
+	/// never by rotating the node. The outline is drawn in world units whatever the owner's scale.
 	/// </remarks>
 	public void Draw(CanvasItem canvas)
 	{
@@ -222,72 +232,14 @@ public sealed class GroundSlamAttack
 
 		if (telegraph.IsWindingUp)
 		{
-			// Grows from a third of the reach to the full shape, so "how much longer" and "how far
-			// out" are the same reading. The player answers it by stepping past the edge.
-			float progress = telegraph.WindUpProgress;
-			float reach = Mathf.Lerp(Radius * 0.35f, Radius, progress);
-			float alpha = Mathf.Lerp(0.35f, 0.85f, progress);
-			DrawShape(canvas, reach, new Color(WarningColor.R, WarningColor.G, WarningColor.B, alpha), 3.5f);
+			TelegraphOutline.Warning(canvas, Shape, Radius, HalfAngleDegrees, HalfWidth, SafeFacing(), WarningColor,
+				telegraph.WindUpProgress);
 			return;
 		}
 
 		if (impactFlashRemaining > 0f)
-		{
-			float fade = Mathf.Clamp(impactFlashRemaining / ImpactFlashSeconds, 0f, 1f);
-			DrawShape(canvas, Radius, new Color(1.0f, 0.85f, 0.55f, fade), 6f * fade);
-		}
-	}
-
-	private void DrawShape(CanvasItem canvas, float reach, Color edge, float width)
-	{
-		var fill = new Color(edge.R, edge.G, edge.B, edge.A * 0.16f);
-
-		switch (Shape)
-		{
-			case TelegraphShape.Cone:
-			{
-				float half = Mathf.DegToRad(HalfAngleDegrees);
-				float start = SafeFacing().Angle() - half;
-				float sweep = half * 2f;
-
-				coneBuffer[0] = Vector2.Zero;
-				for (int i = 0; i <= ConeSegments; i++)
-				{
-					float a = start + sweep * i / ConeSegments;
-					coneBuffer[i + 1] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * reach;
-				}
-
-				canvas.DrawColoredPolygon(coneBuffer, fill);
-				canvas.DrawArc(Vector2.Zero, reach, start, start + sweep, ConeSegments * 2, edge, width, true);
-				// The two straight edges matter more than the arc: they are the line the player has
-				// to get across, and an unclosed wedge reads as a spotlight rather than as a hit.
-				canvas.DrawLine(Vector2.Zero, coneBuffer[1], edge, width, true);
-				canvas.DrawLine(Vector2.Zero, coneBuffer[ConeSegments + 1], edge, width, true);
-				break;
-			}
-
-			case TelegraphShape.Line:
-			{
-				Vector2 facing = SafeFacing();
-				Vector2 side = new Vector2(-facing.Y, facing.X) * HalfWidth;
-				Vector2 end = facing * reach;
-
-				quadBuffer[0] = side;
-				quadBuffer[1] = end + side;
-				quadBuffer[2] = end - side;
-				quadBuffer[3] = -side;
-
-				canvas.DrawColoredPolygon(quadBuffer, fill);
-				for (int i = 0; i < 4; i++)
-					canvas.DrawLine(quadBuffer[i], quadBuffer[(i + 1) % 4], edge, width, true);
-				break;
-			}
-
-			default:
-				canvas.DrawCircle(Vector2.Zero, reach, fill);
-				canvas.DrawArc(Vector2.Zero, reach, 0f, Mathf.Tau, 48, edge, width, true);
-				break;
-		}
+			TelegraphOutline.Strike(canvas, Shape, Radius, HalfAngleDegrees, HalfWidth, SafeFacing(),
+				Mathf.Clamp(impactFlashRemaining / ImpactFlashSeconds, 0f, 1f));
 	}
 
 	// A zero or denormalised facing would make every angle NaN and silently turn a cone into a hit

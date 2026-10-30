@@ -358,6 +358,19 @@ public partial class _UiShot : Node
 	// --fx-lead=40 is mid-flight for the strikes, past halfway for the dark. Pair with --stage=3.
 	// --tender-crowd keeps the swarm, to judge the tender against it. The rekindle needs a snuffed
 	// lantern within reach of the tender, so add --goto=site:3: the call waits ten frames after it.
+	// --tells: the attack icons and the dashed outlines (TelegraphIcon, TelegraphOutline; 0.9.2, "if you
+	// need to telegraph an attack, do so with icon animation"). Clears the arena; the player stands still
+	// and cannot die; fxLead frames before the shutter a lunger, a slammer, an exploder, a summoner and a
+	// caster are stood round him, held still, every cooldown at a blink - so the shutter lands mid
+	// wind-up. --fx-lead=30 is about halfway through most of them; with --burst the icons pop in, fill,
+	// blink and flash across the frames. --tells-boss=res://scenes/GaolerBoss.tscn stands that boss
+	// --tells-offset=DX,DY away (default 240,0) instead.
+	private bool tellsShot;
+	private string tellsBoss;
+	private Vector2 tellsOffset = new Vector2(240f, 0f);
+	private bool tellsPlaced;
+	private readonly System.Collections.Generic.List<Enemy> tellsCast = new();
+
 	private bool tenderShot;
 	private LanternTenderEnemy.Move? tenderMove;
 	private Vector2 tenderOffset = new Vector2(260f, -60f);
@@ -605,6 +618,71 @@ public partial class _UiShot : Node
 		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
 			if (n is Enemy other && IsInstanceValid(other) && other != ghostEnemy)
 				other.QueueFree();
+	}
+
+	// --tells: stand still, immortal, with the telegraphed cast (or one boss) round him and nothing else.
+	private void DriveTells()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+		if (!tellsPlaced && frames >= WarmupFrames - fxLead)
+		{
+			tellsPlaced = true;
+			if (string.IsNullOrEmpty(tellsBoss))
+			{
+				// Each inside its own engage reach: the lunger's 90-420 band, the slammer's 144, the
+				// exploder's 93, the caster's 430; the summoner calls at any range.
+				PlaceTell(p, "res://scenes/LungerEnemy.tscn", new Vector2(-230f, 40f));
+				PlaceTell(p, "res://scenes/SlammerEnemy.tscn", new Vector2(125f, 20f));
+				PlaceTell(p, "res://scenes/ExploderEnemy.tscn", new Vector2(-40f, 80f));
+				PlaceTell(p, "res://scenes/SummonerEnemy.tscn", new Vector2(280f, -170f));
+				PlaceTell(p, "res://scenes/HexerEnemy.tscn", new Vector2(-190f, -190f));
+			}
+			else
+				PlaceTell(p, tellsBoss, tellsOffset);
+		}
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy other && IsInstanceValid(other) && !tellsCast.Contains(other))
+				other.QueueFree();
+	}
+
+	// Held still and unkillable, its cooldown at a blink, so it winds up the moment it can. The exploder
+	// needs nothing: its fuse already lights on the shortest interval the telegraph allows.
+	private void PlaceTell(Player p, string path, Vector2 offset)
+	{
+		if (GD.Load<PackedScene>(path)?.Instantiate() is not Enemy e)
+		{
+			GD.PrintErr($"_UiShot: --tells could not instance an Enemy from '{path}'");
+			return;
+		}
+		e.Health = 1000000;
+		e.Speed = 0f;
+		switch (e)
+		{
+			case LungerEnemy lunger:
+				lunger.LungeIntervalSeconds = 0.05f;
+				break;
+			case SlammerEnemy slammer:
+				slammer.SlamIntervalSeconds = 0.05f;
+				break;
+			case SummonerEnemy summoner:
+				summoner.SummonIntervalSeconds = 0.05f;
+				break;
+			case RangedEnemy caster:
+				caster.CastIntervalSeconds = 0.05f;
+				break;
+			case BossEnemy boss:
+				boss.SlamIntervalSeconds = 0.05f;
+				break;
+		}
+		e.Position = p.GlobalPosition + offset;
+		p.GetParent().AddChild(e);
+		tellsCast.Add(e);
+		GD.Print($"_UiShot: --tells placed {e.GetType().Name} ({path}) at {e.Position}, player at {p.GlobalPosition}");
 	}
 
 	// --tender: stand still, immortal; call the tender through the event, then hold it beside him.
@@ -1212,6 +1290,20 @@ public partial class _UiShot : Node
 				ghost = ghostWail = true;
 			else if (arg == "--ghost-phase")
 				ghost = ghostPhase = true;
+			else if (arg == "--tells")
+				tellsShot = true;
+			else if (arg.StartsWith("--tells-boss="))
+			{
+				tellsShot = true;
+				tellsBoss = arg.Substring("--tells-boss=".Length);
+			}
+			else if (arg.StartsWith("--tells-offset="))
+			{
+				string[] xy = arg.Substring("--tells-offset=".Length).Split(',');
+				tellsOffset = new Vector2(
+					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+			}
 			else if (arg == "--tender")
 				tenderShot = true;
 			else if (arg.StartsWith("--tender="))
@@ -1327,7 +1419,7 @@ public partial class _UiShot : Node
 
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
-		if (statusShowcase || statusCrowd || shove || ghost || tenderShot || pinHeat != null || pinStillFor != null)
+		if (statusShowcase || statusCrowd || shove || ghost || tenderShot || tellsShot || pinHeat != null || pinStillFor != null)
 			SaveManager.WritesDisabled = true;
 		if (dropPotion || dropHealth || winEvent || castBramble || stageCount > 0 || demoEvolutions.Length > 0)
 			SaveManager.WritesDisabled = true;
@@ -2194,6 +2286,8 @@ public partial class _UiShot : Node
 			// The tender's attacks play out across a burst: keep the field clear and him standing.
 			if (tenderShot)
 				DriveTender();
+			if (tellsShot)
+				DriveTells();
 			if (ripenEvery > 0 && ++ripenWait >= ripenEvery && FindNodeOfType<Player>(GetTree().Root) is Player ripened)
 			{
 				ripenWait = 0;
@@ -2237,6 +2331,8 @@ public partial class _UiShot : Node
 				DriveShove();
 			else if (ghost)
 				DriveGhost();
+			else if (tellsShot)
+				DriveTells();
 			else if (tenderShot)
 				DriveTender();
 			else if (wonEvent != null)

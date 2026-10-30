@@ -70,6 +70,7 @@ public static class RegressionChecks
 		ValidateMazeHazards(warnings);
 		ValidateStageHazards(warnings);
 		ValidateStatusEffectAtlas(warnings);
+		ValidateTelegraphIcons(warnings);
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
 		ValidateExploreArt(warnings);
@@ -1134,6 +1135,45 @@ public static class RegressionChecks
 			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} exists but did not load as a texture.");
 		else if (atlas.GetSize() != expected)
 			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} is {atlas.GetSize()}, expected {expected} ({StatusEffectLayer.Rows} rows of {StatusEffectLayer.Frames} {StatusEffectLayer.Cell}px frames).");
+	}
+
+	// The attack icons (TelegraphIcon, 0.9.2: "if you need to telegraph an attack, do so with icon
+	// animation"). Two silent failures. The atlas is addressed by glyph row and state column, so a sheet
+	// regenerated with a row added, or never imported, draws the wrong glyph or nothing. And an enemy
+	// class that holds a wind-up clock but never says what it is winding up (Enemy.ReadAttackTell) gets
+	// no icon node at all - its attack lands with no tell over it, which is the one thing a telegraph
+	// may never do. Re-run: python tools/art/telegraph_icons.py, then import.
+	private static void ValidateTelegraphIcons(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(TelegraphIcon.AtlasPath))
+			warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} is missing or not imported; no enemy will show a wind-up.");
+		else
+		{
+			Texture2D atlas = GD.Load<Texture2D>(TelegraphIcon.AtlasPath);
+			var expected = new Vector2(TelegraphIcon.Cell * TelegraphIcon.Columns, TelegraphIcon.Cell * TelegraphIcon.Rows);
+			if (atlas == null)
+				warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} exists but did not load as a texture.");
+			else if (atlas.GetSize() != expected)
+				warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} is {atlas.GetSize()}, expected {expected} ({TelegraphIcon.Rows} glyph rows of {TelegraphIcon.Columns} {TelegraphIcon.Cell}px states).");
+		}
+
+		const System.Reflection.BindingFlags Fields = System.Reflection.BindingFlags.Instance
+			| System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+		foreach (Type type in typeof(Enemy).Assembly.GetTypes())
+		{
+			if (!typeof(Enemy).IsAssignableFrom(type) || type == typeof(Enemy) || type.IsAbstract)
+				continue;
+			bool holdsClock = false;
+			for (Type t = type; t != null && t != typeof(Enemy); t = t.BaseType)
+				holdsClock |= t.GetFields(Fields | System.Reflection.BindingFlags.DeclaredOnly)
+					.Any(f => f.FieldType == typeof(AttackTelegraph) || f.FieldType == typeof(GroundSlamAttack));
+			if (!holdsClock)
+				continue;
+			var read = type.GetMethod("ReadAttackTell", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+				null, new[] { typeof(TelegraphGlyph).MakeByRefType(), typeof(float).MakeByRefType() }, null);
+			if (read == null || read.DeclaringType == typeof(Enemy))
+				warnings.Add($"Attack icons: {type.Name} holds a wind-up clock but does not override Enemy.ReadAttackTell, so its attacks show no icon.");
+		}
 	}
 
 	// Enemy navigation on a hand-made lake (.ai/terrain.md, "Enemy navigation"). Three things a build

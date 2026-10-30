@@ -87,8 +87,8 @@ public partial class RangedEnemy : Enemy
 			GD.PushError($"RangedEnemy '{EnemyType}': projectile scene not found at '{ProjectileScenePath}', so it will never shoot.");
 	}
 
-	// Approach, hold, or back off - and stand perfectly still while winding up, because the charge
-	// glow is a promise about where the shot comes from.
+	// Approach, hold, or back off - and stand perfectly still while winding up, because the aim tick
+	// is a promise about where the shot comes from.
 	protected override Vector2 AdjustSteering(Vector2 chaseDirection, float distanceToPlayer)
 	{
 		if (Rooted || (cast != null && cast.IsWindingUp))
@@ -213,50 +213,39 @@ public partial class RangedEnemy : Enemy
 		cast = new AttackTelegraph(CastIntervalSeconds, CastWindUpSeconds);
 	}
 
+	// "A shot is coming" is the reticle over its head (TelegraphIcon), filling through the wind-up. It
+	// used to be a translucent mote swelling in front of the caster, which Eric ruled out in 0.9.2 with
+	// every other build-up.
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = TelegraphGlyph.Shot;
+		progress = cast?.WindUpProgress ?? 0f;
+		return cast != null && cast.IsWindingUp;
+	}
+
 	public override void _Draw()
 	{
 		base._Draw();
 		if (cast == null || !cast.IsWindingUp)
 			return;
 
-		// The tell. A mote gathers in front of the caster and brightens as the shot nears, and a
-		// short aim tick shows which way it will go - together they read as "step sideways", which
-		// is the answer. Enemy already calls QueueRedraw every physics frame, so this costs nothing
-		// beyond the draw itself, and the geometry allocates nothing.
-		float progress = cast.WindUpProgress;
+		// "From here to there": in the second half of the wind-up, a short opaque aim tick per bolt
+		// along the heading it will fly. The led heading - exactly what FireVolley will use, so the tick
+		// the player is reading is the line the bolt actually takes - and one per bolt, because a volley
+		// that showed a single line and then arrived as a fan would be a lie about where it is safe to
+		// stand. Shown whole, not faded in; Enemy already redraws every physics frame and nothing here
+		// allocates. World offsets (TelegraphOutline.Stroke draws in world units), which are local ones:
+		// enemies never rotate.
+		if (cast.WindUpProgress <= 0.5f)
+			return;
 		Node2D target = TargetPlayer;
-		Vector2 aim = Vector2.Right;
-		if (target != null && IsInstanceValid(target))
+		Vector2 aim = target != null && IsInstanceValid(target) ? ComputeAimDirection(target) : Vector2.Right;
+		int bolts = Mathf.Max(1, BoltsPerVolley);
+		float spread = Mathf.DegToRad(VolleySpreadDegrees);
+		for (int i = 0; i < bolts; i++)
 		{
-			// The led heading, in local space. Exactly what FireVolley will use, so the tick the
-			// player is reading is the line the bolt actually takes.
-			Vector2 world = ComputeAimDirection(target);
-			aim = ToLocal(GlobalPosition + world).Normalized();
-		}
-
-		Vector2 muzzle = aim * BoltSpawnOffset;
-		float radius = Mathf.Lerp(2.5f, 9.0f, progress);
-
-		var halo = new Color(BoltBodyColor.R, BoltBodyColor.G, BoltBodyColor.B, 0.20f + 0.25f * progress);
-		DrawCircle(muzzle, radius * 2.1f, halo);
-		DrawCircle(muzzle, radius, BoltBodyColor);
-		DrawCircle(muzzle, radius * 0.45f, BoltCoreColor);
-
-		// The aim ticks fade in over the second half only, so the first half of the wind-up says
-		// "a shot is coming" and the second says "from here to there". One tick per bolt: a volley
-		// that showed a single line and then arrived as a fan would be a lie about where it is safe
-		// to stand, which is the whole thing this tell exists to tell the truth about.
-		if (progress > 0.5f)
-		{
-			float lineAlpha = (progress - 0.5f) * 2f * 0.55f;
-			var tickColor = new Color(BoltCoreColor.R, BoltCoreColor.G, BoltCoreColor.B, lineAlpha);
-			int bolts = Mathf.Max(1, BoltsPerVolley);
-			float spread = Mathf.DegToRad(VolleySpreadDegrees);
-			for (int i = 0; i < bolts; i++)
-			{
-				Vector2 heading = aim.Rotated(VolleyOffsetFraction(i, bolts) * spread);
-				DrawLine(heading * BoltSpawnOffset, heading * (BoltSpawnOffset + 46f), tickColor, 2.0f, true);
-			}
+			Vector2 heading = aim.Rotated(VolleyOffsetFraction(i, bolts) * spread);
+			TelegraphOutline.Stroke(this, heading * BoltSpawnOffset, heading * (BoltSpawnOffset + 40f), BoltCoreColor);
 		}
 	}
 }

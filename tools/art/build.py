@@ -39,6 +39,7 @@ import gravewell
 import familiar
 import sleet_runes
 import status_fx
+import telegraph_icons
 import spell_icons
 import spell_icons_core
 import sprite_boo
@@ -460,6 +461,9 @@ if __name__ == "__main__":
     print("")
     print("status marks:")
     status_fx.main()
+    print("")
+    print("attack icons:")
+    telegraph_icons.main()
     print("")
     print("world decor and props:")
     world_props.main()
