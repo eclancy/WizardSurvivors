@@ -313,20 +313,21 @@ public static class GlobalStatsManager
 	/// Writes every gate chapter whose gate is met into the save's opened list, so it stays open (rule 1
 	/// of <see cref="IsStageEarned"/>) whatever is added to its count later. A wizard added before a
 	/// gate would otherwise close it, live, to every save that had it open - which is why schemas 10,
-	/// 12, 14, 15 and 16 each had to grant what they added. Only adds. Returns whether it wrote anything.
-	/// Run after every run's achievements and in the schema 19 step.
+	/// 12, 14, 15 and 16 each had to grant what they added. Only adds. Returns the chapters it wrote,
+	/// which the results screen shows as opened. Run after every run's achievements and in the schema 19
+	/// step (which writes the ones a save had already met, so none of those is announced as new).
 	/// </summary>
-	public static bool RecordMetGates(SaveData data)
+	public static List<StageDefinition> RecordMetGates(SaveData data)
 	{
+		var opened = new List<StageDefinition>();
 		if (data == null)
-			return false;
-		bool wrote = false;
+			return opened;
 		foreach (StageDefinition gate in StageCatalog.GateChapters)
 		{
-			if (!IsStageUnlocked(data, gate.Id) && IsGateMet(data, gate))
-				wrote |= UnlockStage(data, gate.Id);
+			if (!IsStageUnlocked(data, gate.Id) && IsGateMet(data, gate) && UnlockStage(data, gate.Id))
+				opened.Add(gate);
 		}
-		return wrote;
+		return opened;
 	}
 
 	/// <summary>

@@ -502,6 +502,11 @@ shape the roster did not have:
 
 ## The final chapter's gate
 
+**Superseded at schema 19** (`.ai/achievements-and-secrets.md` 2.5 and section 11): the Emberdeep opens
+on the Long Coil beaten and every wizard whose rescue comes before it, not on spells; and each event's
+unlock is now the reward of that event's Road deed (`event_<site>`), granted the moment it is won as
+before. What follows is the history.
+
 The Emberdeep opens on "every spell recovered and every wizard freed", evaluated live, so the five
 discoveries are now part of it. All five events sit in chapters before it. **Schema 10** credits
 the discoveries to any save that had already met the gate, so nobody loses a chapter they had
