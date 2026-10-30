@@ -242,7 +242,12 @@ public partial class Player : CharacterBody2D
 	public Familiar.Grants FamiliarGrants => familiarGrants;
 	private float areaMultiplier = 1.0f;
 	private float durationMultiplier = 1.0f;
+	// The player-wide Amount: the Arcane Codex's Twinstar Sigil and the Split Lens. Read only through
+	// AmountFor, never at a cast site directly - that is what lets the lens charge exactly the spells it pays.
 	private int amountBonus = 0;
+	// The Split Lens (ChestItemCatalog.CrackedPrism) is held: GetSpellDamageMultiplier charges its cost.
+	private bool splitLensHeld;
+	private readonly HashSet<string> undeclaredAmountReaders = new(StringComparer.OrdinalIgnoreCase);
 	// Reused by the magic missile volley so picking targets does not allocate on every cast.
 	private readonly List<Node2D> magicMissileTargets = new();
 	private float growthMultiplier = 1.0f;
@@ -1672,7 +1677,49 @@ public partial class Player : CharacterBody2D
 	/// spell's attunement folded in. Every cast site uses this rather than <c>damageMultiplier</c>
 	/// directly, so attunement cannot be forgotten on a new spell.
 	/// </summary>
-	private float GetSpellDamageMultiplier(SpellData spell) => damageMultiplier * GetAttunementMultiplier(spell);
+	private float GetSpellDamageMultiplier(SpellData spell) =>
+		damageMultiplier * GetAttunementMultiplier(spell) * GetSplitLensMultiplier(spell);
+
+	// The Split Lens's cost: -25% damage - charged only to a spell its +1 projectile reaches (Eric, 0.9.3:
+	// "it should only reduce damage of spells that are affected by the projectile count"). It was a cut to
+	// the global multiplier, so Hollow Star, Fireball, Cinderbreath and every other spell that never reads
+	// Amount paid for a projectile it never got. Which spells read it is EvolutionStat.Amount on each
+	// one's EvolutionStatReaders row, the same row AmountFor pays out by.
+	public const float SplitLensDamageMultiplier = 0.75f;
+
+	private float GetSplitLensMultiplier(SpellData spell) =>
+		splitLensHeld && EvolutionStatReaders.ReadsAmount(spell) ? SplitLensDamageMultiplier : 1f;
+
+	/// <summary>
+	/// The damage multiplier a cast of this spell is handed now, and the projectiles Amount adds to it.
+	/// For RegressionChecks.ValidateAmountReaders, which holds a Player that never enters a tree.
+	/// </summary>
+	public (float Damage, int Amount) DebugCastTerms(SpellData spell) =>
+		(GetSpellDamageMultiplier(spell), EvolutionStatReaders.ReadsAmount(spell) ? AmountFor(spell) : 0);
+
+	/// <summary>A relic's effect taken as a chest gives it, without the pickup's log line or signal. For RegressionChecks.</summary>
+	public void DebugTakeChestItem(string itemId)
+	{
+		if (ownedChestItems.Add(itemId))
+			ApplyChestItemEffect(itemId);
+	}
+
+	/// <summary>
+	/// The extra projectiles the player-wide Amount gives this spell's cast: all of it for a spell whose
+	/// EvolutionStatReaders row says it reads Amount (and holds no milestone that drops it), none for any
+	/// other. Every cast site that adds Amount to a count asks here, so one row decides both whether the
+	/// Split Lens pays a spell and whether it charges it. A spell that asks without its row saying so gets
+	/// nothing and is reported, once: add EvolutionStat.Amount to its row.
+	/// </summary>
+	private int AmountFor(SpellData spell)
+	{
+		if (EvolutionStatReaders.ReadsAmount(spell))
+			return amountBonus;
+		if (spell != null && undeclaredAmountReaders.Add(spell.Id ?? string.Empty))
+			GD.PushError($"Player: '{spell.Id}' adds Amount to its count, but its EvolutionStatReaders row does not say so (EvolutionStat.Amount): "
+				+ "it gets none, and the Split Lens never charges it. Add Amount to its row.");
+		return 0;
+	}
 
 	// Returns the highest threshold (0, 2, 4, or 6) met by the given element's current instance count.
 	public int GetElementTier(Element element)
@@ -3031,9 +3078,11 @@ public partial class Player : CharacterBody2D
 			case ChestItemCatalog.CrackedPrism:
 				// A genuine trade rather than an upgrade, and the only item in the game that makes
 				// a number go DOWN. More shots that each hit softer is better for wide spells and
-				// worse for single heavy ones, so it is a decision instead of a pickup.
+				// worse for single heavy ones, so it is a decision instead of a pickup. The cost is
+				// charged per spell, to the ones the shot reaches (GetSplitLensMultiplier) - it was the
+				// whole damage multiplier until 0.9.3.
 				amountBonus += 1;
-				damageMultiplier *= 0.75f;
+				splitLensHeld = true;
 				break;
 			case ChestItemCatalog.DuellistsChalk:
 				break; // Read in DealDamageToEnemy - it depends on the target, not on the player.
@@ -3659,7 +3708,7 @@ public partial class Player : CharacterBody2D
 					// Ask the resource for the count rather than hardcoding 1: evolutions and
 					// level upgrades can both grant projectiles, and the old literal meant any
 					// that did were silently ignored for this spell alone.
-					int projectileCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+					int projectileCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 					float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 					EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, projectileCount, magicMissileTargets, castRange);
 					outcome = CastOutcome.NoTarget;
@@ -4039,7 +4088,7 @@ public partial class Player : CharacterBody2D
 		if (aim == Vector2.Zero)
 			aim = Vector2.Right;
 
-		int arrows = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int arrows = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		float chargeDamage = Mathf.Lerp(HuntersDrawMinDamageMultiplier, HuntersDrawMaxDamageMultiplier, charge);
 		float chargeSpeed = Mathf.Lerp(HuntersDrawMinSpeedMultiplier, 1f, charge);
 		int chargePierce = fullDraw ? HuntersDrawFullDrawPierceBonus : 0;
@@ -4262,7 +4311,7 @@ public partial class Player : CharacterBody2D
 				chainLightning.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				chainLightning.AreaMultiplier = areaMultiplier;
 				chainLightning.DurationMultiplier = durationMultiplier;
-				chainLightning.ProjectileCountBonus = amountBonus;
+				chainLightning.ProjectileCountBonus = AmountFor(spell);
 				chainLightning.SetSpellLevel(spell.CurrentLevel);
 				chainLightning.PlayerRef = this;
 			}
@@ -4394,7 +4443,7 @@ public partial class Player : CharacterBody2D
 			chainLightning.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			chainLightning.AreaMultiplier = areaMultiplier;
 			chainLightning.DurationMultiplier = durationMultiplier;
-			chainLightning.ProjectileCountBonus = amountBonus;
+			chainLightning.ProjectileCountBonus = AmountFor(spell);
 			chainLightning.SetSpellLevel(spell.CurrentLevel);
 			chainLightning.PlayerRef = this;
 		}
@@ -4554,7 +4603,7 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
-		int cap = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int cap = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		int alive = arena.GetChildren().OfType<KindledWard>()
 			.Count(w => IsInstanceValid(w) && w.SpellData != null
 				&& w.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
@@ -4640,7 +4689,7 @@ public partial class Player : CharacterBody2D
 			arena.AddChild(starfallRain);
 		}
 
-		int stars = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int stars = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		// The node draws itself out of the radius it hits and repaints its own element path, so it takes
 		// only a Legendary's gold from the visual tint, never a node scale.
 		starfallRain.Cloudburst(spell, stars, interval, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
@@ -4735,7 +4784,7 @@ public partial class Player : CharacterBody2D
 			stormsweep.PlayerRef = this;
 			AddChild(stormsweep);
 		}
-		int sweeps = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int sweeps = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		// It draws itself out of the band it sweeps and repaints its own element path, so it takes only
 		// a Legendary's gold from the visual tint, never a node scale.
 		stormsweep.Cast(spell, sweeps, FacingSide, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
@@ -4755,7 +4804,7 @@ public partial class Player : CharacterBody2D
 			sleetRunes.PlayerRef = this;
 			arena.AddChild(sleetRunes);
 		}
-		int runes = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int runes = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		sleetRunes.Cast(spell, runes, GetSpellDamageMultiplier(spell), GetSpellVisualTint(spell));
 		return CastOutcome.Maintained;
 	}
@@ -4783,7 +4832,9 @@ public partial class Player : CharacterBody2D
 		if (nearest == null || minDist > range) return CastOutcome.NoTarget;
 
 		bool mass = spell.HasEvolution(GravewellTrap.MassGraveId);
-		int count = mass ? 1 : Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, GravewellTrap.MaxPerCast);
+		// Mass Grave digs one grave whatever the count, so it never asks for Amount - and its row says so
+		// (EvolutionStatReaders, ExceptAmountUnder), so the Split Lens does not charge it either.
+		int count = mass ? 1 : Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell), 1, GravewellTrap.MaxPerCast);
 		GravewellTrap.Setup setup = GravewellTrap.For(spell, GetEffectiveAreaMultiplier(),
 			GetSpellDamageMultiplier(spell), durationMultiplier);
 		// A great grave opens under the front of the swarm itself; it is wide enough to take what follows.
@@ -5391,7 +5442,7 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
-		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, MaxSporeMushrooms);
+		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell), 1, MaxSporeMushrooms);
 		SporeMushroom.Sowing sowing = SporeMushroom.For(spell, GetEffectiveAreaMultiplier(),
 			GetSpellDamageMultiplier(spell), durationMultiplier, count);
 
@@ -5501,7 +5552,7 @@ public partial class Player : CharacterBody2D
 		bool spire = spell.HasEvolution(IceSpike.FrozenSpireId);
 		Vector2 target = nearest.GlobalPosition;
 
-		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		IceSpike first = MakeIceSpike(spell, scene);
 		float radius = first?.HitRadius ?? 56f;
 
@@ -5694,7 +5745,7 @@ public partial class Player : CharacterBody2D
 		// finished runs at half the other wizards' damage. Distinct targets rather than Glacial Spike's
 		// scatter around one: the ground opens under the front rank of the swarm, which is the hold-
 		// the-line identity, and it keeps the two spike spells reading differently.
-		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell));
 		EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, spikeCount, magicMissileTargets, castRange);
 		if (magicMissileTargets.Count == 0)
 			magicMissileTargets.Add(nearest);
@@ -5744,7 +5795,7 @@ public partial class Player : CharacterBody2D
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.AttackSpeedMultiplier = EffectiveAttackSpeed;
-				script.ProjectileCountBonus = amountBonus;
+				script.ProjectileCountBonus = AmountFor(spell);
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
@@ -5757,7 +5808,7 @@ public partial class Player : CharacterBody2D
 			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 			existing.AttackSpeedMultiplier = EffectiveAttackSpeed;
-			existing.ProjectileCountBonus = amountBonus;
+			existing.ProjectileCountBonus = AmountFor(spell);
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
 		// Kept current, nothing new cast: see CastOutcome.Maintained.
@@ -5849,7 +5900,7 @@ public partial class Player : CharacterBody2D
 			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.DurationMultiplier = durationMultiplier;
 			// Amount is more tentacles.
-			script.TentacleBonus = amountBonus;
+			script.TentacleBonus = AmountFor(spell);
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
@@ -6050,7 +6101,7 @@ public partial class Player : CharacterBody2D
 
 		// Scales target count with level so the ray fans out to more enemies as it levels.
 		int levelTargetBonus = (spell.CurrentLevel - 1) / 2;
-		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus + levelTargetBonus);
+		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell) + levelTargetBonus);
 
 		// The held first (hottest first), then the nearest. `enemies` is nearest first.
 		scorchTargets.Clear();
@@ -6153,7 +6204,7 @@ public partial class Player : CharacterBody2D
 		// round the player's own feet as it used to.
 		if (minDist > castRange) return CastOutcome.NoTarget;
 
-		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, MaxMeteorsPerVolley);
+		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + AmountFor(spell), 1, MaxMeteorsPerVolley);
 		float stagger = MathF.Min(MeteorStagger, MeteorVolleySeconds / count);
 		float damageMultiplier = GetSpellDamageMultiplier(spell);
 		// The evolutions' area belongs in the blast (Bramble Seed's bug again): Meteor Cluster's +30%

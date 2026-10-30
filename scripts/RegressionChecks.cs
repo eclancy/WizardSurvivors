@@ -32,6 +32,7 @@ public static class RegressionChecks
 		ValidateElementPaths(warnings);
 		ValidateEvolutionReaders(warnings);
 		ValidateLevelUpReaders(warnings);
+		ValidateAmountReaders(warnings);
 		ValidateStarfall(warnings);
 		ValidateCycloneGust(warnings);
 		ValidateFear(warnings);
@@ -4299,6 +4300,90 @@ public static class RegressionChecks
 				if (upgrade.Effect != SpellEffect.None && !readers.ReadsEffect(upgrade.Effect) && reported.Add(upgrade.Effect.ToString()))
 					warnings.Add($"Spell '{label}' level {upgrade.Level} grants Effect {upgrade.Effect} {upgrade.EffectValue}, which it never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
 			}
+		}
+	}
+
+	// The Split Lens (0.9.3, Eric: "it should only reduce damage of spells that are affected by the
+	// projectile count"). One row decides both halves of its trade - EvolutionStat.Amount, which
+	// Player.AmountFor pays the +1 by and Player.GetSpellDamageMultiplier charges the -25% by - so this checks
+	// the trade as a cast sees it: a Player that never enters a tree takes the lens, and every spell form
+	// must come out charged exactly when it is paid, untouched otherwise. It also checks what a row cannot
+	// say for itself: a spell that reads Amount has a count to add it to, and a milestone named as dropping
+	// Amount is one the spell offers. A cast site that starts reading Amount without its row saying so is
+	// reported by AmountFor the first time it fires, and gets nothing until it does.
+	private static void ValidateAmountReaders(List<string> warnings)
+	{
+		var player = new Player();
+		try
+		{
+			var spells = ContentValidator.LoadAllSpellForms()
+				.Where(s => s != null && !string.IsNullOrWhiteSpace(s.Id) && EvolutionStatReaders.TryGet(s, out _)).ToList();
+			var before = new Dictionary<SpellData, (float Damage, int Amount)>();
+			foreach (SpellData spell in spells)
+				before[spell] = player.DebugCastTerms(spell);
+			player.DebugTakeChestItem(ChestItemCatalog.CrackedPrism);
+
+			var charged = new List<string>();
+			int spared = 0;
+			foreach (SpellData spell in spells)
+			{
+				EvolutionStatReaders.TryGet(spell, out SpellStatReaders row);
+				string label = ContentValidator.Label(spell);
+				bool reads = row.ReadsAmount(spell);
+				(float damage, int amount) = player.DebugCastTerms(spell);
+				float ratio = before[spell].Damage > 0f ? damage / before[spell].Damage : 0f;
+				int gained = amount - before[spell].Amount;
+				float expected = reads ? Player.SplitLensDamageMultiplier : 1f;
+				if (MathF.Abs(ratio - expected) > 0.001f || gained != (reads ? 1 : 0))
+					warnings.Add($"Split Lens on '{label}': damage x{ratio:0.###} and {gained:+0;-0;0} projectile, where a spell that "
+						+ $"{(reads ? "reads" : "does not read")} Amount should get x{expected:0.##} and {(reads ? "+1" : "none")}. "
+						+ "The lens must charge exactly the spells it pays (Player.GetSplitLensMultiplier, AmountFor).");
+				if (reads)
+					charged.Add(spell.Id);
+				else
+					spared++;
+
+				if ((row.Stats & EvolutionStat.Amount) != 0 && (row.Stats & EvolutionStat.Projectiles) == 0)
+					warnings.Add($"Spell '{label}' reads Amount but no projectile count of its own ({row.ReadIn}): Amount is added to that count.");
+				if (row.AmountDroppedBy.Count > 0)
+				{
+					SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+					foreach (string id in row.AmountDroppedBy)
+					{
+						SpellEvolutionOption milestone = spell.Level4Options?.FirstOrDefault(o => o?.Id == id)
+							?? spell.Level8Options?.FirstOrDefault(o => o?.Id == id);
+						if ((row.Stats & EvolutionStat.Amount) == 0 || milestone == null)
+						{
+							warnings.Add($"Spell '{label}' names '{id}' as dropping Amount, but {((row.Stats & EvolutionStat.Amount) == 0 ? "it never reads Amount" : "offers no such milestone")}.");
+							continue;
+						}
+						// Held, the milestone frees the spell from the lens: by its id alone (HasEvolution), put
+						// back at once - these are the loaded resources a run plays.
+						bool atFour = milestone.MilestoneLevel == 4;
+						string held = atFour ? spell.SelectedLevel4EvolutionId : spell.SelectedLevel8EvolutionId;
+						try
+						{
+							if (atFour) spell.SelectedLevel4EvolutionId = id; else spell.SelectedLevel8EvolutionId = id;
+							(float heldDamage, int heldAmount) = player.DebugCastTerms(spell);
+							float heldRatio = before[spell].Damage > 0f ? heldDamage / before[spell].Damage : 0f;
+							if (MathF.Abs(heldRatio - 1f) > 0.001f || heldAmount != 0)
+								warnings.Add($"Split Lens on '{label}' holding '{id}': damage x{heldRatio:0.###} and {heldAmount} projectile from Amount, "
+									+ "where a milestone that drops Amount should leave it untouched by the lens.");
+						}
+						finally
+						{
+							if (atFour) spell.SelectedLevel4EvolutionId = held; else spell.SelectedLevel8EvolutionId = held;
+						}
+					}
+				}
+			}
+			// A row edit that flagged every spell, or none, would turn the trade back into a flat tax or a gift.
+			if (charged.Count == 0 || spared == 0)
+				warnings.Add($"Split Lens charges {charged.Count} spell forms and spares {spared}: it should be a trade some spells take and others do not.");
+		}
+		finally
+		{
+			player.Free();
 		}
 	}
 
