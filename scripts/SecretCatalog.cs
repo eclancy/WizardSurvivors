@@ -170,7 +170,7 @@ public static partial class SecretCatalog
 	/// <summary>
 	/// Every secret written down, built or not, chapter by chapter. The deeds are derived from this list.
 	/// This is the one line in the catalog that names every chapter, written once: adding a chapter's
-	/// secrets never changes it. A chapter added to StageCatalog (the castle's) adds its file and a line.
+	/// secrets never changes it. Only a chapter added to StageCatalog adds its file and a line here.
 	/// </summary>
 	/// <remarks>Built on first use, each chapter a nested class of its own: C# does not define the order of
 	/// static field initialisers across the files of a partial class (StageBestiary's reason).</remarks>
@@ -187,6 +187,10 @@ public static partial class SecretCatalog
 		Sketchbook.Build(),
 		FallowFields.Build(),
 		BrokenCircle.Build(),
+		// The castle (.ai/endgame-castle.md); the Cursed Dungeon keeps its own file when it moves in.
+		Bridge.Build(),
+		Court.Build(),
+		Throne.Build(),
 	}.SelectMany(chapter => chapter).ToArray();
 
 	/// <summary>Every secret in the world: the built ones. What the screens and the world map count.</summary>

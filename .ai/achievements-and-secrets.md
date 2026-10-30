@@ -960,8 +960,9 @@ this doc.
 ### 12.1 What it is
 
 - **`SecretCatalog` is one partial a chapter** (`SecretCatalog.<Chapter>.cs`, the `StageBestiary`
-  names - `SecretCatalog.EnchantedForest.cs`, `.SunkenCave.cs` and so on, eleven, one for each chapter
-  in `StageCatalog`; a castle chapter adds its file and one line to the list in `SecretCatalog.cs`). A1's
+  names - `SecretCatalog.EnchantedForest.cs`, `.SunkenCave.cs` and so on, fourteen, one for each chapter
+  in `StageCatalog` including the castle's `Bridge`, `Court` and `Throne`, so the castle agents never
+  edit the shared file either; only a new chapter adds a file and a line to the list). A1's
   vault entries moved into their chapters' files, unchanged but for the Geode Heart's, which is built.
   `SecretDefinition` is a record now, so a chapter builds A1's entry with `Vault(...) with { IsBuilt =
   true, CreateSite = ... }`.
