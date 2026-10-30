@@ -11,8 +11,8 @@ using WizardSurvivors.scripts;
 // It arrives on the pace clock, twice a run, interleaved with Rockem (Node2DGame.TickGhostMiniBoss),
 // and it asks two things of the player that nothing else in the Sketchbook does:
 //
-//   THE WAIL - stand-off. Up close it stops, rears back and screams: a cold ring grows round it for
-//   a full second and everything inside takes the hit when it lands. The answer is to leave. It is
+//   THE WAIL - stand-off. Up close it stops, rears back and screams: a cold ring is marked round it
+//   for a full second, a starburst filling over its head, and everything inside takes the hit when it lands. The answer is to leave. It is
 //   the Slammer's lesson on a bigger body, met in a chapter that has no Slammer of its own until
 //   Pushy Dude, and its attack animation is timed to the wind-up so the scream is on its face as the
 //   ring lands.
@@ -71,7 +71,10 @@ public partial class BooEnemy : Enemy
 
 	private void Rebuild()
 	{
-		wail = new GroundSlamAttack(WailIntervalSeconds, WailWindUpSeconds, WailRadius, WailDamage, WailColor);
+		wail = new GroundSlamAttack(WailIntervalSeconds, WailWindUpSeconds, WailRadius, WailDamage, WailColor)
+		{
+			GlyphOverride = TelegraphGlyph.Burst,
+		};
 		phase = new BurrowMove(PhaseTravelSeconds);
 		untilPhase = PhaseFirstDelaySeconds;
 	}
@@ -187,6 +190,14 @@ public partial class BooEnemy : Enemy
 		Rebuild();
 	}
 
-	// The wail's ring is on the floor, under every body (Enemy.DrawGroundTells).
+	// The wail's reach is a dashed ring on the floor, under every body (Enemy.DrawGroundTells); the scream
+	// building is the starburst over its head. Not while it crosses: a thinned ghost has no wail to wind.
 	protected override void DrawGroundTells(CanvasItem floor) => wail?.Draw(floor);
+
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = wail?.Glyph ?? TelegraphGlyph.Burst;
+		progress = wail?.WindUpProgress ?? 0f;
+		return wail != null && wail.IsWindingUp;
+	}
 }

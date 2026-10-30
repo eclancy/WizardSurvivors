@@ -455,13 +455,49 @@ public partial class LanternTenderEnemy : Enemy
 	/// <summary>Where the lantern's flame is in the world: where its strikes leave from.</summary>
 	public Vector2 LanternWorld => GlobalPosition + LanternLocal * Scale.Abs();
 
-	// The oil's cone, on the floor under every body (Enemy.DrawGroundTells), in world units (see
-	// InverseScale).
+	// On the floor under every body (Enemy.DrawGroundTells), in world units (TelegraphOutline draws
+	// through the inverse of this body's scale itself): the oil's wedge as a dashed outline, and through
+	// the dark's wind-up the edge of its light the same way - the reverse of every other outline, the
+	// line to get INSIDE - drawn solid and dissolving as the dark falls. That edge used to be a
+	// translucent arc brightening on the light layer (0.9.2: no build-ups).
 	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		floor.DrawSetTransform(Vector2.Zero, 0f, InverseScale);
 		oil?.Draw(floor);
-		floor.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+		if (dark == null || IsDying)
+			return;
+		if (dark.IsWindingUp)
+			TelegraphOutline.Warning(floor, TelegraphShape.Ring, DarkLightRadius, 0f, 0f, Vector2.Right, FlameHot,
+				dark.WindUpProgress);
+		else if (darkLift >= 0f && darkLift < DarkLiftSeconds)
+			TelegraphOutline.Strike(floor, TelegraphShape.Ring, DarkLightRadius, 0f, 0f, Vector2.Right,
+				1f - darkLift / DarkLiftSeconds);
+	}
+
+	// The icon over it, one attack at a time (Busy): the reticle while it raises the lantern to throw,
+	// the slam over the oil can, the "!" while it lifts the light for the dark. The rekindle strikes
+	// nobody, so it shows none; its thread to the lantern is its tell.
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = TelegraphGlyph.Alert;
+		progress = 0f;
+		if (strike != null && strike.IsWindingUp)
+		{
+			glyph = TelegraphGlyph.Shot;
+			progress = strike.WindUpProgress;
+			return true;
+		}
+		if (oil != null && oil.IsWindingUp)
+		{
+			glyph = oil.Glyph;
+			progress = oil.WindUpProgress;
+			return true;
+		}
+		if (dark != null && dark.IsWindingUp)
+		{
+			progress = dark.WindUpProgress;
+			return true;
+		}
+		return false;
 	}
 
 	// His light flickers (.ai/stage-secrets.md section 2), the same irregular clock as SideEvent.Flicker.
@@ -511,18 +547,9 @@ public partial class LanternTenderEnemy : Enemy
 		if (dark.IsWindingUp)
 		{
 			// The pool it lifts its light over: the safe ground, lit as the dark closes on everything else.
+			// Its edge - the line that decides the hit - is the dashed outline on the floor (DrawGroundTells).
 			float p = dark.WindUpProgress;
 			ExploreArt.DrawGlow(lightLayer, Vector2.Zero, DarkLightRadius * 1.2f, new Color(FlameMid, 0.22f * p * life));
-			lightLayer.DrawArc(Vector2.Zero, DarkLightRadius, 0f, Mathf.Tau, 96,
-				new Color(FlameHot, (0.25f + 0.55f * p) * life), 3f, true);
-		}
-		else if (darkLift >= 0f && darkLift < DarkLiftSeconds)
-		{
-			// The moment it falls: the light's edge flares white and fades with the dark, so a hit taken
-			// outside it has a cause on screen.
-			float k = darkLift / DarkLiftSeconds;
-			lightLayer.DrawArc(Vector2.Zero, DarkLightRadius, 0f, Mathf.Tau, 96,
-				new Color(FlameCore, 0.9f * (1f - k) * life), 6f * (1f - k) + 1f, true);
 		}
 
 		if (rekindle.IsWindingUp && Lanterns != null && rekindleIndex >= 0)

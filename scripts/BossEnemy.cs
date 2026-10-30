@@ -29,7 +29,7 @@ public partial class BossEnemy : Enemy
 	[Export] public string BossId { get; set; } = string.Empty;
 	[Export] public string BossDisplayName { get; set; } = "Boss";
 
-	// Ground slam: the boss plants its feet, a warning grows for the telegraph, then everything
+	// Ground slam: the boss plants its feet, its reach is marked and its icon fills, then everything
 	// inside it takes a heavy hit. The telegraph is the whole fight - the slam is only unfair if the
 	// player cannot see it coming.
 	[Export] public float SlamIntervalSeconds { get; set; } = 4.6f;
@@ -203,7 +203,8 @@ public partial class BossEnemy : Enemy
 
 	// The warning is drawn on the boss's own floor (Enemy.DrawGroundTells), a node made once, rather
 	// than a node per attack, so an attack allocates nothing - this runs in a scene that already has a
-	// swarm in it. It is a ring on the ground, so it is under every body, the boss's own included.
+	// swarm in it. It is a dashed outline on the ground (TelegraphOutline), so it is under every body,
+	// the boss's own included.
 	//
 	// Never on a corpse. A boss killed mid wind-up stops its clock with the warning half grown, and a
 	// warning that stays drawn through the fall says a hit is coming that never will.
@@ -211,6 +212,16 @@ public partial class BossEnemy : Enemy
 	{
 		if (!IsDying)
 			slam?.Draw(floor);
+	}
+
+	// The clock is the icon over the boss (TelegraphIcon): a lane's charge shows the claw, a ring or a
+	// wedge the slam, unless the subclass's BuildSlam names another (GroundSlamAttack.GlyphOverride).
+	// Enemy keeps it off a corpse.
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = slam?.Glyph ?? TelegraphGlyph.Slam;
+		progress = slam?.WindUpProgress ?? 0f;
+		return slam != null && slam.IsWindingUp;
 	}
 
 	// A boss death is a run-defining event, so it skips the throttling and the heavy/small

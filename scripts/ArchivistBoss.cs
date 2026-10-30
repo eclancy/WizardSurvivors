@@ -68,6 +68,8 @@ public partial class ArchivistBoss : BossEnemy
 		{
 			Shape = TelegraphShape.Cone,
 			HalfAngleDegrees = SweepHalfAngle,
+			// A beam that is always on is not a slam: the "!" over it fills to each discharge.
+			GlyphOverride = TelegraphGlyph.Alert,
 		};
 
 	protected override void OnPhaseEntered(int phase)

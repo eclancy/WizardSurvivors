@@ -43,8 +43,6 @@ public partial class SummonerEnemy : Enemy
 	[Export] public float StandoffDistance { get; set; } = 300f;
 	[Export] public float RetreatDistance { get; set; } = 190f;
 
-	[Export] public Color SummonColor { get; set; } = new Color(0.55f, 0.85f, 0.62f);
-
 	private AttackTelegraph summon;
 	private PackedScene minionScene;
 	private readonly List<Enemy> activeMinions = new();
@@ -69,8 +67,8 @@ public partial class SummonerEnemy : Enemy
 		TickSummon((float)delta);
 	}
 
-	// Approach, circle, or back off - and stand still while calling, because the ring it draws is a
-	// promise about where the minions arrive.
+	// Approach, circle, or back off - and stand still while calling, so the minions arrive round the
+	// body the skull is over rather than wherever it had drifted to.
 	protected override Vector2 AdjustSteering(Vector2 chaseDirection, float distanceToPlayer)
 	{
 		if (summon != null && summon.IsWindingUp)
@@ -158,7 +156,7 @@ public partial class SummonerEnemy : Enemy
 		}
 	}
 
-	// Evenly spaced around the ring the tell drew, offset by the summoner's identity so two of them
+	// Evenly spaced round the summoner, offset by its identity so two of them
 	// standing together do not drop minions on the same spots.
 	private Vector2 SpawnOffsetFor(int index, int count)
 	{
@@ -175,24 +173,14 @@ public partial class SummonerEnemy : Enemy
 		summon = new AttackTelegraph(SummonIntervalSeconds, SummonWindUpSeconds);
 	}
 
-	protected override void DrawGroundTells(CanvasItem floor)
+	// The tell is the skull over its head (TelegraphIcon), filling as it calls. It used to be a
+	// translucent ring at the summon radius with a mote swelling on each spot a minion would take - a
+	// build-up on the floor, which Eric ruled out in 0.9.2. The summon deals no damage, so there is no
+	// ground to keep the player off; what he needs is "kill this one now", which the skull says.
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
 	{
-		if (summon == null || !summon.IsWindingUp)
-			return;
-
-		// The tell shows *where*, not just *when*: a ring at the summon radius plus a mote growing
-		// on each spot a minion is about to occupy. A player who reads it walks out of the ring and
-		// gets a free moment on the summoner before the pack turns around. On the floor, under every
-		// body (Enemy.DrawGroundTells): it is where the minions will stand.
-		float progress = summon.WindUpProgress;
-		var ring = new Color(SummonColor.R, SummonColor.G, SummonColor.B, 0.25f + 0.40f * progress);
-		floor.DrawArc(Vector2.Zero, SummonSpawnRadius, 0f, Mathf.Tau, 32, ring, 2.5f, true);
-
-		int wanted = Mathf.Max(1, MinionsPerSummon);
-		for (int i = 0; i < wanted; i++)
-		{
-			Vector2 spot = SpawnOffsetFor(i, wanted);
-			floor.DrawCircle(spot, Mathf.Lerp(2.0f, 9.0f, progress), new Color(SummonColor.R, SummonColor.G, SummonColor.B, 0.30f + 0.45f * progress));
-		}
+		glyph = TelegraphGlyph.Summon;
+		progress = summon?.WindUpProgress ?? 0f;
+		return summon != null && summon.IsWindingUp;
 	}
 }

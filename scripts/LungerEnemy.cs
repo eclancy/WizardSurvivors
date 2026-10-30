@@ -1,9 +1,9 @@
 using Godot;
 using WizardSurvivors.scripts;
 
-// Burst chase (issue #33). It walks slower than an ordinary chaser, plants, shows the player which
-// way it is about to go, then covers ground far faster than anything else in the roster - and is
-// left winded and slow afterwards.
+// Burst chase (issue #33). It walks slower than an ordinary chaser, plants, shows a claw over its
+// head that fills as it winds up (TelegraphIcon), then dashes at the player far faster than anything
+// else in the roster - and is left winded and slow afterwards.
 //
 // What it adds to a run is a reason to keep moving *before* you are cornered. A plain chaser is
 // outrun by walking away from it; this one cannot be, so the answer is to not be standing on the
@@ -43,8 +43,6 @@ public partial class LungerEnemy : Enemy
 	/// <summary>Stops backing off at this multiple of the minimum distance. Above 1 so it does not jitter on the boundary.</summary>
 	[Export] public float RepositionExitMultiplier { get; set; } = 1.6f;
 
-	[Export] public Color TellColor { get; set; } = new Color(1.0f, 0.42f, 0.24f);
-
 	private AttackTelegraph lunge;
 	// The direction is committed the frame the wind-up ends, and never re-aimed. A dash that
 	// tracked the player mid-flight would make the tell a lie about where it is safe to stand.
@@ -52,14 +50,10 @@ public partial class LungerEnemy : Enemy
 	private float lungeRemaining;
 	private float recoveryRemaining;
 	private bool repositioning;
-	// Captured after Node2DGame has applied its run scaling and elite multipliers, so the dash is
-	// a multiple of the speed this individual actually walks at.
-	private float baseSpeed;
 
 	public override void _Ready()
 	{
 		base._Ready();
-		baseSpeed = Speed;
 		lunge = new AttackTelegraph(LungeIntervalSeconds, LungeWindUpSeconds);
 	}
 
@@ -160,33 +154,16 @@ public partial class LungerEnemy : Enemy
 		lungeDirection = Vector2.Zero;
 	}
 
-	protected override void DrawGroundTells(CanvasItem floor)
+	// The tell is the claw over its head (TelegraphIcon), filling through the wind-up and flashing as it
+	// goes. It used to be a translucent streak growing along the floor toward the player plus a brace
+	// ring under its feet - the "jump attacks" Eric named in 0.9.2 ("transparent buildups animations
+	// are weird... remove them"). The streak never said anything the claw does not: the dash is aimed
+	// at the player on the frame the wind-up ends, so "it is coming at me, now" is the whole read, and
+	// the answer is the same sideways step.
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
 	{
-		// The tell is a line, not a ring: this attack is dangerous along one heading and harmless
-		// two steps to either side, and the drawing has to say which. On the floor, under every body
-		// (Enemy.DrawGroundTells), which Enemy redraws every physics frame.
-		if (lunge == null || !lunge.IsWindingUp)
-			return;
-
-		Node2D target = TargetPlayer;
-		Vector2 aim = Vector2.Right;
-		if (target != null && IsInstanceValid(target))
-		{
-			Vector2 local = ToLocal(target.GlobalPosition);
-			if (local.LengthSquared() > 0.0001f)
-				aim = local.Normalized();
-		}
-
-		float progress = lunge.WindUpProgress;
-		float reach = baseSpeed * LungeSpeedMultiplier * LungeDurationSeconds;
-		// The streak grows to the distance the dash actually covers, so its length is a promise
-		// about where the charge ends rather than decoration.
-		Vector2 tip = aim * reach * progress;
-
-		var track = new Color(TellColor.R, TellColor.G, TellColor.B, 0.16f + 0.30f * progress);
-		floor.DrawLine(Vector2.Zero, tip, track, 7.0f, true);
-		floor.DrawCircle(tip, Mathf.Lerp(3.0f, 8.0f, progress), new Color(TellColor.R, TellColor.G, TellColor.B, 0.55f));
-		// A brace ring under its feet, so a lunger winding up inside a crowd is still findable.
-		floor.DrawArc(Vector2.Zero, Mathf.Lerp(26f, 16f, progress), 0f, Mathf.Tau, 24, new Color(TellColor.R, TellColor.G, TellColor.B, 0.75f), 2.5f, true);
+		glyph = TelegraphGlyph.Leap;
+		progress = lunge?.WindUpProgress ?? 0f;
+		return lunge != null && lunge.IsWindingUp;
 	}
 }

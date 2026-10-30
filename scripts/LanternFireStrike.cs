@@ -179,7 +179,7 @@ public partial class LanternFireStrike : Node2D
 			new Rect2(frame * size, 0f, size, size));
 	}
 
-	// The ring on the ground: growing for the flight, then GroundSlamAttack's impact flash.
+	// The ring on the ground: GroundSlamAttack's dashed outline for the whole flight, then its strike.
 	private void OnRingDraw()
 	{
 		if (thrown)

@@ -38,6 +38,13 @@ public static class DrawLayers
 	/// <summary>Anything in the air: projectiles, blasts, swung weapons, thrown sprays. Over every body.</summary>
 	public const int Air = 6;
 
+	/// <summary>
+	/// The icon an enemy shows over its head while it winds up an attack (TelegraphIcon): over every body,
+	/// every projectile and the lantern-tender's dark (7) and light (8), so a wind-up stays findable in a
+	/// packed swarm; under the floating numbers.
+	/// </summary>
+	public const int AttackIcon = 12;
+
 	/// <summary>Floating numbers and words: over everything in the world, under the HUD's canvas layers.</summary>
 	public const int FloatingText = 20;
 }

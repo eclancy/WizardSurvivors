@@ -2,8 +2,8 @@ using Godot;
 using WizardSurvivors.scripts;
 
 // Stop-and-attack (issue #33). It closes like an ordinary chaser, and once it is near enough it
-// plants, grows a warning ring, and hits everything inside the ring - including ground it is not
-// standing on the far side of.
+// plants, marks its reach on the ground in a dashed ring while the icon over its head fills, and hits
+// everything inside the ring - including ground it is not standing on the far side of.
 //
 // The point is that its threat has a shape. Every other melee enemy in the roster damages you by
 // occupying the same pixel as you, so "do not touch it" is the whole rule and backing off one step
@@ -96,6 +96,14 @@ public partial class SlammerEnemy : Enemy
 		slam = BuildSlam();
 	}
 
-	// The ring is on the floor, under every body (Enemy.DrawGroundTells).
+	// The reach is a dashed outline on the floor, under every body (Enemy.DrawGroundTells); the clock is
+	// the icon over its head.
 	protected override void DrawGroundTells(CanvasItem floor) => slam?.Draw(floor);
+
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = slam?.Glyph ?? TelegraphGlyph.Slam;
+		progress = slam?.WindUpProgress ?? 0f;
+		return slam != null && slam.IsWindingUp;
+	}
 }
