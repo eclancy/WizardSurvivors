@@ -330,6 +330,14 @@ public static class RegressionChecks
 				warnings.Add($"Secrets: '{secret.Id}' has no seen line, so its achievement has nothing to say once its tell has been seen.");
 			if (secret.IsKeepsake && secret.IsVault)
 				warnings.Add($"Secrets: '{secret.Id}' is both a keepsake and a spell vault; a chapter's keepsake and its vault are two secrets.");
+			// How a built secret gets into a run (SecretDirector, piece A4): a placed one names its node, a
+			// custom one its install; and a vault is placed as a vault (6.4), a keepsake as a keepsake.
+			if (secret.IsBuilt && (secret.Placement == SecretPlacement.Custom ? secret.Install == null : secret.CreateSite == null))
+				warnings.Add($"Secrets: '{secret.Id}' is built but has no {(secret.Placement == SecretPlacement.Custom ? "Install" : "CreateSite")}, so no run ever puts it in the world.");
+			if (secret.IsVault && secret.Placement != SecretPlacement.Vault)
+				warnings.Add($"Secrets: '{secret.Id}' is a spell vault placed as {secret.Placement}; a vault is placed five to seven chunks out (SecretPlacement.Vault).");
+			if (secret.IsKeepsake && secret.Placement != SecretPlacement.Keepsake)
+				warnings.Add($"Secrets: '{secret.Id}' is a keepsake placed as {secret.Placement}; a keepsake is placed ten to twelve chunks out (SecretPlacement.Keepsake).");
 
 			bool paysSpell = secret.MetaReward == SecretMetaReward.Spell;
 			if (paysSpell != !string.IsNullOrWhiteSpace(secret.SpellUnlockId))

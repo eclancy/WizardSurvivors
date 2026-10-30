@@ -43,8 +43,34 @@ public enum SecretMetaReward
 	Spell,
 }
 
+/// <summary>
+/// Where the run puts a secret, at stage start, from the terrain seed (.ai/stage-secrets.md section 4;
+/// .ai/achievements-and-secrets.md 6.4). The SecretDirector does the placing for every kind but
+/// <see cref="Custom"/>, so a chapter's secret is a catalog entry and a node, and never an edit to the
+/// director.
+/// </summary>
+public enum SecretPlacement
+{
+	/// <summary>
+	/// The secret puts itself in the world through <see cref="SecretDefinition.Install"/> - the Fenced
+	/// Bloom rides every flower pen as it streams in. (A secret that is not built is never placed, whatever
+	/// its placement says: the director only reads <see cref="SecretCatalog.ForStage"/>.)
+	/// </summary>
+	Custom,
+	/// <summary>The chapter's guaranteed near secret: three to four chunks out, its bearing at least 90
+	/// degrees from the side event's. Stream 9.</summary>
+	Anchor,
+	/// <summary>The chapter's keepsake: ten to twelve chunks out; at least 90 degrees from the anchor's
+	/// bearing when there is one, and on the seed's own bearing when not (the First Tree). Stream 7.</summary>
+	Keepsake,
+	/// <summary>A spell vault (.ai/achievements-and-secrets.md 6.4): five to seven chunks out, at least 90
+	/// degrees from the side event's and the keepsake's bearings, in every run of its chapter. Stream 8.</summary>
+	Vault,
+}
+
 /// <summary>One stage secret: what it is called, where it lives, how it is worked and what it pays.</summary>
-public sealed class SecretDefinition
+/// <remarks>A record so a chapter can build on A1's written-down vault with <c>with</c> (<see cref="SecretCatalog"/>'s Vault).</remarks>
+public sealed record SecretDefinition
 {
 	public required string Id { get; init; }
 	/// <summary>A StageCatalog id - the chapter it belongs to.</summary>
@@ -68,6 +94,11 @@ public sealed class SecretDefinition
 	public bool IsVault { get; init; }
 	/// <summary>What finding it does in the run, in words for the toast.</summary>
 	public required string RunReward { get; init; }
+	/// <summary>
+	/// The toast's line when it is found again in a later run, if that pays something else - a vault
+	/// whose spell is already on the save pays a chest (6.4). Empty: <see cref="RunReward"/> again.
+	/// </summary>
+	public string RepeatReward { get; init; } = "";
 	public SecretMetaReward MetaReward { get; init; } = SecretMetaReward.PageOnly;
 	/// <summary>For FoundLevel: the ArcaneUpgrades id (vitality, recovery, magnet, movespeed).</summary>
 	public string MetaRewardId { get; init; } = "";
@@ -87,6 +118,24 @@ public sealed class SecretDefinition
 	/// so no screen counts or names it, and its deed is evaluated but not listed.
 	/// </summary>
 	public bool IsBuilt { get; init; } = true;
+
+	// --- How it gets into a run (the SecretDirector reads these; nothing else does) ---------------
+
+	/// <summary>How the director puts it in the world. A built secret needs a placement and a site, or an Install.</summary>
+	public SecretPlacement Placement { get; init; } = SecretPlacement.Custom;
+	/// <summary>
+	/// Open ground kept round the site: the placer tests it, and decor stays out of it. A vault's is
+	/// large (6.4: the size of the flower pen), so the place it stands in is a place to fight.
+	/// </summary>
+	public float Footprint { get; init; } = 160f;
+	/// <summary>
+	/// The node an Anchor, Keepsake or Vault is, made once a run: the director sets its id, its director
+	/// and its position, hands it the placer to lay out anything else it needs (a path, a set of shards)
+	/// and adds it to the run. Never called outside a run, so the validators never build a node.
+	/// </summary>
+	public Func<global::SecretSite> CreateSite { get; init; }
+	/// <summary>For <see cref="SecretPlacement.Custom"/>: run once at stage start, to hook the secret into the world.</summary>
+	public Action<global::SecretDirector> Install { get; init; }
 }
 
 /// <summary>
@@ -94,21 +143,20 @@ public sealed class SecretDefinition
 /// UnlockCatalog and ApotheosisCatalog. RegressionChecks.ValidateSecretCatalog holds it to the rules.
 /// </summary>
 /// <remarks>
-/// Built so far (issue #20, 2026-10-28): the Enchanted Forest's first secret and its keepsake. The
-/// Fenced Bloom is worked by walking a lap round a flower pen and drops a seed; the First Tree, far
-/// out, takes the seed and pays the first found level.
+/// ONE FILE PER CHAPTER (piece A4 of .ai/achievements-and-secrets.md, section 9). Each chapter's secrets
+/// are written in its own partial, <c>SecretCatalog.&lt;Chapter&gt;.cs</c>, in a nested class with a
+/// <c>Build()</c> - the StageBestiary pattern - so the agents building chapters in parallel each edit
+/// their own file and never this one. A chapter's file holds its rows of section 8 and nothing else:
+/// the entry, and through <see cref="SecretDefinition.CreateSite"/> the node that is the secret in the
+/// world. <c>.ai/stage-secrets.md</c> section 13 is the recipe.
 ///
-/// Written down but not built (2026-10-30, piece A1 of .ai/achievements-and-secrets.md): the nine spell
-/// vaults. Each pays a spell the shop or a Feat used to, so every spell has an achievement behind it
-/// from the day the unlock rule changes, and each has a derived deed (<see cref="AsAchievement"/>) the
-/// unlock catalog can name. Piece A4 splits this file into one partial per chapter; the vaults move
-/// into their chapters' files then, and each chapter's agent builds its vault and flips IsBuilt.
+/// Built so far: the Enchanted Forest's Fenced Bloom and First Tree (issue #20, 2026-10-28), and the
+/// Sunken Cave's Geode Heart, the first spell vault (2026-10-30). The other eight vaults are written
+/// down (piece A1) with their deeds, words and spells, unbuilt; each chapter's agent builds its vault and
+/// flips IsBuilt.
 /// </remarks>
-public static class SecretCatalog
+public static partial class SecretCatalog
 {
-	public const string FencedBloomId = "fenced_bloom";
-	public const string FirstTreeId = "first_tree";
-
 	/// <summary>The four stats a found level may raise: comfort, never what the Apotheosis floor was
 	/// measured with at cap (.ai/stage-secrets.md section 3).</summary>
 	public static readonly IReadOnlyList<string> FoundLevelStats = new[] { "vitality", "recovery", "magnet", "movespeed" };
@@ -116,70 +164,45 @@ public static class SecretCatalog
 	/// <summary>The most Arcane Energy one keepsake may pay.</summary>
 	public const int MaxKeepsakeArcane = 150;
 
-	/// <summary>Every secret written down, built or not. The deeds are derived from this list.</summary>
-	public static readonly IReadOnlyList<SecretDefinition> Defined = new[]
-	{
-		new SecretDefinition
-		{
-			Id = FencedBloomId,
-			StageId = "stage_0",
-			DisplayName = "The Fenced Bloom",
-			FoundLine = "A moonflower somebody kept, behind a fence. Walk all the way round it and it opens.",
-			SeenLine = "A walled garden in the wood, and in it one pale flower that turns to follow you.",
-			Verb = SecretVerb.Circle,
-			RunReward = "Healed by half, and the garden heals you while you stand in it",
-		},
-		new SecretDefinition
-		{
-			Id = FirstTreeId,
-			StageId = "stage_0",
-			DisplayName = "The First Tree",
-			FoundLine = "A dead clearing far out in the wood, waiting for a seed from the moonflower.",
-			SeenLine = "A dead clearing ringed with old stumps, and in the middle a bed of turned earth with nothing in it.",
-			Verb = SecretVerb.Carry,
-			IsKeepsake = true,
-			RunReward = "Fully healed",
-			MetaReward = SecretMetaReward.FoundLevel,
-			MetaRewardId = "vitality",
-		},
+	private static SecretDefinition[] defined;
+	private static SecretDefinition[] built;
 
-		// THE SPELL VAULTS (.ai/achievements-and-secrets.md 2.1, 6.4 and section 8), one per chapter but
-		// the Emberdeep. Planned: in the catalog, with deeds, not yet in the world. The seen lines say what
-		// the near tell shows and never what to do; the found lines say what it was and what opened it.
-		Vault("pale_hart", "stage_0", "The Pale Hart", SecretVerb.Follow, "hunters_draw", "Hunter's Draw",
-			seen: "A hart of warm light at the edge of a clearing, the only warm thing that moves and is not you. It is watching you.",
-			found: "A hart of light that led you, a stand at a time, to an old hunter's high seat. A bow of light hung there."),
-		Vault("pinfold", "stage_9", "The Pinfold", SecretVerb.Guarded, "familiar", "Familiar",
-			seen: "A walled stone pound with a barred gate. Behind the bars a hound of warm light lies with its head on its paws.",
-			found: "The Hayward's pound, and a stray he kept in it. Its guards fell, the latch lifted, and the hound ran to you."),
-		Vault("fallen_star", "stage_10", "The Fallen Star", SecretVerb.Gather, "starfall", "Starfall",
-			seen: "A line of burnt heather running dead straight across the heath, glinting at intervals.",
-			found: "A star that fell on the heath and broke. Its seven shards gathered, the crater gave up its light."),
-		Vault("geode_heart", "stage_2", "The Geode Heart", SecretVerb.Strike, "frost_shard", "Frost Shard",
-			seen: "A crystal three men tall, grown up through the cavern floor. The small ones near it are cracking.",
-			found: "A crystal grown round a light he missed. Fighting at its foot broke it open."),
-		Vault("cold_forge", "stage_1", "The Cold Forge", SecretVerb.Cull, "molten_shard", "Molten Shard",
-			seen: "A dead smithy in the gaol: a cold hearth, an anvil, and a warm glint on the anvil's horn.",
-			found: "The forge that made the shackles. Every kill on its hearth set an ember in the coals until it roared."),
-		Vault("swallow_hole", "stage_3", "The Swallow-Hole", SecretVerb.Lure, "gravewell", "Gravewell",
-			seen: "A sinkhole of black mud in the bog. The reeds lean toward it, and something glints at the bottom.",
-			found: "A hole in the bog that swallows what walks into it. Thirty of his went in, and it gave up what it held."),
-		Vault("broken_ward", "stage_4", "The Broken Ward", SecretVerb.Sequence, "kindled_ward", "Kindled Ward",
-			seen: "Five ward stones in a ring, each cut with a different number of notches, all of them dark.",
-			found: "A ward broken from the inside. Touched in the order of their notches, its stones stood again, and its light came to you."),
-		// Stillness is a linger with no place but where he stands: the drift settles round his feet.
-		Vault("buried_runes", "stage_5", "The Buried Runes", SecretVerb.Linger, "sleet_runes", "Sleet Runes",
-			seen: "A drift field where the snow never stops blowing, except round anyone who stands still.",
-			found: "Rune-stones under a drift. Standing still let the snow settle off them, and the three were dug out."),
-		// The storm is a kind of hour: a cycle of its own on the pace clock, with a build you can see.
-		Vault("fulgurite", "stage_6", "The Fulgurite", SecretVerb.Hour, "stormsweep", "Stormsweep",
-			seen: "A branching tree of glass standing in the dunes, under a sky darker over it than anywhere else.",
-			found: "Glass the lightning left in the sand. You stood by it through the dry storm, and it drew the last strike into itself."),
-	};
+	/// <summary>
+	/// Every secret written down, built or not, chapter by chapter. The deeds are derived from this list.
+	/// This is the one line in the catalog that names every chapter, written once: adding a chapter's
+	/// secrets never changes it. Only a chapter added to StageCatalog adds its file and a line here.
+	/// </summary>
+	/// <remarks>Built on first use, each chapter a nested class of its own: C# does not define the order of
+	/// static field initialisers across the files of a partial class (StageBestiary's reason).</remarks>
+	public static IReadOnlyList<SecretDefinition> Defined => defined ??= new[]
+	{
+		EnchantedForest.Build(),
+		CursedDungeon.Build(),
+		SunkenCave.Build(),
+		BlightedSwamp.Build(),
+		MysticRuins.Build(),
+		FrozenWaste.Build(),
+		ScorchedSands.Build(),
+		Emberdeep.Build(),
+		Sketchbook.Build(),
+		FallowFields.Build(),
+		BrokenCircle.Build(),
+		// The castle (.ai/endgame-castle.md); the Cursed Dungeon keeps its own file when it moves in.
+		Bridge.Build(),
+		Court.Build(),
+		Throne.Build(),
+	}.SelectMany(chapter => chapter).ToArray();
 
 	/// <summary>Every secret in the world: the built ones. What the screens and the world map count.</summary>
-	public static readonly IReadOnlyList<SecretDefinition> All = Defined.Where(s => s.IsBuilt).ToArray();
+	public static IReadOnlyList<SecretDefinition> All => built ??= Defined.Where(s => s.IsBuilt).ToArray();
 
+	/// <summary>
+	/// A spell vault, as A1 wrote the nine down (.ai/achievements-and-secrets.md 2.1, 6.4 and section 8):
+	/// its spell through its deed, the run's toast line, and - unbuilt - no place in the world. A chapter
+	/// that builds its vault writes it with <c>with</c>: <c>Vault(...) with { IsBuilt = true, CreateSite =
+	/// () => new MyVault(), Footprint = ... }</c>. The seen lines say what the near tell shows and never
+	/// what to do; the found lines say what it was and what opened it.
+	/// </summary>
 	private static SecretDefinition Vault(string id, string stageId, string name, SecretVerb verb,
 		string spellId, string spellName, string seen, string found) => new()
 	{
@@ -191,11 +214,18 @@ public static class SecretCatalog
 		Verb = verb,
 		IsVault = true,
 		RunReward = $"{spellName} can be offered from your next level-up",
+		// Found once, it still works (6.4): later runs pay its run reward and a chest from the budget.
+		RepeatReward = "It still gives up a chest",
 		MetaReward = SecretMetaReward.Spell,
 		SpellUnlockId = spellId,
 		SpellName = spellName,
 		IsBuilt = false,
+		Placement = SecretPlacement.Vault,
+		Footprint = VaultFootprint,
 	};
+
+	/// <summary>A vault's default footprint: the place it stands in is a place to fight (6.4).</summary>
+	public const float VaultFootprint = 420f;
 
 	/// <summary>A secret by id, built or planned.</summary>
 	public static SecretDefinition Get(string id) =>

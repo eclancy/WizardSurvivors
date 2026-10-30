@@ -24,7 +24,9 @@ public partial class ThawEvent : SideEvent
 	private Vector2 block;
 	private float heat;
 	private float guardTimer;
-	private bool listening;
+	// The hits that warm it: the StrikeListener every breakable secret uses was extracted from here
+	// (.ai/achievements-and-secrets.md section 5), and the thaw counts through it exactly as it did.
+	private StrikeListener strike;
 
 	protected override string Announcement => "Someone is frozen in the ice nearby.";
 	protected override string ChestLine => "The ice gives up a chest";
@@ -47,16 +49,16 @@ public partial class ThawEvent : SideEvent
 	protected override void Begin()
 	{
 		block = MainSite;
-		Player.EnemyDamagedAt += OnEnemyDamagedAt;
-		listening = true;
-	}
-
-	private void OnEnemyDamagedAt(Vector2 where, int amount, SpellData source)
-	{
-		if (IsResolved || where.DistanceTo(block) > HeatRadius)
-			return;
-		float multiplier = source?.ElementWeights != null && source.ElementWeights.ContainsKey("Fire") ? FireHeatMultiplier : 1f;
-		heat += amount * multiplier;
+		strike = new StrikeListener(block, HeatRadius)
+		{
+			Weight = source => StrikeListener.IsFire(source) ? FireHeatMultiplier : 1f,
+			Struck = (amount, _) =>
+			{
+				if (!IsResolved)
+					heat += amount;
+			},
+		};
+		strike.Start();
 	}
 
 	protected override void Tick(float delta)
@@ -83,13 +85,7 @@ public partial class ThawEvent : SideEvent
 		}
 	}
 
-	private void StopListening()
-	{
-		if (!listening)
-			return;
-		Player.EnemyDamagedAt -= OnEnemyDamagedAt;
-		listening = false;
-	}
+	private void StopListening() => strike?.Stop();
 
 	public override void _ExitTree()
 	{
@@ -125,13 +121,7 @@ public partial class ThawEvent : SideEvent
 		DrawLine(rect.Position + new Vector2(4f, 4f), rect.Position + new Vector2(12f, 4f), IceLit, 2f);
 
 		// Cracks spread as it warms: one more per fifth.
-		for (int i = 0; i < Mathf.FloorToInt(t * 5f); i++)
-		{
-			float a = i * 1.3f + 0.4f;
-			Vector2 from = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 6f;
-			Vector2 to = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * half * 1.2f;
-			DrawLine(from, to, IceLit, 1.5f);
-		}
+		Breakable.DrawCracks(this, c, half * 1.2f, Mathf.FloorToInt(t * 5f), IceLit);
 
 		DrawProgressArc(block, half * 1.6f + 8f, t, Warm);
 	}

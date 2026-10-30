@@ -14,10 +14,11 @@ using WizardSurvivors.scripts;
 //
 // It draws itself - the stumps, the bed and the sapling - on the art grid in the forest's own browns and
 // the contract's gold, the way the side events' sites do (GaolersKeyEvent's cell), so it needs no sheet.
-public partial class FirstTree : Node2D
+//
+// Placed by the SecretDirector as the Forest's keepsake (SecretPlacement.Keepsake, stream 7 - the same
+// draw it has always had), from its catalog entry in SecretCatalog.EnchantedForest.
+public partial class FirstTree : SecretSite
 {
-	public SecretDirector Director { get; set; }
-
 	/// <summary>The ground kept clear for it: the stump ring and a margin.</summary>
 	public const float Footprint = 220f;
 
@@ -25,7 +26,6 @@ public partial class FirstTree : Node2D
 	private const float GrowSeconds = 6f;
 	private const float RingRadius = 170f;
 	private const int Stumps = 9;
-	private const float GlintPeriod = 2.4f;
 
 	private static readonly Color Bark = new Color(0.36f, 0.26f, 0.18f);
 	private static readonly Color BarkDark = new Color(0.20f, 0.14f, 0.10f);
@@ -35,7 +35,6 @@ public partial class FirstTree : Node2D
 	private static readonly Color Crack = new Color(0.07f, 0.05f, 0.04f);
 	private static readonly Color Leaf = new Color(0.45f, 0.72f, 0.36f);
 	private static readonly Color LeafLit = new Color(0.66f, 0.86f, 0.48f);
-	private static readonly Color GoldHi = new Color(1.0f, 0.941f, 0.753f);
 
 	private enum Step { Barren, Growing, Grown }
 	private Step step = Step.Barren;

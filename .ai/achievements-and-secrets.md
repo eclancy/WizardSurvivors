@@ -10,7 +10,9 @@ Eric, 2026-10-29:
 > Let's add significantly more secrets, like a giant crystal that needs to be destroyed to find a
 > related spell, etc."
 
-**Status: design, decided 2026-10-30; the unlock core (A1) built, the rest not.** Eric accepted every
+**Status: design, decided 2026-10-30; the unlock core (A1), the achievements page (A2), the shop (A3)
+and the secret core (A4, with the first vault, the Geode Heart - section 12) built; the chapters'
+secrets (A5-A13) not.** Eric accepted every
 recommendation (section 10), confirming three directly: the final gate is **every wizard freed and the
 Long Coil beaten**; the shop stops selling spells and Arcane Energy keeps the stat upgrades and the
 boons; Fireball goes to the Long Coil. The unlock core (piece A1, section 9) is built on branch
@@ -776,9 +778,9 @@ own plan; the two meet only at `SecretCatalog`'s castle files and the achievemen
 | piece | what | files it owns | depends on |
 |---|---|---|---|
 | **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it. **Also touched, section 11:** `SecretCatalog.cs` (additive), `WorldMap.cs`, `_UiShot.cs`, `_BalanceHarness.cs` | **built** (`wip/achievements-core`, section 11) |
-| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them); **built** on `wip/achievements-page`, over A1 - the secret's steps (4.4) wait for A4's `SecretRunState` |
+| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them); **built** on `wip/achievements-page`, over A1 - the secret's steps (4.4) wait for A4's `SecretRunState` (A4 built it as `SecretDirector.StateOf`, section 12; the steps are not on the page yet) |
 | **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods). **Also touched:** `UnlockCatalog.cs` (`PurchasableSpells` retired) | A1; **built** on `wip/shop-no-spells` (2.4, "Built") |
-| **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | A1 |
+| **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | **built** (`wip/secret-core`, section 12), with the Geode Heart as its proof |
 | **A5-A13 One chapter's secrets each** | that chapter's rows of section 8: its vault first, then the rest; art in `tools/art/secret_<chapter>.py` | its own `SecretCatalog.<Chapter>.cs`, its own secret scripts and generator | A4 |
 | **A14 Sounds** | the shimmer (seen) and found stings `.ai/stage-secrets.md` 7.7 asked for, and the crystal's shatter | `tools/audio/`, `SfxCatalog.cs` | none |
 
@@ -945,3 +947,99 @@ Wind carrier off the road trips the check.
   and a schema-9 save that had everything, each migrated twice.
 - **Not verified by play**: nothing here was seen on a screen - the old Unlocks list with the new
   rows, the world map's finale card, a won event's line. A2's photographs cover the page.
+
+---
+
+## 12. What A4 built (2026-10-30, `wip/secret-core`)
+
+The secret core of section 9's A4 row, and one vault end to end as its proof: the Sunken Cave's Geode
+Heart (8.4.1), Eric's crystal, which pays Frost Shard. **`.ai/stage-secrets.md` section 13 is the
+record of each piece and the recipe a chapter agent follows**; this section is what changed against
+this doc.
+
+### 12.1 What it is
+
+- **`SecretCatalog` is one partial a chapter** (`SecretCatalog.<Chapter>.cs`, the `StageBestiary`
+  names - `SecretCatalog.EnchantedForest.cs`, `.SunkenCave.cs` and so on, fourteen, one for each chapter
+  in `StageCatalog` including the castle's `Bridge`, `Court` and `Throne`, so the castle agents never
+  edit the shared file either; only a new chapter adds a file and a line to the list). A1's
+  vault entries moved into their chapters' files, unchanged but for the Geode Heart's, which is built.
+  `SecretDefinition` is a record now, so a chapter builds A1's entry with `Vault(...) with { IsBuilt =
+  true, CreateSite = ... }`.
+- **Placement by kind** (`SecretPlacement`: `Anchor`, `Keepsake`, `Vault`, `Custom`), done by
+  `SecretDirector` for every built secret of the chapter: 6.4's vault band and bearing rule (five to
+  seven chunks, at least 90 degrees from the side event's and the keepsake's bearings), on its own
+  placer stream (8), its footprint reserved (`SecretCatalog.VaultFootprint`, 420 px).
+- **The seen mark** (4.3) is the director's: within 450 px of a site's near tell, once, recorded on
+  `GlimpsedSecretIds` and saved with the next save; `secret_seen` at the site the first time per save.
+- **`SecretDirector.Found` calls `AchievementManager.CompleteNow`** (11.2, item 4): a vault's spell is
+  granted and saved at once and offered from the next level-up of the same run (decision 9). The
+  results screen lists it with the run's discoveries. A vault whose spell was bought says "you already
+  had it" (4.5). `secret_found` plays for a find again, `meta_unlock` for the first.
+- **`SecretVault`** (6.4's class): `Open` pays the deed the first time ever and a chest from the run's
+  secret budget (two) in a later run.
+- **The far tell is built** (stage-secrets section 2, which section 12 there said was not):
+  `SecretFarTell`, furnished into each chunk as it streams in through one new call in
+  `Node2DGame.FurnishChunk`.
+- **Solid ground**: a site's footprint is stamped into the navigation flags as a fence is, through one
+  call in `Node2DGame.PlanChunkFeatures`, so the flow field routes round the crystal (8.4.1).
+- **The primitives**: `StrikeListener` and `Breakable` (extracted from the thaw, which counts and
+  draws its cracks through them exactly as before), `SecretMover` (follow), `SecretGather`,
+  `SecretLure`.
+
+### 12.2 Where it departs from this doc, and why
+
+1. **Three hooks in `Node2DGame`**, outside section 9's file list: `Secrets` (the director, assigned
+   before it is added, because placing it makes chunk data, which asks it for solid cells),
+   `Secrets?.FurnishChunk` beside the curated props, `Secrets?.StampChunk` at the top of
+   `PlanChunkFeatures`, and `IsDecorSpotOpen` (the tests a scattered sprite passes, for the far tell).
+   They are why no chapter has to touch the furnishing.
+2. **The far tell's crystals have no collision.** They are a direction to walk in; with collision, a
+   gradient thickening toward the vault would clutter the very pocket the vault asks him to fight in.
+3. **The seen mark is not taken while the secrets stand down** (the boss), and a site with many
+   instances (every flower pen) is seen once for its id.
+4. **The Geode Heart's first crack shows on the first hit that counts**, not at a quarter: four drawn
+   stages over 2,000 with the hairline at the first point says at once that fighting here does
+   something - the only feedback it gives besides a one-pixel jolt per counted hit. Nothing on screen
+   says how far along it is.
+5. **Its frost ring is drawn** (a one-shot ring of its own light ending on the freeze radius, with its
+   shards flying to it) - an animation, which `.ai/art-direction.md` "The player's spells carry no area
+   markers" allows, not a marker.
+6. **`_UiShot` is touched** (the tool, not the game): `--secret=<id>` (stage-secrets 7.8),
+   `--secret-stage=N[@F]`, `--goto=secret`, and `--secret-probe` runs `VaultProbe` on a chapter with a
+   built vault.
+7. **Not built:** the per-chunk scatter of stage-secrets 7.2 (common secrets at a probability per
+   super-cell). The first chapter that needs one adds it in `SecretDirector.FurnishChunk` - the one
+   shared edit still to come. And `SecretSeed` is still the Forest's carry, not extracted.
+
+### 12.3 Verified, and not
+
+- `dotnet build`; the validator run (0 errors, the one standing test_wizard warning) with the Geode
+  Heart built and the new `ValidateSecretCatalog` rules in.
+- **The thaw behaves as before**: `_ExploreProbe --stage=5` (seed 4242), 22 of 22 before the
+  extraction and after it, the event finished in 15.3 s and 15.4 s of game time after arriving.
+- **The Forest's two secrets still work**: `_UiShot --secret-probe --stage=0` all pass before and after
+  (the lap opens the bloom and heals half, the seed drops and is carried, the First Tree is placed ten
+  to twelve chunks out on stream 7, planted, found, and pays its found level of Vitality).
+- **The Geode Heart, walked and broken on a fixed seed** (`--secret-probe --stage=2 --terrain-seed=4242`):
+  on a fresh save, 23 of 23 - placed 5.2 chunks out, never a target, its foot solid in the grid, unseen
+  on the way in and seen at its foot, the far tell 109 crystals within a chunk (43 of them cracked)
+  against 69 from one to two chunks out (none cracked), a hit beyond its reach counting nothing, the
+  four stages at 54, 702, 1,350 and 2,000 landed, both witnesses in the ring frozen, then found, its deed
+  recorded, Frost Shard owned, in the level-up pool and not in the loadout, and no chest. With
+  `--all-unlocked` (a later run), 22 of 22: the same, and a chest from the budget instead.
+- **Photographed** beside the spawn (`--secret=geode_heart`) on both canvases: every stage, the shatter
+  in flight with the crowd frozen in its ring, the first find's toast and a later one's, and the far
+  tell zoomed out.
+- `_BalanceHarness --seek-apotheosis --all-unlocked --immortal --stage=2 --minutes=15` (6.3, item 7),
+  after merging A2, A3 and C0: the Apotheosis offered and taken at 10.8 minutes (the Ascensions at 6.6
+  and 12.6, level 30 at the clock), above the 7.5-minute floor. With every spell owned nothing in the
+  pool can move, and the immortal bot holds its ground, so it never walks to the vault - which is the
+  check that nothing else moved.
+- After that merge, again: the validator (0 errors; 6 warnings, the standing one and C0's five castle
+  to-dos), the thaw 22 of 22, the Forest all pass, and the Geode Heart 23 of 23 on seed 4242 and on
+  seed 777 (6.2 chunks out there, 94 far-tell crystals within a chunk against 53 beyond).
+- **Not verified by play**: whether the crystal reads in a crowd on the phone in the real light, whether
+  anyone follows the cracked clusters to it, whether 2,000 is the right amount (`.ai/achievements-and-
+  secrets.md` 9, "What no harness checks"), and whether `secret_seen` is audible at 450 px. The
+  sounds were wired, not listened to.
