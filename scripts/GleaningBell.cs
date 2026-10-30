@@ -19,7 +19,7 @@ using WizardSurvivors.scripts;
 // and a heal that came with it would make it a panic button worth holding off for. Every orb in the
 // group, however far, the far bank included (Node2DGame.SweepFarXpOrbs); orbs dropped after the ring
 // are ordinary orbs. The pull is XPOrb.Glean: the near ones land first and the far ones stream in
-// behind, the whole map in about two seconds.
+// behind, an orb 5000 px off in about two and a half seconds.
 //
 // A HAUL WORTH SEVERAL LEVELS queues them, one screen at a time (Node2DGame.ResumeOrOpenNextMenu): the
 // first orb over the line opens the level-up and pauses the run, the orbs still in flight freeze where

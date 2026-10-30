@@ -242,7 +242,7 @@ death animation plays. The death sound is not gating anything and may outlast th
 |---|---|---|---|
 | `pickup_xp.wav` | 0.09 s | −23.0 dBFS | `XPOrb.OnBodyEntered` (`scripts/XPOrb.cs:82`) — ramp `PitchScale` upward with the collection streak, reset when it breaks |
 | `pickup_health.wav` | 0.42 s | −13.0 dBFS | `PickupBase.OnBodyEntered` (`scripts/PickupBase.cs:78`) for `HealthPickup` |
-| `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | a vacuum or `FortunesFavor` pull beginning — once per pull, not per orb |
+| `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | **wired**, `GleaningBell.Ring` (2026-10-30): the Gleaning Bell rung, every XP orb on the map called in - the vacuum it was made for, played `Global`, once per pull and never per orb; each orb then lands on its own streak-pitched `pickup_xp`. Also played by `SecretSeed` when the Fenced Bloom's seed is taken |
 | `pickup_haste.wav` | 0.38 s | −12.0 dBFS | **wired**, `BuffItem.OnPickedUp` (the speed potion). A double gust and a climbing triangle shimmer; hf 11%, nearest neighbour in the whole set `pickup_magnet` at 0.157. About one kill in a hundred drops a potion, so it sits a dB over `pickup_health` |
 | `event_reward.wav` | 1.45 s | −8.0 dBFS | **wired**, `SideEvent.Succeed` when the event pays a chest: a formant breath swelling into one glass tone with vibrato, under the chest rising as a ghost. Not played on a discovery, which keeps `meta_unlock`. hf 3%, nearest neighbour `spell_evolve` at 0.135 |
 | `bearing_found.wav` | 1.58 s | −8.0 dBFS | **wired**, `WayfinderPickup.Take`: the chapter's wayfinder taken and every point of interest marked. Five decelerating ticks (a needle settling; `pickup_magnet` accelerates, which is the difference between found and pulled) then an open fifth. hf 2% |

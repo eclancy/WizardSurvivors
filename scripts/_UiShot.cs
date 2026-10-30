@@ -3778,6 +3778,10 @@ public partial class _UiShot : Node
 		private float rungAt = -1f;
 		private float touchedAt = -1f;
 		private float doneAt = -1f;
+		private float wallSinceRing;
+		private XPOrb farthestOrb;
+		private float farthestStart;
+		private float farthestIn = -1f;
 		private int levelAtRing;
 		private int xpAtRing;
 		private int mostScreens;
@@ -3817,6 +3821,11 @@ public partial class _UiShot : Node
 				return;
 			}
 			mostScreens = System.Math.Max(mostScreens, ScreensUp());
+			// Every frame since the ring, screens included. The play-only clock reads short: it skips every
+			// frame that begins paused, and the orbs move in some of those. This one is what agrees with
+			// XPOrb.Glean's acceleration (5193 px in 2.36 s, measured).
+			if (rungAt >= 0f && doneAt < 0f)
+				wallSinceRing += (float)delta;
 			if (GetTree().Paused)
 				return;
 			clock += (float)delta;
@@ -3891,6 +3900,12 @@ public partial class _UiShot : Node
 						alive++;
 						if (orb.Gleaned)
 							answered++;
+						float d = orb.GlobalPosition.DistanceTo(Hero.GlobalPosition);
+						if (d > farthestStart)
+						{
+							farthestStart = d;
+							farthestOrb = orb;
+						}
 					}
 					Expect("touching it rings it", true, $"{(rungAt - touchedAt) * 1000f:0} ms after he stood on it");
 					Expect("every orb on the map answers", answered == alive && alive > 0, $"{answered} of {alive} flying in");
@@ -3899,6 +3914,8 @@ public partial class _UiShot : Node
 				}
 				case 4:
 				{
+					if (farthestIn < 0f && (farthestOrb == null || !IsInstanceValid(farthestOrb) || farthestOrb.IsQueuedForDeletion()))
+						farthestIn = clock - rungAt;
 					int left = 0;
 					foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
 						if (node is XPOrb orb && !orb.IsQueuedForDeletion() && orb.Gleaned)
@@ -3907,7 +3924,8 @@ public partial class _UiShot : Node
 						break;
 					doneAt = clock;
 					Expect("they are all in within four seconds of play", left == 0 && doneAt - rungAt <= 4f,
-						$"{left} still flying, the last in {doneAt - rungAt:0.00} s");
+						$"{left} still flying, the last in {doneAt - rungAt:0.00} s of play ({wallSinceRing:0.00} s with the level-up screens, "
+						+ $"{Engine.GetFramesPerSecond():0} fps, time scale {Engine.TimeScale:0.00}); the farthest, {farthestStart:0} px out, gone in {farthestIn:0.00} s");
 					stage = 5;
 					break;
 				}
