@@ -1031,9 +1031,14 @@ this doc.
 - **Photographed** beside the spawn (`--secret=geode_heart`) on both canvases: every stage, the shatter
   in flight with the crowd frozen in its ring, the first find's toast and a later one's, and the far
   tell zoomed out.
-- `_BalanceHarness --seek-apotheosis --all-unlocked --immortal --stage=2` (6.3, item 7): see the branch's
-  report for the minute the Apotheosis was offered; with every spell owned nothing in the pool can move,
-  and the immortal bot holds its ground, so it never walks to the vault.
+- `_BalanceHarness --seek-apotheosis --all-unlocked --immortal --stage=2 --minutes=15` (6.3, item 7),
+  after merging A2, A3 and C0: the Apotheosis offered and taken at 10.8 minutes (the Ascensions at 6.6
+  and 12.6, level 30 at the clock), above the 7.5-minute floor. With every spell owned nothing in the
+  pool can move, and the immortal bot holds its ground, so it never walks to the vault - which is the
+  check that nothing else moved.
+- After that merge, again: the validator (0 errors; 6 warnings, the standing one and C0's five castle
+  to-dos), the thaw 22 of 22, the Forest all pass, and the Geode Heart 23 of 23 on seed 4242 and on
+  seed 777 (6.2 chunks out there, 94 far-tell crystals within a chunk against 53 beyond).
 - **Not verified by play**: whether the crystal reads in a crowd on the phone in the real light, whether
   anyone follows the cracked clusters to it, whether 2,000 is the right amount (`.ai/achievements-and-
   secrets.md` 9, "What no harness checks"), and whether `secret_seen` is audible at 450 px. The
