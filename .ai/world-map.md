@@ -190,9 +190,11 @@ Shown for the highlighted stop, rebuilt when the selection changes:
 
 1. **Where it is in the road**: *"Chapter 3 of 10"* (campaign position, not stage index), *"Beyond the
    map"* for the Sketchbook, *"The Seat"* for Boss Rush.
-2. **The name** (Title role, Cinzel) and **one short line** (Body): the chapter's `CorruptionText` - what
-   he has done to it - or the `FlavorText` where it has none (the Sketchbook). Same rule as the old
-   list: two lines, not a wall.
+2. **The name** (Title role, Cinzel) and **one short line** (Body): once the chapter is open, its
+   `CorruptionText` - what he has done to it; while it is held, its `FlavorText` - what the place is.
+   "He keeps a wizard in one of these cells" is the reveal of a secret wizard, and the opening is its
+   beat (`UnlockCatalog`, Tituba), so a held chapter does not say it. The Sketchbook has only the
+   scenery line. Same rule as the old list: two lines, not a wall.
 3. **The state line**, glyph-led: the lock reason (lock glyph) if locked; otherwise the warden -
    *"Elderbark has fallen"* (done) or *"Elderbark holds it"* - and the best time survived there.
 4. **What it holds** (section 9): a row of slots, each the real icon or sprite of something tied to
@@ -270,7 +272,7 @@ furthest open chapter of the campaign. Back returns to CharacterSelection.
 | the screen | `scenes/WorldMap.tscn`, `scripts/WorldMap.cs` (layout, input, card), `scripts/WorldMapView.cs` (the drawn world, wizard and camera), `scripts/WorldMapCompass.cs`, `scripts/WorldMapLayout.cs` (reads the JSON) |
 | the authority | `scripts/StageRewards.cs`; `RegressionChecks.ValidateStageRewards`, `ValidateWorldMap` |
 | the flow | `CharacterSelection` opens `WorldMap.tscn`; `StageSelection` stays in the tree, unused, until this has been played |
-| the harness | `_UiShot --scene=res://scenes/WorldMap.tscn`, plus `--map-at=<stop>` (where he starts), `--all-unlocked` (everything owned, found and beaten, in memory), and the existing `--pad=right,...` for a press and `--frames` to catch him mid-walk or at rest; `--map-start-probe` presses Start and checks the stage the run was handed, or that a locked stop handed none |
+| the harness | `_UiShot --scene=res://scenes/WorldMap.tscn`, plus `--map-at=<stop>` (where he starts), `--character=N` (who), `--all-unlocked` (everything owned, found and beaten, in memory), `--last-run=<stage>` (a run recorded, for the cold-start return), and the existing `--pad=release,right,...` for presses and `--frames` to catch him mid-walk or at rest; `--map-tap=<stop>` / `--compass-tap=<stop>` put a real screen touch on a place or a mark and report the selection; `--map-start-probe` presses Start and reports the chapter the run that loads is, or that a locked stop loaded nothing |
 
 ## 13. Sound
 
@@ -306,3 +308,38 @@ and the camera are this doc's own, from Eric's description.
 3. **The Sketchbook as a page off the edge of the world**, reached by a pencil line. If it should feel
    more apart, the line can go and the camera can cut across the dark instead - but then the wizard
    has to cross it somehow, and walking is the rule of the screen.
+
+## 16. As built (2026-10-29), and what still needs eyes
+
+Branch `wip/world-map`. Built as written above, with these departures, each found by photographing it:
+
+- **The fog is a mist, not a bank.** Solid occlusion over a held place read as a pit in the map. The
+  shroud never covers more than about three pixels in four, so the place shows through it, held.
+- **The Broken Circle's stones are pale granite** (the bone row), not stone: in stone they vanished
+  into the heather at x2.
+- **His mark is the material arcane cyan** (his lanterns, Elderbark's eyes, the dead on the trade road),
+  the colour every enemy's eye wears - not the arcane element's violet.
+- **The derived lock hint lower-cases a boss's article mid-sentence** (`StageCatalog.LockedHintFor`:
+  "defeat the Hayward"). The map is the first screen to show every locked chapter's hint.
+- **The card's rewards heading reads "What he keeps here"**, the fiction's words for section 9.
+
+**Checked by the harness** (`_UiShot`, `xvfb`, both canvases): the map at rest and mid-walk; three quick
+presses running as one walk with the camera leashed to him; locked places under the mist with their
+lock line, sealed and silhouetted slots; silhouettes empty (fresh save), partly filled (one secret) and
+full (`--all-unlocked`); the Sketchbook's page off the edge with the kids' drawings on it; the Boss Rush
+at the seat; Start on the Forest, the Dungeon (index 1, campaign position 5) and the Boss Rush loading
+exactly that run, and on a locked chapter loading nothing; a real screen touch on a place and on a
+compass mark selecting it; a pad's A pressing Start on the first attempt (`_PadProbe`); the cold-start
+return to the chapter last played. `ValidateStageRewards`' prose net was shown to fire by untying
+Laelaps from the Circle in data, then restoring him.
+
+**Still needs eyes, and a phone:**
+
+- **The art is a first pass.** The generator draws every place and the land between, but it has been
+  judged only in photographs. The forest canopy, the plain hill country and the sea are the weakest.
+- **On a real phone**: the stick-free controls (step plates, taps on places and marks) at the Pixel 9's
+  1.5 pixels per unit, and the legibility of the compass numerals there. Computed, not seen.
+- **A held stick's repeat** (0.4 s, then every 0.18 s) wants a controller in a hand.
+- **On a large monitor** the map draws at the nearest whole number of screen pixels to x2 (x3 at 1080p
+  full screen, x4 at 2736), so a bigger screen shows the same amount of map, larger - by design, but
+  worth seeing.
