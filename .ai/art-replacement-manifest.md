@@ -537,6 +537,10 @@ pixels drawn upright in world coordinates, and every fade among them - and the F
 and Mirefoot's wisps' - is a dither (`spell_dither.gdshader`). Section 9, "The trap and star spells'
 shared pieces" and after, has each part.
 
+`SolarFlare` (`SolarFlareVisual`) no longer has it either (2026-10-29): the burst, Corona Discharge's
+beams and the charge at his boots are `scenes/shaders/solar_flare.gdshader` on the world's 2-unit cell,
+and Sun Dogs' mock suns are stamped cell by cell. Section 9 has the audit.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
@@ -1294,3 +1298,29 @@ Waste, and the base with two pairings that show every card at the game's zoom on
 | Thunderhead's strike (`ThunderStrike`) | **Failed** (stroked translucent polylines, soft discs) | Done in the strays pass above (`SpellStrokes` strokes, a dithered glow, a dissolve; commit 4327ca5), which landed first; this pass left it as that one made it |
 | Thunderhead's burst | Passed - the shared `ImpactDebrisLayer` | Unchanged |
 | Squall's burst into five | Nothing drawn of its own beyond the blades | - |
+
+### Solar Flare
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd, the wizard standing still so the flare
+builds: the base spell (crowd at arm's length so a pulse lands in the burst), Sun Dogs alone at level 5
+(at Daybreak's reach the mock suns hang off the screen), and level 8 with Sun Dogs + Daybreak Avatar,
+Solar Prominence + Corona Discharge and Blinding Flash + Corona Discharge, at `--zoom=1.6` on the Cursed
+Dungeon; Prominence + Corona at the game's zoom on the Frozen Waste (stage 5) and the Sketchbook's paper
+(stage 8, the bright floor), with the base and Sun Dogs on the paper too. No wizard's Apotheosis rides on it.
+
+| Part | Audit | Now |
+|---|---|---|
+| The burst (`SolarFlareVisual`) | **Failed.** Two `DrawArc` hoops at 95% and 60% alpha - antialiased, and held on the radius for the back half of every burst, which in a still frame is a ring round the reach - translucent spoke wedges, `DrawCircle` embers and a soft kernel | `scenes/shaders/solar_flare.gdshader`, one quad: every fragment snaps to the world cell and is measured from the snapped centre. A white-hot kernel for the first instant; rays of Light from hot at the root to Fire's mid at the tip, long and short by turns, never past 0.95 of the reach; a front that leaves white-hot, cools through gold to Fire's orange and lands on the radius as it breaks up by dither; a dimmer burnt wave behind it; embers riding out, cooling down Fire's ramp, inside the reach by their own size. The same numbers as before - reach, duration, ray and ember counts, spin - so a pulse is as wide and as quick as it was |
+| Corona Discharge's beams | **Failed.** Translucent quads under an antialiased `DrawLine` | In the same shader: each beam at exactly the half width and length `FireCoronaBeams` hits, a white-hot spine, gold and orange to its edges, a knot of light running out along it; it thins only after it has struck, and goes out by dither |
+| The charge at his boots | **Failed.** Two soft translucent discs squashed onto the floor and circle motes - and drawn in the air, over his boots | The same shader on a second material, on a child at `DrawLayers.GroundTell` (under every body, where the Brazier's `StanceGlow` is): a dithered pool of light that widens, fills and whitens as the charge climbs, a sparse gold halo, motes one art pixel each drawn in to it |
+| Sun Dogs' mock suns (`ElementalPulse.DrawSunDogs`) | **Failed.** Translucent `DrawCircle` halo and glow, antialiased `DrawLine` rays, a soft kernel | Stamped cell by cell round the sun's snapped centre, on the world grid: a white kernel, a hot ring, a dithered glow, a sparse halo, four one-cell rays turning (`PixelInk.Bayer` for the dither) |
+| Sun Dogs' bursts | The burst, at 0.6 of the reach | The shader, as the burst (10 rays, 8 embers) |
+| Solar Prominence's loops | **Passed.** Rects stamped on the 2 px grid (`WhipLimb.Cell`) in Fire's ramp, on a canvas at the world's origin | Unchanged |
+| A prominence's landing | **Passed** (`ImpactDebris`) | Unchanged |
+| Blinding Flash, Daybreak Avatar | Nothing of their own: a stagger on the enemy, and a bolt burnt away by `EnemyProjectile` | - |
+
+The node's modulate - a Legendary's gold, a card's warmth - still multiplies the flare, as it always did:
+the cards' tints are pale yellows over a white and gold ramp. On the paper the Light stops are quiet and
+the gold and orange edges carry it. Photographed before (`vis_blasts_b_*sf*`) and after
+(`vis_blasts_a*_sf*`). Still needs eyes: Daybreak's full-screen flare on a phone, where a dithered front
+of that size is the most fragments this pass draws in one quad.

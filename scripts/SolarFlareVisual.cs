@@ -9,40 +9,80 @@ namespace WizardSurvivors.scripts;
 // rendered as a growing *filled* disc - an opaque blob that swallowed the wizard and the swarm.
 //
 // Instead this draws the flare as light erupting from the player and washing outward, and nothing
-// wide is opaque: the bright elements are thin arcs, tapered spokes and a small core, so enemies stay
-// readable straight through the blast.
+// wide is solid: the bright elements are rays, a front that thins as it travels and a small kernel, so
+// enemies stay readable straight through the blast.
 //
 // THE DRAWING IS THE HIT (2026-10-23, "their animations should make it clear what the hitbox is").
 // It used to be emitted inside a transform squashed to 0.42 high and dropped to the feet, to read as
 // a ground effect - but ElementalPulse hits a CIRCLE round the player's origin, so an enemy straight
 // above or below him at the full radius was hit with nothing drawn within half that distance of it.
-// It is a circle on the player's origin now, the same one the pulse tests. The faint scorch disc
-// under it went with the other flat discs, and the burst's own front - the leading shockwave, which
-// travels out once at the moment of the hit and stops on the radius - is what shows the reach.
+// It is a circle on the player's origin now, the same one the pulse tests, and the burst's own front -
+// the leading shockwave, which travels out once at the moment of the hit and lands on the radius - is
+// what shows the reach.
+//
+// PIXEL ART SINCE 2026-10-29 ("does not look up to our typical visual fidelity"). It was DrawArc,
+// DrawCircle and see-through polygons - smooth hoops, soft discs, antialiased lines - and the hoops sat
+// on the radius for the back half of every burst. Now it is one quad through
+// scenes/shaders/solar_flare.gdshader, which snaps every fragment to the world's 2 px cell and draws
+// in opaque Light and Fire tones with Bayer dithering as the only gradient. The charge pool at his boots
+// is a second quad on a child on the ground layer, under the bodies, since it lies on the floor: it was
+// drawn in the air over his boots. Its numbers are the ones the old drawing used, so a pulse looks
+// exactly as wide, as long and as quick as it did; only the way it is drawn changed.
 public partial class SolarFlareVisual : Node2D, IPulseVisual
 {
-	// Both stay at zero offset and no squash: the hit is a circle on the player's origin.
-	[Export] public float GroundOffset { get; set; } = 0f;
-	[Export] public float GroundSquash { get; set; } = 1f;
 	[Export] public int RayCount { get; set; } = 14;
 	[Export] public int EmberCount { get; set; } = 12;
 	[Export] public float BurstDuration { get; set; } = 0.55f;
-	[Export] public Color CoreColor { get; set; } = new Color(1.0f, 0.96f, 0.76f, 1.0f);
-	[Export] public Color FlareColor { get; set; } = new Color(1.0f, 0.60f, 0.13f, 1.0f);
-	[Export] public Color ScorchColor { get; set; } = new Color(0.85f, 0.20f, 0.04f, 1.0f);
+
+	public const string ShaderPath = "res://scenes/shaders/solar_flare.gdshader";
+	private static Shader shader;
+	private static readonly StringName ParamPool = "pool";
+	private static readonly StringName ParamRadius = "radius";
+	private static readonly StringName ParamProgress = "progress";
+	private static readonly StringName ParamSpin = "spin";
+	private static readonly StringName ParamRays = "rays";
+	private static readonly StringName ParamEmbers = "embers";
+	private static readonly StringName ParamBeamCount = "beam_count";
+	private static readonly StringName ParamBeamLength = "beam_length";
+	private static readonly StringName ParamBeamHalf = "beam_half";
+	private static readonly StringName ParamBeamTurn = "beam_turn";
+	private static readonly StringName ParamCharge = "charge";
+	private static readonly StringName ParamClock = "clock";
+	private static readonly StringName ParamBoots = "boots";
 
 	private float elapsed = 0f;
 	private float radius = 90f;
 	private float spin = 0f;
 	private bool active = false;
+	private ShaderMaterial burstMaterial;
+	private ShaderMaterial poolMaterial;
+	private Node2D poolCanvas;
 
 	public override void _Ready()
 	{
-		// The flare is light washing outward through the air: over the bodies, which its thin arcs and
-		// spokes leave readable (DrawLayers). It was on the floor from when it was drawn as a flat ellipse.
+		// The flare is light washing outward through the air: over the bodies, which its rays and its
+		// thinning front leave readable (DrawLayers). It was on the floor from when it was drawn as a flat
+		// ellipse.
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
-		Visible = false;
+		shader ??= GD.Load<Shader>(ShaderPath);
+		burstMaterial = new ShaderMaterial { Shader = shader };
+		burstMaterial.SetShaderParameter(ParamPool, false);
+		Material = burstMaterial;
+
+		// The pool at his boots lies on the floor: under every body, with the other marks at a body's
+		// feet (StanceGlow, the Brazier's ring, is the same layer), never over his boots.
+		poolMaterial = new ShaderMaterial { Shader = shader };
+		poolMaterial.SetShaderParameter(ParamPool, true);
+		poolCanvas = new Node2D { Name = "ChargePool", ZAsRelative = false, ZIndex = DrawLayers.GroundTell, Material = poolMaterial };
+		AddChild(poolCanvas);
+		poolCanvas.Draw += DrawCharge;
+	}
+
+	public override void _ExitTree()
+	{
+		if (poolCanvas != null && IsInstanceValid(poolCanvas))
+			poolCanvas.Draw -= DrawCharge;
 	}
 
 	// Corona Discharge's sunbeams, set by ElementalPulse just before the Burst they belong to: the
@@ -61,16 +101,18 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 	}
 
 	// How far the flare has built while the player stands still (ElementalPulse.StillCharge), 0 to 1.
-	// Between bursts it is light pooling on the ground at his boots: a flat white-gold ellipse that
-	// widens and brightens as the charge climbs, throbbing quicker as it fills, with motes drawn in
-	// to it - the sun gathering itself. Inside the Brazier's ember ring (StanceGlow, 31 x 11) so the
-	// two stand-still tells never sit on each other, and small on purpose: it says "building", and
-	// the burst says how far.
+	// Between bursts it is light pooling on the ground at his boots: a flat white-gold patch that widens
+	// and fills as the charge climbs, throbbing quicker as it fills, with motes drawn in to it - the sun
+	// gathering itself. Inside the Brazier's ember ring (StanceGlow, 31 x 11) so the two stand-still
+	// tells never sit on each other, and small on purpose: it says "building", and the burst says how far.
 	private float charge;
 	private float chargeClock;
 	private Vector2 feet = new Vector2(0f, 36f);
 	private const float ChargeShowsFrom = 0.05f;
 	private const float PoolSquash = 0.36f;
+	// The furthest a mote starts from the pool's middle, as a share of the pool's widest (solar_flare's
+	// gathering): what the pool's quad has to cover.
+	private const float PoolReach = 26f * 1.08f * 2.4f + 4f;
 
 	/// <param name="boots">Where his boots stand, in this node's space (the player's Feet capsule).</param>
 	public void SetCharge(float value, Vector2 boots)
@@ -80,9 +122,7 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		if (Mathf.IsEqualApprox(next, charge) && next < ChargeShowsFrom)
 			return;
 		charge = next;
-		if (!active)
-			Visible = charge >= ChargeShowsFrom;
-		QueueRedraw();
+		poolCanvas?.QueueRedraw();
 	}
 
 	public void Burst(float burstRadius)
@@ -93,13 +133,24 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		// Rotate the spoke pattern a little every cast so repeat pulses never stamp the same
 		// starburst on the floor twice in a row.
 		spin += 0.37f;
-		Visible = true;
+		burstMaterial.SetShaderParameter(ParamRadius, radius);
+		burstMaterial.SetShaderParameter(ParamSpin, spin);
+		burstMaterial.SetShaderParameter(ParamRays, Math.Max(4, RayCount));
+		burstMaterial.SetShaderParameter(ParamEmbers, Math.Max(0, EmberCount));
+		burstMaterial.SetShaderParameter(ParamBeamCount, beamLength > 0f ? beamCount : 0);
+		burstMaterial.SetShaderParameter(ParamBeamLength, beamLength);
+		burstMaterial.SetShaderParameter(ParamBeamHalf, beamHalfWidth);
+		burstMaterial.SetShaderParameter(ParamBeamTurn, beamTurn);
+		burstMaterial.SetShaderParameter(ParamProgress, 0f);
 		QueueRedraw();
+		poolCanvas?.QueueRedraw();
 	}
 
 	public override void _Process(double delta)
 	{
 		chargeClock += (float)delta;
+		if (charge >= ChargeShowsFrom && !active)
+			poolCanvas?.QueueRedraw();
 		if (!active)
 			return;
 
@@ -107,148 +158,39 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		if (elapsed >= BurstDuration)
 		{
 			active = false;
-			Visible = charge >= ChargeShowsFrom;
+			// The beams belong to the burst they were set for.
+			beamCount = 0;
+			QueueRedraw();
+			poolCanvas?.QueueRedraw();
 			return;
 		}
+		burstMaterial.SetShaderParameter(ParamProgress, Mathf.Clamp(elapsed / MathF.Max(0.01f, BurstDuration), 0f, 1f));
 		QueueRedraw();
 	}
 
+	// One quad over the reach and the beams; the shader decides every pixel and discards the rest. Sized
+	// in world px, which is what the pulse hit in, whatever this node's scale.
 	public override void _Draw()
 	{
 		if (!active)
-		{
-			DrawCharge();
 			return;
-		}
-
-		float progress = Mathf.Clamp(elapsed / MathF.Max(0.01f, BurstDuration), 0f, 1f);
-		// Ease-out: the shockwave leaves the feet fast and coasts as it reaches its edge.
-		float wave = 1f - (1f - progress) * (1f - progress);
-		float fade = 1f - progress;
-
-		DrawSetTransform(new Vector2(0f, GroundOffset), 0f, new Vector2(1f, GroundSquash));
-
-		DrawBeams(wave, fade);
-		DrawSpokes(wave, fade);
-		DrawShockRings(wave, fade);
-		DrawEmbers(wave, fade);
-		DrawCore(progress);
+		float scale = MathF.Max(0.01f, GlobalScale.X);
+		float half = (MathF.Max(radius, beamCount > 0 ? beamLength : 0f) + 4f) / scale;
+		DrawRect(new Rect2(-half, -half, half * 2f, half * 2f), Colors.White);
 	}
 
-	// Tapered corona spokes reaching out from the feet, alternating long and short so the flare has
-	// some internal structure instead of reading as an even wheel.
-	private void DrawSpokes(float wave, float fade)
-	{
-		int rays = Math.Max(4, RayCount);
-		float inner = radius * 0.10f;
-		var points = new Vector2[3];
-		for (int i = 0; i < rays; i++)
-		{
-			float lengthScale = (i % 2 == 0) ? 1.0f : 0.62f;
-			float angle = spin + (Mathf.Tau * i / rays);
-			var direction = Vector2.FromAngle(angle);
-			var side = new Vector2(-direction.Y, direction.X);
-			float outer = inner + ((radius * 0.95f) - inner) * wave * lengthScale;
-			float halfWidth = radius * 0.055f * lengthScale * fade;
-
-			points[0] = direction * outer;
-			points[1] = (direction * inner) + (side * halfWidth);
-			points[2] = (direction * inner) - (side * halfWidth);
-			DrawColoredPolygon(points, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.65f * fade * lengthScale));
-		}
-	}
-
-	// Corona Discharge: each beam shoots out to its full length in the first third of the burst and
-	// then thins and fades, white-hot down the middle over the flare's orange - the width it is drawn at
-	// is the width it hits at, so a beam never looks narrower than what it cuts.
-	private void DrawBeams(float wave, float fade)
-	{
-		if (beamCount <= 0 || beamLength <= 0f)
-			return;
-		float reach = beamLength * Mathf.Clamp(wave * 3f, 0f, 1f);
-		float half = beamHalfWidth * Mathf.Lerp(0.35f, 1f, fade);
-		var quad = new Vector2[4];
-		for (int i = 0; i < beamCount; i++)
-		{
-			var dir = Vector2.FromAngle(beamTurn + Mathf.Tau * i / beamCount);
-			var side = new Vector2(-dir.Y, dir.X);
-			Vector2 start = dir * radius * 0.15f;
-			Vector2 end = dir * reach;
-			quad[0] = start + side * half;
-			quad[1] = end + side * half * 0.6f;
-			quad[2] = end - side * half * 0.6f;
-			quad[3] = start - side * half;
-			DrawColoredPolygon(quad, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.55f * fade));
-			DrawLine(start, end, new Color(CoreColor.R, CoreColor.G, CoreColor.B, 0.9f * fade), MathF.Max(1.5f, half * 0.45f), true);
-		}
-		if (fade <= 0.02f)
-			beamCount = 0;
-	}
-
-	// The leading shockwave plus a dimmer trailing wave, both thin rings that thin out further as
-	// the pulse dissipates. Both cool as they travel - holding the leading edge at CoreColor the whole
-	// way out desaturated it into a flat grey hoop once it got large.
-	private void DrawShockRings(float wave, float fade)
-	{
-		// Its outer edge on the radius at the end of the burst, never past it.
-		float lead = MathF.Max(1f, radius * wave - Mathf.Lerp(1f, 4.5f, fade));
-		var leadColor = CoreColor.Lerp(FlareColor, wave);
-		DrawArc(Vector2.Zero, lead, 0f, Mathf.Tau, 64,
-			new Color(leadColor.R, leadColor.G, leadColor.B, 0.95f * fade), Mathf.Lerp(2f, 9f, fade), true);
-
-		float trail = MathF.Max(1f, lead * 0.68f);
-		var trailColor = FlareColor.Lerp(ScorchColor, wave);
-		DrawArc(Vector2.Zero, trail, 0f, Mathf.Tau, 48,
-			new Color(trailColor.R, trailColor.G, trailColor.B, 0.6f * fade), Mathf.Lerp(1.5f, 6f, fade), true);
-	}
-
-	// Embers riding the wave outward. The scatter is derived from the loop index rather than an RNG
-	// so it costs no allocation and no stored state per pulse; `spin` keeps it from repeating.
-	private void DrawEmbers(float wave, float fade)
-	{
-		int count = Math.Max(0, EmberCount);
-		for (int i = 0; i < count; i++)
-		{
-			float angle = (spin * 0.6f) + (Mathf.Tau * ((i * 0.6180339f) % 1f));
-			float reach = radius * (0.55f + (0.5f * (((i * 7) % 5) / 5f)));
-			float size = Mathf.Lerp(1.5f, 4.0f, (i % 3) / 2f) * fade;
-			DrawCircle(Vector2.FromAngle(angle) * reach * wave, MathF.Max(0.5f, size),
-				new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.8f * fade));
-		}
-	}
-
+	// The pool's quad, round his boots. The shader is told where they are in world px from this node.
 	private void DrawCharge()
 	{
-		if (charge < ChargeShowsFrom)
+		if (active || charge < ChargeShowsFrom)
 			return;
-		DrawSetTransform(feet, 0f, new Vector2(1f, PoolSquash));
-		float throb = 0.5f + 0.5f * MathF.Sin(chargeClock * Mathf.Lerp(3f, 7f, charge));
-		float pool = Mathf.Lerp(10f, 26f, charge) * Mathf.Lerp(0.92f, 1.08f, throb);
-		DrawCircle(Vector2.Zero, pool * 1.35f, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.12f + 0.22f * charge));
-		DrawCircle(Vector2.Zero, pool, new Color(CoreColor.R, CoreColor.G, CoreColor.B, 0.22f + 0.48f * charge));
-		// Motes drawn in across the ground from beyond the pool, more of them as it fills.
-		int motes = 3 + Mathf.RoundToInt(6f * charge);
-		for (int i = 0; i < motes; i++)
-		{
-			float cycle = (chargeClock * 0.9f + i * 0.6180339f) % 1f;
-			float angle = spin + Mathf.Tau * ((i * 0.381966f) % 1f) + chargeClock * 0.4f;
-			float reach = Mathf.Lerp(pool * 2.4f, pool * 0.7f, cycle);
-			DrawCircle(Vector2.FromAngle(angle) * reach, Mathf.Lerp(2f, 4f, charge),
-				new Color(FlareColor.R, FlareColor.G, FlareColor.B, (0.4f + 0.5f * charge) * MathF.Sin(cycle * MathF.PI)));
-		}
-		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-	}
-
-	// A brief white-hot kernel right at the feet. Kept small and short-lived on purpose: this is the
-	// only near-white element, and at full radius it would be the old blob all over again.
-	private void DrawCore(float progress)
-	{
-		float coreFade = Mathf.Clamp(1f - (progress * 2.6f), 0f, 1f);
-		if (coreFade <= 0.01f)
-			return;
-
-		float coreRadius = radius * 0.20f * coreFade;
-		DrawCircle(Vector2.Zero, coreRadius * 1.9f, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.28f * coreFade));
-		DrawCircle(Vector2.Zero, coreRadius, new Color(CoreColor.R, CoreColor.G, CoreColor.B, 0.85f * coreFade));
+		float scale = MathF.Max(0.01f, GlobalScale.X);
+		poolMaterial.SetShaderParameter(ParamCharge, charge);
+		poolMaterial.SetShaderParameter(ParamClock, chargeClock);
+		poolMaterial.SetShaderParameter(ParamSpin, spin);
+		poolMaterial.SetShaderParameter(ParamBoots, feet * scale);
+		float w = PoolReach / scale;
+		float h = (PoolReach * PoolSquash + 4f) / scale;
+		poolCanvas.DrawRect(new Rect2(feet.X - w, feet.Y - h, w * 2f, h * 2f), Colors.White);
 	}
 }
