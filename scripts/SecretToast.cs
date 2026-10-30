@@ -52,6 +52,7 @@ public partial class SecretToast : CanvasLayer
 	{
 		title.Text = firstEver ? $"Secret found: {name}" : name;
 		line.Text = runReward;
+		line.Visible = runReward.Length > 0;
 		paid.Text = metaReward;
 		paid.Visible = metaReward.Length > 0;
 		clock = 0f;

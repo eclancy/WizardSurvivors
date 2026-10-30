@@ -734,9 +734,12 @@ public partial class Node2DGame : Node2D
 		SpawnKidDog();
 		// One side event per run, on the chapters that have one (.ai/side-events.md).
 		AddChild(new SideEventDirector { Name = "SideEventDirector", Game = this });
-		// The chapter's secrets (issue #20, .ai/stage-secrets.md): the keepsake is placed and its ground
-		// reserved here, before LoadInitialTerrain furnishes the first chunks, as the event's is.
-		AddChild(new SecretDirector { Name = "SecretDirector", Game = this });
+		// The chapter's secrets (issue #20, .ai/stage-secrets.md): the keepsake and the vault are placed and
+		// their ground reserved here, before LoadInitialTerrain furnishes the first chunks, as the event's is.
+		// Assigned before it is added: placing asks about the ground, which makes chunk data, which runs
+		// PlanChunkFeatures, which asks the director for the cells its sites make solid.
+		Secrets = new SecretDirector { Name = "SecretDirector", Game = this };
+		AddChild(Secrets);
 		BuildStageHazards();
 		BuildCuratedProps();
 		// After all three: on an endless stage they only recorded what to scatter, and this is where
@@ -2512,6 +2515,8 @@ public partial class Node2DGame : Node2D
 		if (index == decorSets)
 		{
 			FurnishCuratedProps(chunk, parent, rect, decorShare);
+			// The secrets' far tells: decor thickening toward a vault (SecretFarTell), the same rules.
+			Secrets?.FurnishChunk(chunk, parent, rect);
 			return false;
 		}
 
@@ -2562,6 +2567,8 @@ public partial class Node2DGame : Node2D
 	/// </summary>
 	private void PlanChunkFeatures(TerrainChunk chunk)
 	{
+		// A secret that stands solid (the Geode Heart) is in the grid the way a fence is.
+		Secrets?.StampChunk(chunk);
 		if (LandmarkCells(chunk) is not Rect2I cells)
 			return;
 		const int n = TerrainStreamer.ChunkTiles;
@@ -5396,6 +5403,18 @@ public partial class Node2DGame : Node2D
 
 	public ulong TerrainSeed => terrainSeed;
 	public Vector2 StageOrigin => stageOrigin;
+
+	/// <summary>This run's stage secrets (SecretDirector), made at stage start.</summary>
+	public SecretDirector? Secrets { get; private set; }
+
+	/// <summary>
+	/// True where a scattered sprite may stand: the tests every decor set's sprite passes
+	/// (FurnishDecorSet) - out of the spawn clearing, not on water, a wall or a hazard, not in a landmark,
+	/// a side event's or secret's footprint, or a planned hazard. For a secret's far tell (SecretFarTell).
+	/// </summary>
+	public bool IsDecorSpotOpen(Vector2 position) =>
+		position.DistanceTo(stageOrigin) >= DecorPlayerSafeRadius && !IsPropAvoidedAt(position) && !IsInLandmark(position)
+		&& !IsInExploreReserve(position) && !IsNearPlannedHazard(position);
 
 	/// <summary>A placer for this run's points of interest. <paramref name="stream"/> separates independent layouts.</summary>
 	public ExplorePlacer CreateExplorePlacer(int stream, float eventMinChunks, float eventMaxChunks)
