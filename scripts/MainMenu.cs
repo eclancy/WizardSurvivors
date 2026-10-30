@@ -537,8 +537,13 @@ public partial class MainMenu : Control
 		RefreshAchievementCards();
 	}
 
-	// Unlocks (once Deeds): the achievement list. Every entry pays something - a spell, a boon,
-	// Arcane Energy - and its reward line says which, so the name says what the list is for.
+	// Achievements (once Unlocks, once Deeds; .ai/achievements-and-secrets.md section 4): every
+	// achievement in the game, listed or revealed as the player plays. Every entry pays something - a
+	// spell, a boon, a wizard, Arcane Energy - and its reward line says which. The page itself is
+	// AchievementsPage, which the pause tab builds too; this is its frame: heading, subtitle, summary,
+	// the four tabs, the list and Back.
+	private HBoxContainer achievementTabs;
+
 	private void EnsureUnlocksUi()
 	{
 		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
@@ -565,7 +570,7 @@ public partial class MainMenu : Control
 		var title = new Label
 		{
 			Name = "AchievementsTitle",
-			// The button that opens it says Unlocks, and so does the pause tab.
+			// The button that opens it says Achievements, and so does the pause tab: one constant.
 			Text = CodexRows.UnlocksTitle,
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
@@ -575,6 +580,17 @@ public partial class MainMenu : Control
 		vbox.AddChild(BuildPanelSubtitle(CodexRows.UnlocksSubtitle, CodexRows.Stone.InkSoft));
 
 		vbox.AddChild(new VBoxContainer { Name = "AchievementSummary", MouseFilter = Control.MouseFilterEnum.Ignore });
+
+		// Above the list and outside its scroll, so a tab is never scrolled away and choosing one
+		// rebuilds the rows under it without freeing the button the selection is on.
+		// In the list's gutter (CodexRows.WithGutter's 2 and 18), so the strip's ends line up with the
+		// rows' edges rather than running on over the scroll bar - on a phone the four tabs fill the width.
+		achievementTabs = AchievementsPage.BuildTabs(AchievementsPage.MenuFilter, OnAchievementFilterChosen);
+		var tabMargin = new MarginContainer { Name = "AchievementTabsMargin", MouseFilter = Control.MouseFilterEnum.Ignore };
+		tabMargin.AddThemeConstantOverride("margin_left", 2);
+		tabMargin.AddThemeConstantOverride("margin_right", 18);
+		tabMargin.AddChild(achievementTabs);
+		vbox.AddChild(tabMargin);
 
 		vbox.AddChild(CodexRows.BuildScroll("AchievementScroll", CodexRows.BuildList("AchievementList")));
 
@@ -587,6 +603,11 @@ public partial class MainMenu : Control
 		};
 		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Title);
 		vbox.AddChild(backButton);
+
+		// The title menu's button that opens this panel is the scene's, and the scene still says
+		// "Unlocks"; it says the panel's name instead, from the same constant.
+		if (GetNodeOrNull<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton") is Button opener)
+			opener.Text = CodexRows.UnlocksTitle;
 	}
 
 	// One centred line under a panel heading that says what the panel is for. Label role, never
@@ -766,6 +787,27 @@ public partial class MainMenu : Control
 	{
 		RefreshAchievementCards();
 		ShowPanel(achievementsPanel);
+		ScrollAchievementsToTop();
+		// The panel opens on the tab chosen last, with the selection on it: the root's navigator
+		// would land on the first tab by tree order, which is not the one showing after a visit to
+		// another. A pointer user sees no ring (MenuFocusHighlight hides it under the mouse), and the
+		// tabs sit outside the list's scroll, so focusing one scrolls nothing.
+		AchievementsPage.TabFor(achievementTabs, AchievementsPage.MenuFilter)?.GrabFocus();
+	}
+
+	// A tab rebuilds the list under it and keeps the selection on itself (.ai/achievements-and-secrets.md
+	// 4.8): the tab is outside the list, so the rebuild never frees the control that has the focus.
+	private void OnAchievementFilterChosen(AchievementsPage.Filter filter)
+	{
+		AchievementsPage.MenuFilter = filter;
+		RefreshAchievementCards();
+		ScrollAchievementsToTop();
+	}
+
+	private void ScrollAchievementsToTop()
+	{
+		if (achievementsPanel?.FindChild("AchievementScroll", true, false) is ScrollContainer scroll)
+			scroll.ScrollVertical = 0;
 	}
 
 	// The two lists choose one column or two as they are built, so a canvas that changes shape
@@ -1930,7 +1972,8 @@ public partial class MainMenu : Control
 	}
 
 	// A page not found yet says how to find it. The name stays hidden - that is the discovery - but
-	// the hint is the one useful thing on the row, so it is the row's body, not a footnote.
+	// the hint is the one useful thing on the row, so it is the row's body, not a footnote. A spell in
+	// a vault is named by its chapter only, led by the secret's warm glint (CodexRows.SpellHintGlyph).
 	private Control BuildMissingSpellbookRow(SpellbookEntry entry, int count)
 	{
 		return CodexRows.BuildRow(new CodexRows.Entry
@@ -1939,7 +1982,7 @@ public partial class MainMenu : Control
 			Icon = entry.Icon ?? DefaultSpellIcon,
 			IconSilhouette = true,
 			Meta = UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell),
-			MetaGlyph = StatIcons.Load("lock"),
+			MetaGlyph = CodexRows.SpellHintGlyph(entry.Id),
 			Quiet = true,
 			FocusStop = true,
 		}, CodexRows.Vellum);
@@ -2057,89 +2100,27 @@ public partial class MainMenu : Control
 
 	private void RefreshSpellbookCards() => BuildSpellbookCards();
 
-	// Unlocks: what is still to do, closest first, then what is done, quietly. It was a four-column
-	// grid in definition order, with done and not-done entries interleaved and told apart by colour.
+	// The page under the tabs (AchievementsPage, which the pause tab builds too), and the summary over
+	// them, which counts the whole page whichever tab is showing. The Secrets section that ended this
+	// list is the Secrets tab now (.ai/achievements-and-secrets.md 4.10).
 	private void BuildAchievementCards()
 	{
 		ClearChildren(achievementList);
 		ClearChildren(achievementSummary);
 		codexColumnsBuilt = CodexRows.ColumnsFor(this);
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		AchievementsPage.LayoutTabs(achievementTabs, narrow);
+		AchievementsPage.MarkTab(achievementTabs, AchievementsPage.MenuFilter);
 
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-		AchievementContext context = AchievementContext.ForSave(data);
-		var open = new List<(AchievementDefinition, AchievementProgress)>();
-		var done = new List<AchievementDefinition>();
-		foreach (AchievementDefinition deed in AchievementDefinitions.Listed)
-		{
-			if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
-				done.Add(deed);
-			else
-				open.Add((deed, deed.GetProgress(context)));
-		}
-
-		int total = open.Count + done.Count;
-		achievementSummary.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSummary(done.Count, total), CodexRows.Stone,
-			total > 0 ? done.Count / (float)total : 0f));
-
-		Texture2D SpellIcon(string id) => spellbookEntries.FirstOrDefault(
-			e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Icon;
-
-		int columns = codexColumnsBuilt;
-		if (open.Count > 0)
-			CodexRows.AddSection(achievementList, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
-				CodexRows.OrderInProgress(open).Select(p => CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone)));
-		if (done.Count > 0)
-			CodexRows.AddSection(achievementList, "Done", $"{done.Count}", CodexRows.Stone, columns,
-				done.Select(d => CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone)));
-		AddSecretsSection(data, columns);
-	}
-
-	// The stage secrets (issue #20, .ai/stage-secrets.md 7.6): what has been found, chapter by chapter.
-	// A found secret is named with what it was, and a keepsake with what it paid; one not yet found is
-	// not named at all - a list of named blanks is a checklist, which is a different game - so a
-	// chapter with more to find says only how many. A section here rather than a page of its own: the
-	// plan's own page needs a button on the title art, and the Unlocks list is already the record of
-	// what a save has done.
-	private void AddSecretsSection(SaveData data, int columns)
-	{
-		var rows = new List<Control>();
-		int foundTotal = 0;
-		foreach (IGrouping<string, SecretDefinition> chapter in SecretCatalog.All.GroupBy(s => s.StageId))
-		{
-			var found = chapter.Where(s => data?.HasFoundSecret(s.Id) == true).ToList();
-			int count = chapter.Count();
-			foundTotal += found.Count;
-			string chapterName = StageCatalog.GetById(chapter.Key)?.DisplayName ?? chapter.Key;
-			foreach (SecretDefinition secret in found)
-			{
-				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
-				{
-					Title = secret.DisplayName,
-					Body = secret.FoundLine,
-					Meta = secret.MetaReward == SecretMetaReward.PageOnly ? chapterName : $"{chapterName}  ·  {SecretCatalog.DescribeMeta(secret)}",
-					MetaIsReward = secret.MetaReward != SecretMetaReward.PageOnly,
-					Tag = "Found",
-					TagGlyph = StatIcons.Load("done"),
-					TagIsDone = true,
-					FocusStop = true,
-				}, CodexRows.Stone));
-			}
-			if (found.Count < count)
-			{
-				int left = count - found.Count;
-				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
-				{
-					Title = chapterName,
-					Body = left == 1 ? "There is something here you have not found." : $"There are {left} things here you have not found.",
-					Progress = found.Count / (float)count,
-					ProgressText = $"{found.Count} of {count} found",
-					Quiet = true,
-					FocusStop = true,
-				}, CodexRows.Stone));
-			}
-		}
-		if (rows.Count > 0)
-			CodexRows.AddSection(achievementList, "Secrets", $"{foundTotal} of {SecretCatalog.All.Count} found", CodexRows.Stone, columns, rows);
+		AchievementsPage.Result page = AchievementsPage.Build(achievementList, AchievementContext.ForSave(data),
+			AchievementsPage.PageMode.Menu, AchievementsPage.MenuFilter, string.Empty);
+		AchievementsPage.LinkTabsToList(achievementTabs, achievementList, AchievementsPage.MenuFilter);
+		// The bar under the count only where there is height for it: on a 720-tall PC canvas the heading,
+		// the subtitle, the count and the tabs already stand over the list, and every unit they take is a
+		// row the list cannot show. The phone's portrait canvas has the height to spare.
+		achievementSummary.AddChild(CodexRows.BuildSummary(AchievementsPage.SummaryLine(page, narrow), CodexRows.Stone,
+			narrow && page.Total > 0 ? page.Earned / (float)page.Total : (float?)null));
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();

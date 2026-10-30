@@ -692,7 +692,10 @@ and **Arcane Upgrades** was the Arcane Codex. The words live once, in `CodexRows
 so the main menu and the pause tabs cannot drift apart. Internal names - the panels
 (`SpellbookPanel`, `AchievementsPanel`), the lists, `BuildDeedRow`, achievement ids and every save
 key - kept the old words on purpose: the save is persisted and the rest was not worth the churn.
-The history below is written in the names the screens had at the time.
+The history below is written in the names the screens had at the time. **Unlocks is
+Achievements since 2026-10-30** (Eric's decision; `UnlocksTitle` keeps its name and holds the new
+word): one page built by `AchievementsPage` for the menu panel and the pause tab, with secrets on it,
+described in `.ai/achievements-and-secrets.md` section 4.
 
 Each list carries a one-line subtitle under its heading, in the panel's soft ink, saying what
 kind of page it is before the counts do ("Every spell, and how to find the ones you have not.";
@@ -1096,9 +1099,13 @@ hand of three.
   The level 4 mutation page is photographed through `_UiShot --show-mutation`, and the level 8
   Ascension page through `--show-ascension`; both reach the private page builder by reflection.
   `--open-pause` opens the in-run pause screen, and `--press-late=EscapeTabSpellIndex` (or
-  `EscapeTabUnlocks`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
+  `EscapeTabAchievements`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
   lists are `--scene=res://scenes/TitleScreen.tscn --open-menu --press-late=SpellIndexButton` (or
-  `UnlocksButton`, or `ArcaneUpgradesButton` for the shop). `--scroll=N` holds every visible list N units down (a large N is the end),
+  `UnlocksButton` - it opens Achievements, the panel's name since 2026-10-30 - or `ArcaneUpgradesButton`
+  for the shop); `--press-late=UnlocksButton,AchievementsTabSecrets` opens one of the achievements
+  tabs (`All`, `Chapters`, `Feats`, `Secrets`). `--demo-achievements` puts in a save part way along
+  the road, and `--seen-secrets=id,id` and `--found-secrets=id,id` after it fill a hidden
+  achievement's three states (`.ai/achievements-and-secrets.md` 4.3). `--scroll=N` holds every visible list N units down (a large N is the end),
   `--demo-level=N`, `--demo-spell-level=N` and `--demo-spells=id,id` put the run in a state the
   ascension browser has something to say about (pair with `--grant-boons` for tags; the forced
   level-up adds one more level, so `--demo-level=16` photographs a player at 17), a trailing `*` on

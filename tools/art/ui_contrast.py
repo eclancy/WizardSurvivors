@@ -157,6 +157,13 @@ STONE_REWARD = h2rgb(f2h(0.847, 0.690, 0.290))
 STONE_DONE = h2rgb(f2h(0.608, 0.831, 0.333))
 STONE_FLAG = h2rgb(f2h(0.95, 0.72, 0.45))
 STONE_HEADING = h2rgb(f2h(1.0, 0.941, 0.753))
+# The achievements page (scripts/AchievementsPage.cs, .ai/achievements-and-secrets.md 4.3): the Seen
+# tag's ink, and a sealed secret's silhouette (CodexRows.BuildSilhouette) - its lit rim is the shape's
+# only edge on the dark panel, so it is held to the graphic target.
+STONE_SEEN = h2rgb(f2h(0.416, 0.722, 0.910))          # arcane.lit
+STONE_SIL_KEY_RIM = h2rgb(f2h(0.604, 0.643, 0.722))   # skin.base
+STONE_SIL_RIM = h2rgb(f2h(0.384, 0.431, 0.518))       # skin.shade
+VELLUM_SEEN = h2rgb(f2h(0.090, 0.255, 0.369))         # arcane.shade
 
 
 def chip_fill(rgb):
@@ -206,6 +213,7 @@ def codex_pairs(add, vellum_ground, stone_ground):
         add(name, g, "InkMeta (counts, hints)", VELLUM_INK_META, BODY)
         add(name, g, "Reward", VELLUM_REWARD, BODY)
         add(name, g, "Flag (set aside)", VELLUM_FLAG, BODY)
+        add(name, g, "Seen (seen tag)", VELLUM_SEEN, BODY)
     add("Set aside pill, hovered", VELLUM_PILL_HOVER, "Ink", VELLUM_INK, BODY)
     for name, g in (("codex row on stone (face)", STONE_FACE), ("codex quiet row (stone panel)", stone_ground)):
         add(name, g, "Heading (section)", STONE_HEADING, LARGE)
@@ -215,6 +223,12 @@ def codex_pairs(add, vellum_ground, stone_ground):
         add(name, g, "Reward", STONE_REWARD, BODY)
         add(name, g, "Done", STONE_DONE, BODY)
         add(name, g, "Flag (set aside)", STONE_FLAG, BODY)
+        add(name, g, "Seen (seen tag)", STONE_SEEN, BODY)
+        add(name, g, "sealed glyph lit rim (graphic)", STONE_SIL_KEY_RIM, GRAPHIC)
+    # The eye glyph's iris is the Seen ink itself (tools/art/stat_icons.py, arcane lit), so the tag's
+    # glyph and its word read as one mark. A sealed row is quiet - no face - so its silhouette sits on
+    # the bare panel, and its far rim, the quieter edge, still clears the graphic floor there.
+    add("sealed glyph (stone panel)", stone_ground, "far rim (skin.shade)", STONE_SIL_RIM, GRAPHIC)
     for el, rgb in ELEMENTS:
         ground = chip_fill(rgb)
         add("codex chip %s" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
