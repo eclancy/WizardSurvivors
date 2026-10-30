@@ -4862,7 +4862,7 @@
       "milestone": 8,
       "id": "riptide_titan_cataclysm",
       "name": "Tidal Wall",
-      "description": "The wave rises into a wall of water three times as wide, \u002B60% damage, and it breaks through 40 more before it is spent.",
+      "description": "The wave leaves your hand at its own size and rises as it rolls out, into a wall of water 3 times as wide by the end of its run. \u002B60% damage and it breaks through 40 more before it is spent, but the sea takes 3 times as long to gather between walls.",
       "synergy": "Ascension / Water",
       "visual_tag": "TidalWall",
       "gains": {
@@ -4874,7 +4874,7 @@
       "rider": "None",
       "damage": 1.6,
       "damage_bonus": 0,
-      "cooldown": 1,
+      "cooldown": 3,
       "projectiles": 0,
       "area": 1,
       "scale": 3,

@@ -4299,10 +4299,16 @@ public partial class Player : CharacterBody2D
 					Heading = heading == Vector2.Zero ? Vector2.Right : heading,
 					Length = castRange * 0.9f,
 					// As wide as the wave that floods it, so the tidal wave leaves a tidal lane: its hit
-					// radius at its scale, and a body either side (RiptideWave.SwathHalfWidth).
+					// radius at its scale, and a body either side (RiptideWave.SwathHalfWidth). Tidal Wall
+					// rises as it runs (ElementalBolt.ScaleAt), so the lane widens from the hand to the
+					// wall's full height over the same run - a wedge, wet only where the water went.
 					HalfWidth = bolt is ElementalBolt crest
-						? crest.HitRadius * crest.GlobalScale.X + RiptideWave.BodyAllowance
+						? crest.HitRadius * crest.ScaleAt(1f) + RiptideWave.BodyAllowance
 						: 40f * GetEffectiveAreaMultiplier(),
+					StartHalfWidth = bolt is ElementalBolt start
+						? start.HitRadius * start.ScaleAt(0f) + RiptideWave.BodyAllowance
+						: -1f,
+					GrowLength = (bolt as ElementalBolt)?.Range ?? 0f,
 					// The water fills behind the crest at the crest's own pace, not ahead of it.
 					FloodSpeed = (bolt as ElementalBolt)?.Speed ?? 0f,
 				};

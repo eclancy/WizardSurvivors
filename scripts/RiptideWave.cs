@@ -38,7 +38,9 @@ using WizardSurvivors.scripts;
 // trough drawn down ahead of the face, a lip half again as thick with spume heaped off it toward the
 // top of the screen, twice the spray, a churned wake, and a heavy splash on every enemy it breaks
 // over (RiptideSplash). All of it inside the swath the grown circle cuts, because that is the
-// payoff - what grew is what it hits.
+// payoff - what grew is what it hits. Since 2026-10-30 the wall RISES: it leaves the hand at a wave's
+// size and reaches that height by the end of its run (ElementalBolt.Growth scales the node, so the hit
+// and this drawing rise together; SwathHalfWidth reads the scale every frame).
 //
 // **Brackish Tide** (the level 4 element path into Poison, ElementPaths): the same wave gone foul -
 // the foam in Poison's own core and hot, the face and body a sea turned murky green, and the splashes

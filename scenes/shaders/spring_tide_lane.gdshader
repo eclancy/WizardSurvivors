@@ -25,6 +25,10 @@ render_mode unshaded;
 uniform float front = 0.0;
 uniform float tail = 0.0;
 uniform float half_width = 40.0;
+// Tidal Wall rises as it runs, so its lane widens with it (SpringTideLane.HalfWidthAt): start_half_width at
+// the caster, half_width from grow_length on. With grow_length 0 the lane is half_width all the way.
+uniform float start_half_width = 40.0;
+uniform float grow_length = 0.0;
 // The stretch behind the tail that is still soaking away, in px. 0 when the whole lane drains at once.
 uniform float drain_length = 0.0;
 // 1 while the lane is whole; with no FloodSpeed the whole lane dissolves together as this falls to 0.
@@ -95,9 +99,11 @@ vec4 shade_cell(vec2 world, vec2 origin, vec2 axis_x, vec2 axis_y) {
 	if (x < tail || x > front || front <= tail)
 		return vec4(0.0);
 
+	// The lane's half width here: the wave's own width where it crossed this stretch.
+	float hw = grow_length > 0.0 ? mix(start_half_width, half_width, clamp(x / grow_length, 0.0, 1.0)) : half_width;
 	// The banks wander up to three art pixels in from the half width, never out past it.
 	float side = p.y < 0.0 ? 17.0 : 53.0;
-	float bank = half_width - GRID * (0.4 + 2.6 * noise(vec2(x, side), 22.0));
+	float bank = hw - GRID * (0.4 + 2.6 * noise(vec2(x, side), 22.0));
 	if (across > bank)
 		return vec4(0.0);
 	float from_bank = bank - across;
@@ -128,10 +134,10 @@ vec4 shade_cell(vec2 world, vec2 origin, vec2 axis_x, vec2 axis_y) {
 
 	// The current: streaks of foam running down the lane at the drag's own speed, one row every few
 	// art pixels across it, each broken into dashes so the eye can follow them moving.
-	float rows = max(3.0, floor(half_width / 9.0));
-	float row_w = half_width * 2.0 / rows;
-	float row = floor((p.y + half_width) / row_w);
-	float in_row = (p.y + half_width) - row * row_w;
+	float rows = max(3.0, floor(hw / 9.0));
+	float row_w = hw * 2.0 / rows;
+	float row = floor((p.y + hw) / row_w);
+	float in_row = (p.y + hw) - row * row_w;
 	float period = 46.0 + 30.0 * hash12(vec2(row, 5.0));
 	float dash = fract((x - time * drag_speed) / period + hash12(vec2(row, 9.0)));
 	if (in_row < GRID && dash < 0.34 && from_bank > GRID) {
@@ -149,7 +155,7 @@ vec4 shade_cell(vec2 world, vec2 origin, vec2 axis_x, vec2 axis_y) {
 	// The body: shallow water over the ground. Deeper (denser, and darker) toward the middle of the
 	// lane, thinning toward the banks, so the floor shows through between its cells - and a slow
 	// swell of noise drifting with the current moves the shallows about.
-	float depth = clamp(from_bank / max(GRID * 4.0, half_width * 0.45), 0.0, 1.0);
+	float depth = clamp(from_bank / max(GRID * 4.0, hw * 0.45), 0.0, 1.0);
 	float swell = noise(vec2(x - time * drag_speed * 0.35, p.y), 30.0);
 	float density = 0.26 + 0.3 * depth + 0.24 * (swell - 0.5);
 	float b2 = bayer4(cell + vec2(2.0, 1.0));

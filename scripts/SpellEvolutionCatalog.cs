@@ -2731,13 +2731,18 @@ public static class SpellEvolutionCatalog
 		AddElementPath(spell);
 		// A TIDAL WAVE (2026-10-27, "riptide size should end up being a huge portion of the screen per
 		// shot"), named for what it is since 2026-10-29: Tidal Wall. x3 of a level 8 wave (224 px) is about
-		// 620 px across, 800 with Breaker's 30% - most of a phone's width and most of a PC's height. The
-		// width multiplies what it hits, so the damage is the smaller half of the doubling, and a wave that
-		// size is not spent on the first ranks it meets. Its look is RiptideWave's titanic sea.
+		// 620 px across, 800 with Breaker's 30% - most of a phone's width and most of a PC's height. A wave
+		// that size is not spent on the first ranks it meets. Its look is RiptideWave's titanic sea.
+		// RISES, AND COMES SELDOM (2026-10-30, "tidal wall starts too big, it should start small and grow
+		// as it moves away from you. it's also firing far too fast"): it leaves the hand a wave's size and
+		// rises to that height by the end of its run (ElementalBolt.Growth), and the sea takes three times
+		// as long to gather - one wall on the screen, not three. Its damage a hit is what it was: three walls
+		// at once were overkilling the same pack, and one measures where three did (BoltEvolutions.TidalWall*,
+		// .ai/spell-roster.md 2i).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"The wave rises into a wall of water three times as wide, +60% damage, and it breaks through 40 more before it is spent.",
-			"Ascension / Water", "Ascension: the sea comes in.",
-			o => { Renamed(o, "Tidal Wall", "TidalWall", sea); o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 40; }));
+			$"The wave leaves your hand at its own size and rises as it rolls out, into a wall of water {BoltEvolutions.TidalWallScale:0} times as wide by the end of its run. +{(BoltEvolutions.TidalWallDamage - 1f) * 100f:0}% damage and it breaks through 40 more before it is spent, but the sea takes {BoltEvolutions.TidalWallCooldown:0} times as long to gather between walls.",
+			"Ascension / Water", "Ascension: the sea comes in - seldom, and all at once.",
+			o => { Renamed(o, "Tidal Wall", "TidalWall", sea); o.DamageMultiplier = BoltEvolutions.TidalWallDamage; o.ScaleMultiplier = BoltEvolutions.TidalWallScale; o.CooldownMultiplier = BoltEvolutions.TidalWallCooldown; o.PierceBonus = 40; }));
 		// Not "Spring Tide", as 2e first proposed: that is Tituba's Apotheosis's name.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			$"Three waves fan out from your hand at once, the middle one on your aim and the others {BoltEvolutions.TridentSpreadDegrees:0} degrees to either side. -50% cooldown, and each wave 40% bigger, 40% harder and tearing through 4 more.",

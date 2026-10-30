@@ -34,6 +34,17 @@ public partial class SpringTideLane : Node2D
 
 	public float Length { get; set; } = 360f;
 	public float HalfWidth { get; set; } = 40f;
+	// THE LANE WIDENS WITH ITS WAVE (2026-10-30). Tidal Wall leaves the hand a wave's size and rises to
+	// its full height over its run (ElementalBolt.ScaleAt), so the lane it floods is StartHalfWidth wide
+	// at the caster and HalfWidth from GrowLength on - wet only where the water went. Below zero (or a
+	// GrowLength of 0) the lane is HalfWidth all the way, as it always was. The drag and the drawing
+	// both read HalfWidthAt.
+	public float StartHalfWidth { get; set; } = -1f;
+	public float GrowLength { get; set; } = 0f;
+
+	private float HalfWidthAt(float x) => StartHalfWidth < 0f || GrowLength <= 0f
+		? HalfWidth
+		: Mathf.Lerp(StartHalfWidth, HalfWidth, Mathf.Clamp(x / GrowLength, 0f, 1f));
 	public Vector2 Heading { get; set; } = Vector2.Right;
 	public float FloodSpeed { get; set; } = 0f;
 
@@ -51,6 +62,8 @@ public partial class SpringTideLane : Node2D
 	private static readonly StringName ParamFront = "front";
 	private static readonly StringName ParamTail = "tail";
 	private static readonly StringName ParamHalfWidth = "half_width";
+	private static readonly StringName ParamStartHalfWidth = "start_half_width";
+	private static readonly StringName ParamGrowLength = "grow_length";
 	private static readonly StringName ParamDrainLength = "drain_length";
 	private static readonly StringName ParamFadeAll = "fade_all";
 	private static readonly StringName ParamDragSpeed = "drag_speed";
@@ -82,6 +95,8 @@ public partial class SpringTideLane : Node2D
 		material = new ShaderMaterial { Shader = laneShader };
 		Material = material;
 		material.SetShaderParameter(ParamHalfWidth, HalfWidth);
+		material.SetShaderParameter(ParamStartHalfWidth, StartHalfWidth < 0f || GrowLength <= 0f ? HalfWidth : StartHalfWidth);
+		material.SetShaderParameter(ParamGrowLength, GrowLength);
 		material.SetShaderParameter(ParamDragSpeed, DragSpeed);
 		material.SetShaderParameter(ParamSeed, (GetInstanceId() % 997) * 0.731f);
 		material.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
@@ -122,7 +137,7 @@ public partial class SpringTideLane : Node2D
 			if (node is not Enemy e || e.IsDying) continue;
 			// In the lane's own frame: x along the heading from the caster, y across it.
 			Vector2 local = ToLocal(e.GlobalPosition);
-			if (local.X < tail || local.X > front || Mathf.Abs(local.Y) > HalfWidth) continue;
+			if (local.X < tail || local.X > front || Mathf.Abs(local.Y) > HalfWidthAt(local.X)) continue;
 
 			e.ApplySlow(SlowMultiplier, 0.4f);
 			e.ApplyKnockback(Heading * DragSpeed);

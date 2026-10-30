@@ -120,6 +120,31 @@ public partial class ElementalBolt : Area2D
 	/// </summary>
 	public float HitRadius => areaRadius;
 
+	/// <summary>How far this bolt flies before it stops seeking - a growing wave's run.</summary>
+	public float Range => range;
+
+	/// <summary>
+	/// The node's scale (hit and drawing alike) at this fraction of its run: its scale when shot,
+	/// times its growth. Spring Tide's lane widens with the wave that floods it by this.
+	/// </summary>
+	public float ScaleAt(float runFraction) =>
+		shotScale.X * (groundswell || tidalWall ? Growth(Mathf.Clamp(runFraction, 0f, 1f)) : 1f);
+
+	// How much of the size it was shot at a growing wave is, at this fraction of its run. Groundswell
+	// builds from 60% to 180%. Tidal Wall rises from the wave it would have been without the card - the
+	// card's x3 is in the scale it was shot at - to its full height; with Groundswell it rises from
+	// Groundswell's narrower start, but no higher than the wall, since Groundswell's swell on top of it
+	// stood a wave 5.4 times a level 8 wave's width, wider than a phone and taller than a PC screen.
+	private float Growth(float runFraction)
+	{
+		if (tidalWall)
+		{
+			float start = (groundswell ? BoltEvolutions.GroundswellStart : 1f) / BoltEvolutions.TidalWallScale;
+			return Mathf.Lerp(start, 1f, runFraction);
+		}
+		return Mathf.Lerp(BoltEvolutions.GroundswellStart, BoltEvolutions.GroundswellEnd, runFraction);
+	}
+
 	/// <summary>
 	/// Above zero, the hit is a band ACROSS the heading rather than a circle: a capsule HitRadius to
 	/// either side and this fraction of HitRadius deep along the travel (Riptide, 0.35).
@@ -170,7 +195,7 @@ public partial class ElementalBolt : Area2D
 
 	// --- Which evolutions this bolt carries (BoltEvolutions), read once at the shot ---
 	private bool slagTrail, splitOnHit, magmaCore, caldera;
-	private bool groundswell;
+	private bool groundswell, tidalWall;
 	private bool barbed;
 	private bool eddy, hooked, liveWire, thunderhead, squall;
 
@@ -258,6 +283,7 @@ public partial class ElementalBolt : Area2D
 		magmaCore = s.HasEvolution(BoltEvolutions.MagmaCoreId);
 		caldera = s.HasEvolution(BoltEvolutions.CalderaId);
 		groundswell = s.HasEvolution(BoltEvolutions.GroundswellId);
+		tidalWall = s.HasEvolution(BoltEvolutions.TidalWallId);
 		barbed = s.HasEvolution(BoltEvolutions.BarbedId);
 		eddy = cast && s.HasEvolution(BoltEvolutions.EddyId);
 		hooked = s.HasEvolution(BoltEvolutions.HookedThrowId);
@@ -278,6 +304,10 @@ public partial class ElementalBolt : Area2D
 		pierceCount = 0;
 		returnLeg = false;
 		shotScale = Scale;
+		// A wave that builds as it runs starts at its starting size on the frame it is fired, never at
+		// the full height it was scaled to (Tidal Wall's would flash a wall at the hand for a frame).
+		if (groundswell || tidalWall)
+			Scale = shotScale * Growth(0f);
 		if (Returning)
 		{
 			outboundDistance = MathF.Max(MinThrowDistance * AreaMultiplier, from.DistanceTo(to) + ReturnOvershoot);
@@ -378,14 +408,10 @@ public partial class ElementalBolt : Area2D
 		if (travelled > range)
 			target = null;
 
-		// Groundswell: the wave leaves the hand narrow and builds to its full width by the end of its
-		// run. The node's scale is the hit and the drawing alike (RiptideWave), so it widens as one.
-		if (groundswell)
-		{
-			float grown = Mathf.Lerp(BoltEvolutions.GroundswellStart, BoltEvolutions.GroundswellEnd,
-				Mathf.Clamp(travelled / MathF.Max(1f, range), 0f, 1f));
-			Scale = shotScale * grown;
-		}
+		// Groundswell and Tidal Wall: the wave leaves the hand narrow and builds to its full width by the
+		// end of its run. The node's scale is the hit and the drawing alike (RiptideWave), so it widens as one.
+		if (groundswell || tidalWall)
+			Scale = shotScale * Growth(Mathf.Clamp(travelled / MathF.Max(1f, range), 0f, 1f));
 
 		Position += direction * speed * (float)delta;
 		// The slag is laid along the shard's flight at the pack, its cast range; a shard that pierced
