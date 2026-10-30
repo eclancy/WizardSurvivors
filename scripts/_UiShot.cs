@@ -1220,6 +1220,13 @@ public partial class _UiShot : Node
 					stageOffset = new Vector2(float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
 						float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture));
 			}
+			else if (arg.StartsWith("--cover="))
+			{
+				cover = true;
+				stageCount = System.Math.Max(1, int.Parse(arg.Substring("--cover=".Length)));
+			}
+			else if (arg == "--cover-mortal")
+				coverMortal = true;
 			else if (arg == "--stage-mortal")
 				stageMortal = true;
 			else if (arg.StartsWith("--demo-evolutions="))
@@ -2079,6 +2086,12 @@ public partial class _UiShot : Node
 	{
 		if (layerCensus && FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame censusArena)
 			CensusLayers(censusArena);
+		// --cover: the second half of a measured frame - the same paused moment, the spell hidden.
+		if (coverPhase == 1)
+		{
+			CoverCaptureB();
+			return;
+		}
 		// Menus build themselves over several frames - fonts resolve, containers sort, and the
 		// responsive column count is re-applied on a viewport signal. Capturing the first drawn
 		// frame catches a half-laid-out screen, so give it a few.
@@ -2109,6 +2122,11 @@ public partial class _UiShot : Node
 			if (++burstWait >= burstGap)
 			{
 				burstWait = 0;
+				if (cover)
+				{
+					CoverCaptureA();
+					return;
+				}
 				if (ripenEvery > 0)
 				{
 					float gap = BlackTentacles.ClosestMawGap();
@@ -2165,7 +2183,9 @@ public partial class _UiShot : Node
 			}
 			else
 				DriveMovement();
-			if (stageCount > 0 && !stagePlaced && frames >= WarmupFrames - fxLead)
+			if (cover && !stagePlaced && frames >= WarmupFrames / 3)
+				PlaceCoverRing();
+			else if (stageCount > 0 && !cover && !stagePlaced && frames >= WarmupFrames - fxLead)
 				PlaceStage();
 			if (statusShowcase && showcase.Count == 0 && frames >= WarmupFrames / 3)
 				BuildShowcase();
@@ -3021,13 +3041,233 @@ public partial class _UiShot : Node
 		{
 			p.MaxHP = System.Math.Max(p.MaxHP, 100000);
 			p.CurrentHP = p.MaxHP;
+			// --cover: no level-ups. A level-up deals the first card, which can be another spell, and its
+			// art would be hidden with the measured one's and counted as its cover.
+			if (cover)
+			{
+				p.CurrentXP = 0;
+				p.XPToNextLevel = int.MaxValue / 2;
+			}
 		}
 		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
 			if (n is Enemy e && IsInstanceValid(e) && !stageCrowd.Contains(e))
 				e.QueueFree();
+		if (cover && coverMortal)
+		{
+			// The crowd keeps its own health and dies, and every one that falls is replaced on the ring,
+			// so an on-kill spell (Frost Shard's shatter, Avalanche, Cataclysm) has deaths to show.
+			for (int i = 0; i < stageCrowd.Count; i++)
+				if (!IsInstanceValid(stageCrowd[i]) || stageCrowd[i].IsDying)
+					stageCrowd[i] = SpawnCoverEnemy(i);
+			return;
+		}
 		foreach (Enemy e in stageCrowd)
 			if (IsInstanceValid(e))
 				e.Health = System.Math.Max(e.Health, 1000000);
+	}
+
+	// --- --cover=N: how much of the screen a spell's art covers (the Ascension audit, 2026-10-30) ---
+	//
+	// N skeletons stood in a ring 160-300 px round the wizard a third of the way through the warmup,
+	// crawling in and impossible to kill (--cover-mortal: they die and are replaced), the wizard still
+	// (or --walk), no level-ups, nothing else on the field. Every --burst frame is rendered twice: as it
+	// is, then - the tree paused, so nothing moves - with every node the spell put in the world hidden.
+	// The pixels that differ are the spell's art. Prints COVER lines: the share of the screen, and of
+	// the wizard's own sprite box, the spell covers on each frame; then the peak and the mean, and saves
+	// the frame at the peak. A node is the spell's if it was added to the arena at run time and is not
+	// an enemy, a pickup, a telegraph or the ground (CoverKeeps); children the player's own scene does
+	// not hold are the spell's too (an orbit, a shield). The first frame lists what it hid, by class,
+	// so a world node mistaken for a spell shows up at once.
+	private bool cover;
+	private bool coverMortal;
+	private int coverPhase;
+	private Image coverA;
+	private readonly System.Collections.Generic.List<CanvasItem> coverHidden = new();
+	private readonly System.Collections.Generic.List<float> coverShares = new();
+	private readonly System.Collections.Generic.List<float> coverPlayerShares = new();
+	private float coverPeak = -1f;
+	private Image coverPeakImage;
+	private bool coverListed;
+	private RandomNumberGenerator coverRng;
+
+	private void PlaceCoverRing()
+	{
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		coverRng = new RandomNumberGenerator { Seed = 5 };
+		for (int i = 0; i < stageCount; i++)
+			stageCrowd.Add(SpawnCoverEnemy(i));
+		stagePlaced = true;
+		GD.Print($"_UiShot: cover ring of {stageCrowd.Count} placed round {p.GlobalPosition}");
+	}
+
+	private Enemy SpawnCoverEnemy(int k)
+	{
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p
+			|| GD.Load<PackedScene>("res://scenes/enemy.tscn")?.Instantiate() is not Enemy e)
+			return null;
+		float angle = Mathf.Tau * k / System.Math.Max(1, stageCount) + coverRng.RandfRange(-0.3f, 0.3f);
+		e.Position = p.GlobalPosition + Vector2.FromAngle(angle) * coverRng.RandfRange(160f, 300f);
+		e.Speed = 10f;
+		if (!coverMortal)
+			e.Health = 1000000;
+		p.GetParent().AddChild(e);
+		return e;
+	}
+
+	// What stays visible: everything that is not the spell. By class name, since the world adds most of
+	// itself at run time (the ground's chunks, pickups, telegraphs, enemy bolts, events, secrets).
+	private static readonly string[] CoverKeeps =
+	{
+		"TileMap", "Tile", "Chunk", "Decor", "Prop", "Pickup", "Orb", "Gem", "Chest", "Flask", "Potion",
+		"DamageNumber", "Telegraph", "GroundSlam", "GroundHit", "EnemyBolt", "EnemyProjectile", "Hazard",
+		"Event", "Secret", "Landmark", "Portal", "Lantern", "Shrine", "Painter", "Terrain", "Water",
+		"Camera", "Footprint", "Corpse", "Boss", "Spawn", "Wayfinder", "Compass", "Grove",
+		"FloatingText", "StatusEffect", "Tree", "Props",
+	};
+
+	private static bool CoverKeeps_(Node n)
+	{
+		string name = n.GetType().Name;
+		// A plain node is named for what it holds (the ground's Props_0_0 chunks).
+		if (name == nameof(Node2D) || name == nameof(Node) || name == nameof(CanvasItem))
+			name = n.Name;
+		// Two spells whose names would match a keep: the Arcane Orb is Magic Missile's, and a slag or
+		// water the spell lays is its own (Spring Tide's lane, Mirefoot's bog).
+		if (name.Contains("Spell") || name.Contains("Riptide") || name.Contains("Spring") || name.Contains("Mire"))
+			return false;
+		foreach (string k in CoverKeeps)
+			if (name.Contains(k))
+				return true;
+		return false;
+	}
+
+	private void CoverHide(Node node, Node arena, Player player)
+	{
+		foreach (Node child in node.GetChildren())
+		{
+			if (child is CanvasLayer || child is Enemy || child is Camera2D)
+				continue;
+			if (child is Player self)
+			{
+				// The wizard's own scene stays; what a spell hung on him goes (and the shield's aura).
+				foreach (Node part in self.GetChildren())
+					if (part is CanvasItem ci && ci.Visible && (part.Owner != self || part.Name == "ShieldAura"))
+						CoverHideOne(ci);
+				continue;
+			}
+			if (child.Owner == arena || CoverKeeps_(child))
+			{
+				if (child.Owner == arena)
+					CoverHide(child, arena, player);
+				continue;
+			}
+			if (child is CanvasItem item)
+			{
+				if (item.Visible)
+					CoverHideOne(item);
+			}
+			else
+				CoverHide(child, arena, player);
+		}
+	}
+
+	private readonly System.Collections.Generic.Dictionary<string, int> coverClasses = new();
+
+	private void CoverHideOne(CanvasItem item)
+	{
+		item.Visible = false;
+		coverHidden.Add(item);
+		string name = item.GetType().Name == nameof(Node2D) ? $"Node2D:{item.Name}" : item.GetType().Name;
+		coverClasses[name] = coverClasses.TryGetValue(name, out int c) ? c + 1 : 1;
+	}
+
+	private void CoverCaptureA()
+	{
+		coverA = GetViewport()?.GetTexture()?.GetImage();
+		if (FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame arena)
+			CoverHide(arena, arena, FindNodeOfType<Player>(GetTree().Root));
+		if (!coverListed)
+		{
+			coverListed = true;
+			GD.Print("COVER hid: " + string.Join(", ", coverClasses.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} x{kv.Value}")));
+		}
+		GetTree().Paused = true;
+		coverPhase = 1;
+	}
+
+	private void CoverCaptureB()
+	{
+		coverPhase = 0;
+		Image b = GetViewport()?.GetTexture()?.GetImage();
+		foreach (CanvasItem item in coverHidden)
+			if (IsInstanceValid(item))
+				item.Visible = true;
+		coverHidden.Clear();
+		GetTree().Paused = false;
+		if (coverA == null || b == null)
+		{
+			GD.PrintErr("_UiShot: --cover could not read the viewport");
+			GetTree().Quit(1);
+			return;
+		}
+		coverA.Convert(Image.Format.Rgba8);
+		b.Convert(Image.Format.Rgba8);
+		byte[] pa = coverA.GetData();
+		byte[] pb = b.GetData();
+		int w = coverA.GetWidth(), h = coverA.GetHeight();
+		// The wizard's sprite box on the image: the sprite's frame, through the canvas and the stretch.
+		Rect2I box = new Rect2I();
+		if (FindNodeOfType<Player>(GetTree().Root) is Player p && p.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D") is AnimatedSprite2D sprite
+			&& sprite.SpriteFrames?.GetFrameTexture(sprite.Animation, sprite.Frame) is Texture2D tex)
+		{
+			Vector2 size = tex.GetSize();
+			Transform2D xf = GetViewport().GetFinalTransform() * sprite.GetGlobalTransformWithCanvas();
+			Vector2 a = xf * (sprite.Offset - size / 2f);
+			Vector2 c = xf * (sprite.Offset + size / 2f);
+			box = new Rect2I((int)Mathf.Min(a.X, c.X), (int)Mathf.Min(a.Y, c.Y), (int)Mathf.Abs(c.X - a.X), (int)Mathf.Abs(c.Y - a.Y));
+		}
+		long covered = 0, boxCovered = 0, boxTotal = 0;
+		for (int y = 0; y < h; y++)
+		{
+			bool inBoxRow = y >= box.Position.Y && y < box.End.Y;
+			for (int x = 0; x < w; x++)
+			{
+				int i = (y * w + x) * 4;
+				int d = System.Math.Max(System.Math.Abs(pa[i] - pb[i]), System.Math.Max(System.Math.Abs(pa[i + 1] - pb[i + 1]), System.Math.Abs(pa[i + 2] - pb[i + 2])));
+				bool hit = d > 16;
+				if (hit)
+					covered++;
+				if (inBoxRow && x >= box.Position.X && x < box.End.X)
+				{
+					boxTotal++;
+					if (hit)
+						boxCovered++;
+				}
+			}
+		}
+		float share = covered / (float)(w * h);
+		float playerShare = boxTotal > 0 ? boxCovered / (float)boxTotal : 0f;
+		coverShares.Add(share);
+		coverPlayerShares.Add(playerShare);
+		GD.Print($"COVER frame={burstTaken} share={share:0.000} player={playerShare:0.000} box={box}");
+		if (share > coverPeak)
+		{
+			coverPeak = share;
+			coverPeakImage = coverA;
+		}
+		coverA = null;
+		burstTaken++;
+		if (burstTaken >= burstCount)
+		{
+			float mean = coverShares.Average(), pMean = coverPlayerShares.Average();
+			var sorted = coverShares.OrderBy(s => s).ToList();
+			float p90 = sorted[(int)System.Math.Min(sorted.Count - 1, System.Math.Floor(sorted.Count * 0.9))];
+			GD.Print($"COVER SUMMARY shot={ShotName} frames={coverShares.Count} peak={coverPeak:0.000} p90={p90:0.000} mean={mean:0.000} playerPeak={coverPlayerShares.Max():0.000} playerMean={pMean:0.000} size={w}x{h}");
+			Error err = coverPeakImage?.SavePng($"user://{ShotName}-peak.png") ?? Error.Failed;
+			GD.Print(err == Error.Ok ? $"_UiShot: {ProjectSettings.GlobalizePath($"user://{ShotName}-peak.png")}" : $"_UiShot: save failed ({err})");
+			GetTree().Quit(0);
+		}
 	}
 
 	private void PlaceStage()
