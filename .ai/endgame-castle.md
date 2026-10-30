@@ -882,10 +882,10 @@ its own contract, and an ordinary run is untouched by it:
 | Enchanted Forest | open, endless | grass, moss, meadow | ponds, trunks, the pen's fence | - | survive, boss | hold the grove |
 | The Fallow Fields | open | stubble, furrow, hedge bank | millponds, fences | - | survive, boss | defend the well |
 | The Broken Circle | open | heather, peat, granite | tarns, standing stones | - | survive, boss | relight the moot |
-| Sunken Cave | open | **the Ruins' palette** - it has none of its own (`LevelGenerator.PaletteFor` falls back) | - | - | survive, boss | - |
+| Sunken Cave | **caverns**, endless (V2, built) | its own: `cave_floor`, silt, scree; `cave_wall` rock | rock, pools in chambers | - | survive, boss | - |
 | Cursed Dungeon | **maze**, endless | flags | jail walls, water | pits, spikes and vents in the corridors | survive, boss | the key |
 | Blighted Swamp | open | mud, moss | much water | - | survive, boss | the lanterns |
-| Mystic Ruins | open | graystone, cobble | - | pits, spikes | survive, boss | - |
+| Mystic Ruins | **broken walls** on the maze, endless (V1, built) | graystone, cobble; `ruin_wall` | broken walls, pillars | spikes in hallway rows (the pits went) | survive, boss | - |
 | Frozen Waste | open | graystone, ice | water | - | survive, boss | the thaw |
 | Scorched Sands | open | sand, scree | - | rocky pits | survive, boss | the caravan |
 | The Emberdeep | open | basalt | - | lava, pits | survive, boss | - |
@@ -919,6 +919,11 @@ are cheap.
 
 **Decided: 1 and 2 first.** With the move they are no longer only variety: they restore walled ground
 to the middle of the campaign (1.7), so they should land **before or with** the Dungeon's move.
+
+**Built (2026-10-30, `wip/variety-walls`): both.** What each became, where the proposal above changed in
+the building (the Cave's graph at a 16-tile pitch rather than the Dungeon's 8, chambers as well as halls;
+the Ruins' pits removed), the proof that the caverns have no sealed pockets, the two bosses' placement
+fixes and the probe and harness numbers are in `.ai/terrain.md` section 11.
 
 ---
 

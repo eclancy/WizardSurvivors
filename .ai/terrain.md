@@ -1281,3 +1281,132 @@ more often now, which crosses borders more. Worth a look if a real player ever o
   multiplies over each tree's quad.
 - **A boss under a crown.** The fade keys on the wizard, not the boss, and a boss fight dragged
   into the Forest's thickest stand has not been looked at.
+
+## 11. Walled chapters on the maze's graph: the Cave's caverns and the Ruins' broken walls
+
+Pieces V2 and V1 of `.ai/endgame-castle.md` (7.3). Ten of the eleven chapters were the same open field;
+with the Cursed Dungeon moving into the castle, the road before the gate had no walled chapter at all.
+Both are topologies in partial files (`LevelGenerator.Caverns.cs`, `LevelGenerator.Ruin.cs`, C0's pattern),
+both draw the Dungeon's maze GRAPH - its 4 x 4 blocks, braid, loops, halls and doorways, so the world is
+connected - and both play by walled ground's rules unchanged: no cleanup pass, every enemy on the flow
+field, spawns and recycling on walking distance, placement trusting "connected by construction".
+
+### The Sunken Cave: the graph drawn as rock
+
+The Cave had no palette (`PaletteFor` fell back to the Ruins') and stood on the Ruins' open field.
+
+- **Shape.** The graph's cells stand 16 tiles apart (`CavernPitch`), each centre moved up to 4 tiles off
+  the lattice; a passage the graph opens is two lines through a bend pushed up to 3.5 tiles off its
+  middle; a hall is the quad between four centres; one cell in seven is a chamber, a disc of 3 to 6.5
+  tiles round its centre. A tile is floor when it is nearer that skeleton than a half-width of 2.5 to 4.3
+  tiles (smooth value noise: a slow swell per cell and a wobble every 6 tiles). Passages run 5 to 9 tiles
+  wide, chambers 11 to 21 across, and about two fifths of the ground is rock. Twelve and eight tiles a
+  centre were tried first: at eight the cave was an open floor with boulders, at twelve rock islands in a
+  floor.
+- **Connected by construction, proved.** The half-width never drops below 2.5, so the middle five tiles
+  of every passage are floor. Step a floor tile one tile toward its nearest skeleton point and the
+  distance falls by at least 0.573; the half-width cannot rise by more than 1.5 x (1.2/16 + 0.6/6) = 0.26
+  in a step; so the step lands on floor and the walk ends in a passage's core. No pass after the field
+  ever closes ground: thin rock (one-tile slivers, nubs, two masses touching at a corner) only turns
+  to floor, and a pool stands only where every tile within three of its rim is floor.
+- **Pools.** Stone `pool` water in half of the chambers and halls whose ring fits, a smaller pool tried
+  when the rolled one does not. Nine chunks round the start on the validator's seed: 40.1% rock, 0.3%
+  water.
+- **Look.** `cave_walls.py` (`cave_wall` set): tops are lumpy domes in the stone row's deep, the darkest
+  thing on screen; faces are fractured cliffs in shade under a lit lip; rounded outer corners (cut
+  transparent, so the ground tile shows; the full-cell collision overhangs the cut by at most seven
+  pixels on the diagonal); crystals unlit, seeps, stalactites, fungus, a fossil. The floor is
+  `terrain_cave.py`'s `cave_floor`, a terrain used as the ground on the stone row's base, a step LIGHTER
+  than the natural floors, because walled ground needs floor > face > top (section 6's lesson). Its own
+  ground detail (no flowers), a cold haze, and no flower pen: it needs 24 x 18 tiles clear of walls.
+- **The boss.** The Hollow Choir set its two echoes on a bare 210 px ring round the first voice, and in
+  `_BossProbe` one landed inside a rock mass and stood there all fight (243 of 797 body-frames in wall
+  or water; `_BossProbe` reports that line now). `HollowChoirBoss.EchoPosition` turns the bearing and
+  shortens the ring until the point is reachable: 0 of 735, and 0 of 2,836 under `--focus`.
+
+### The Mystic Ruins: the maze at the rates that broke it
+
+The Dungeon's own lattice (8-tile cells, 6-tile corridors, 2-tile walls), so `ExplorePlacer`'s cell snap
+and the traps' hallway rows apply as they are, at the loop and hall rates section 6 threw out for the
+Dungeon (18%, 35%) because they made "an open floor with furniture" - a ruin. On top: a closed wall is
+whole three times in five, else a gap is knocked through it (four tiles from the middle, or three off one
+end - never narrower than 144 px); half of the pillars left standing alone have fallen; one block in eight
+is a court (every inner wall and post gone: thirty tiles of floor inside a broken wall, where the flower
+pen and a ward ring fit) and one in sixteen a colonnade (every inner wall gone, every post standing).
+Every pass only opens what the maze closed. 12.2% of the nine chunks round the start is wall.
+
+- **The pits went.** Kept three tiles off every wall, they came out as black rectangles cut square
+  along the lattice, and one across a six-tile corridor closes it. The walls are the obstacle now and the
+  spike plates the trap.
+- **Look.** `ruin_walls.py` (`ruin_wall` set). Under the open sky the order turns over: the flat top of a
+  wall faces the key full on, so the TOP is the lightest stone (big slabs on the stone row's base with
+  grass and moss in the joints), the face sits in shade under a broken coping, and the floor below both.
+  Ivy, a dead ward cut in a block (a groove, no light - the Broken Ward's living stones must be the only
+  ones that answer), empty niches, breaches, fallen blocks, a broken pilaster.
+- **The boss.** The Archivist resurfaces 240 px from the player at a random bearing, which on broken
+  walls lands on a wall about one dive in eight, and it never takes a step. `ArchivistBoss.SurfacingPoint`
+  turns the bearing until the point is reachable.
+
+### The tools that hold it
+
+- `RegressionChecks.ValidateNoSealedPockets` floods nine chunks of every walled partial-file topology and
+  faults any standing ground that neither holds the start nor reaches the edge. `--terrain-stats` prints
+  each one's wall and water share.
+- `ValidateTerrainSeams` holds both to the seam rule by itself (C0). Both build their ground in a grid
+  ten tiles wider than the chunk's padded one (`WalledFloorMargin`), so the passes that read neighbours -
+  the thin-rock pass, the blobs' cleanup round fixed walls (`LayFloorBetweenWalls`) - are exact on every
+  cell they hand back.
+- `tools/art/tiles.py` finds a chapter's wall set as `<name>_walls.py` with a `TERRAIN` (`wall_set_modules`),
+  as it finds ground modules, and writes its manifest on Python 3 as well as 2.7: a full run on 3.13
+  reproduces every committed tile byte for byte.
+
+### Measured
+
+`_MazeProbe --bot=roam --seconds=300` (seed 20261014), one run each; the Dungeon on the same build for
+reference:
+
+| | reach | detour | pinned | close | jammed | stacked |
+|---|---|---|---|---|---|---|
+| Cursed Dungeon | 100% | 1.17 | 0.8% | 16.8% | 7.3% | 2.5% |
+| Cave, open (before) | 99.9% | 1.06 | 0.0% | 9.2% | 0.9% | 0.7% |
+| Cave, caverns | 100% | 1.17 | 0.9% | 26.1% | 7.5% | 4.0% |
+| Ruins, open (before) | 100% | 1.06 | 0.0% | 14.6% | 0.9% | 1.5% |
+| Ruins, broken walls | 96.1% | 1.16 | 0.9% | 18.6% | 7.6% | 6.7% |
+
+The Ruins' reach was 100% in every five-second sample but one stretch of twenty seconds (44-79%), and
+the probe's `low reach` lines put the bot on open ground with the navigation window a chunk behind it:
+the window-lag section 10 found on the Forest, which a roaming bot at timescale 4 provokes by crossing
+borders faster than the streamer settles. Not the walls.
+
+`_BalanceHarness --minutes=15 --all-unlocked --immortal --timescale=2 --terrain-seed=4242` (one run each):
+
+| | kills | level at 15:00 | L17 | L23 |
+|---|---|---|---|---|
+| Cursed Dungeon | 3,967 | 29 | 6.4 min | 9.9 min |
+| Cave, open (before) | 3,573 | 27 | 6.7 | 10.6 |
+| Cave, caverns | 3,966 | 29 | 6.2 | 9.5 |
+| Ruins, open (before) | 3,170 | 26 | 7.6 | 12.2 |
+| Ruins, broken walls | 3,195 | 27 | 6.9 | 10.9 |
+
+Walls bring the horde to the player: more of it is close, and the kill supply rises toward the
+Dungeon's. The caverns land on the Dungeon's numbers almost exactly, so the Cave's level clock moves as
+it does on the existing walled chapter and no further. The Ruins' broken walls are open enough that the
+supply barely moves (+0.8%), and the level clock runs a level ahead at most. `--check-feet` walking a
+bearing for three minutes: Cave 0 of 2,692 frames with the footprint in terrain, no stuck checks, no
+enemy inside rock or water; Ruins 0 of 4,492 frames, no stuck checks, and no enemy centre inside the
+ground's collision in 392,079 enemy-frames (the end-of-run count by cell flag found 1 of 131 on a wall
+cell, which that physics test never did). The Ruins' spike plates: 4.97 a chunk, 132 of 149 in hallway
+rows, closest two 272 px - the Dungeon's pattern.
+
+### Still needs eyes
+
+- Whether the caverns read as a cave and the ruin as a ruin on the phone, and whether a full swarm in a
+  five-tile passage reads as pressure or as a jam. The photographs were desktop, `--portrait --safe-area`
+  for the phone canvas.
+- The rounded rock corners' overhang: up to seven pixels of the full-cell collision past the drawn rock on
+  an outer corner's diagonal.
+- Whether the ruin's lit tops pull the eye in a long run; they are the stone row's base, two stops under
+  anything an actor wears.
+- The bosses in the new ground: `_BossProbe` proves arrival, phases and a clean fall and now that no body
+  stands in rock; whether the Choir's three voices and the Archivist's beam read among walls is for a
+  playtest.
