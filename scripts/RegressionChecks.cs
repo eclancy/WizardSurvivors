@@ -241,8 +241,9 @@ public static class RegressionChecks
 	// a found level of Growth, Amount or a charge would undercut the Apotheosis floor measured with the
 	// shop at its cap; and two keepsakes of one stat would let a save find it twice.
 	// THE BOSS RUSH (issue #12, BossRushCatalog). Its roster is derived, not written, so what can go
-	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
-	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
+	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the arena's
+	// (the Emberdeep's, StageCatalog.GateChapter: the run would end on the wrong fight - and a castle
+	// boss built before C2's RoadOrder would land after it), or arrivals that are not strictly before the
 	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
 	// Traps fit their map (2026-10-28, "there shouldn't be fire vents outside. double check that all
 	// traps make sense for the map they're in"). A flame vent is an iron grate set in a floor: indoors

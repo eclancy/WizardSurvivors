@@ -10,8 +10,8 @@ theme and nine chapter sets in `assets/music/` - has its own section at the end.
 allowlisted in `SfxCatalog` and **not wired** - the secret agents build the sites that play them.
 Each is in the table under "Secrets" below with the trigger site proposed for it; `SfxPlayer` will
 report `84 sounds preloaded`. Also on 2026-10-30, three castle sets were rendered for the music
-(the Last Bridge, the Court, the Throne; "The castle's music" at the end) and are not yet in
-`MusicCatalog`. And the generators now run under Python 3 (the container has only 3.13) as well as
+(the Last Bridge, the Court, the Throne; "The castle's music" at the end), and the castle's plumbing
+(C0) put them in `MusicCatalog` the same day; their chapters are not playable yet. And the generators now run under Python 3 (the container has only 3.13) as well as
 2.7, writing the same bytes under either: all 81 earlier effects and the heath's three stems
 re-rendered byte-identical under 3.13 (`.ai/audio-direction.md` section 3).
 
@@ -450,7 +450,7 @@ full tables.
 - **Inside each stem:** `music.py --balance` prints every voice's level; no ostinato is more than
   7 dB under its bed, no snare or tek more than 22 dB under its pulse.
 
-### The castle's music (2026-10-30: rendered, not yet wired)
+### The castle's music (2026-10-30: rendered, and wired in `MusicCatalog` by C0)
 
 Piece C7 of `.ai/endgame-castle.md`: a set for each of the three new castle chapters, scored in its
 own `tools/audio/music_<chapter>.py` (which `music.py` picks up by name) and rendered once into
@@ -469,11 +469,11 @@ written before the first import with `edit/loop_mode=2` (Forward) and `compress/
 
 **Where they are wired, and by whom:**
 
-- **`MusicCatalog`: the castle's plumbing agent (C0).** Three planned sets with the Emberdeep's as
-  their stand-in, under these ids - `PlannedChapter("bridge", Emberdeep)`, `("court", ...)`,
-  `("throne", ...)` - and rows `[11]`, `[12]`, `[13]` in `PerStage`. A planned set switches itself
-  on when its bed is imported, so the moment C0's rows land these play; `ValidateMusic` checks the
-  three stems are the same length (they are, to the sample) and loop.
+- **`MusicCatalog`: the castle's plumbing agent (C0). Done** (`wip/castle-plumbing`): three planned
+  sets with the Emberdeep's as their stand-in, under these ids - `PlannedChapter("bridge", Emberdeep)`,
+  `("court", ...)`, `("throne", ...)` - and rows `[11]`, `[12]`, `[13]` in `PerStage`. A planned set
+  switches itself on when its bed is imported, so these play now; `ValidateMusic` checks the three
+  stems are the same length (they are, to the sample) and loop, and reports nothing.
 - **The Last Bridge and the Court play as every chapter does** (`Node2DGame.PlayRunMusic`, the
   pulse and lead thresholds, the shared boss loop for the Constable and the Seneschal). Nothing more.
 - **The Throne does not.** Whoever builds `ThroneRules` (C4) and the dark wizard (C5) between them:

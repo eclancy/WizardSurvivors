@@ -409,9 +409,6 @@ public sealed partial class LevelGenerator
 	public static StageTopology EffectiveTopology(StageTopology declared) =>
 		IsTopologyBuilt(declared) ? declared : StageTopology.Open;
 
-	/// <summary>The topology a chapter's palette names, built or not. For the validator's to-do list.</summary>
-	public static StageTopology DeclaredTopologyOf(StageEnvironmentKind kind) => PaletteFor(kind).Topology;
-
 	private static bool IsWalled(StageTopology topology) =>
 		topology == StageTopology.Maze
 		|| (topology is not StageTopology.Open && TopologyBuilds[(int)topology].Walled);
