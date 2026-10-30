@@ -132,10 +132,22 @@ public partial class GeodeHeart : SecretVault
 		body.AddChild(new CollisionShape2D { Position = new Vector2(0f, -4f), Shape = new RectangleShape2D { Size = FootBody } });
 		AddChild(body);
 
-		// The light and the burst fly over everything (DrawLayers.Air), not sorted among the bodies.
-		effects = new Node2D { Name = "Light", ZIndex = DrawLayers.Air, ZAsRelative = false };
+		// The light and the burst fly over everything (DrawLayers.Air), not sorted among the bodies. The
+		// canvas stands at the world's origin (TopLevel), so its units are world units and every cell it
+		// stamps is on the world's 2-unit grid (PixelInk), and it draws through the dither material, so
+		// what fades - the ring going out, the shards landing - dissolves pixel by pixel instead of going
+		// translucent (the secrets' pixel-art pass, 2026-10-30).
+		effects = new Node2D
+		{
+			Name = "Light",
+			ZIndex = DrawLayers.Air,
+			ZAsRelative = false,
+			TopLevel = true,
+			Material = SpellInk.DitherByCell,
+		};
 		effects.Draw += DrawEffects;
 		AddChild(effects);
+		effects.GlobalPosition = Vector2.Zero;
 
 		HasShattered = Crystal.IsBroken;
 	}
@@ -206,59 +218,69 @@ public partial class GeodeHeart : SecretVault
 
 	// --- drawing ----------------------------------------------------------------------------------------
 
+	// The ring's two tones, the ice ramp's hot and mid (.ai/art-direction.md section 3): the shatter's own
+	// cold light, the colours it always had, now as stops rather than translucent washes.
+	private static readonly Color IceHot = new(0.784f, 0.957f, 1.0f);
+	private static readonly Color IceMid = new(0.498f, 0.863f, 0.973f);
+
+	// Drawn in WORLD units: the canvas is TopLevel at the origin (see _Ready). Under the dither material a
+	// draw call's alpha is coverage - each art pixel is drawn opaque or not at all, by the world cell's
+	// Bayer threshold - so nothing here is ever translucent over what is under it.
 	private void DrawEffects()
 	{
-		Vector2 heart = HeartOffset;
+		Vector2 foot = GlobalPosition;
+		Vector2 heart = foot + HeartOffset;
 
-		// The near tell: the warm glint, breathing, deep in the stone - until the light has left it.
+		// The near tell: the warm glint, breathing, deep in the stone - until the light has left it. A
+		// little brighter as it cracks: the light is nearer the surface. (It had a faint translucent disc
+		// round it too; the strip already draws the warm cloud in the stone, which is what that was for.)
 		if (!HasShattered)
-		{
-			// A little brighter as it cracks: the light is nearer the surface.
-			float strength = 0.75f + 0.25f * Crystal.Stage / 3f;
-			effects.DrawCircle(heart, 14f, new Color(GoldHi, 0.06f + 0.06f * Breath(clock)));
-			DrawGlint(effects, heart, clock, strength);
-		}
+			DrawGlint(effects, heart, clock, 0.75f + 0.25f * Crystal.Stage / 3f);
 
 		if (burst >= 0f)
 		{
 			float t = Mathf.Clamp(burst / BurstSeconds, 0f, 1f);
 			float spread = 1f - (1f - t) * (1f - t);
-			// The frost going out: one ring of the shatter's own cold light, ending on the freeze's edge.
+			float fade = 1f - t;
+			// The frost going out: one ring of the shatter's own cold light, ending on the freeze's edge - an
+			// animation of the hit, which ends on its radius, not a marker (art-direction "no area markers").
+			// Three art pixels thick as it leaves the foot, one as it arrives, dissolving as it goes.
 			float ring = FreezeRadius * spread;
-			effects.DrawArc(Vector2.Zero, ring, 0f, Mathf.Tau, 64, new Color(0.78f, 0.96f, 1.0f, 0.55f * (1f - t)), 6f * (1f - t) + 1f);
-			effects.DrawArc(Vector2.Zero, ring * 0.92f, 0f, Mathf.Tau, 64, new Color(0.50f, 0.86f, 0.97f, 0.35f * (1f - t)), 2f);
-			// The shards, flung from the heart's height down to the ring.
+			int thick = fade > 0.66f ? 3 : fade > 0.33f ? 2 : 1;
+			PixelInk.Ring(effects, foot, ring, ring, new Color(IceHot, fade), thick);
+			PixelInk.Ring(effects, foot, ring * 0.92f, ring * 0.92f, new Color(IceMid, 0.7f * fade), 1);
+			// The shards, flung from the heart's height down to the ring. They turn by stepping through the
+			// six drawings, never by rotating the sprite (a rotated sprite's pixels leave the grid), stand
+			// on the world's grid, and dissolve as they land.
 			if (shards != null)
 			{
 				foreach (var (angle, reach, spin, frame) in flying)
 				{
 					Vector2 dir = Vector2.FromAngle(angle);
-					Vector2 at = heart.Lerp(dir * reach * new Vector2(1f, 0.7f), spread) + new Vector2(0f, -40f * MathF.Sin(t * MathF.PI));
-					effects.DrawSetTransform(at, spin * t, Vector2.One);
-					effects.DrawTextureRectRegion(shards, new Rect2(-ShardCell * 0.5f, -ShardCell * 0.5f, ShardCell, ShardCell),
-						new Rect2(frame * ShardCell, 0f, ShardCell, ShardCell), new Color(1f, 1f, 1f, 1f - t * t));
+					Vector2 at = heart.Lerp(foot + dir * reach * new Vector2(1f, 0.7f), spread) + new Vector2(0f, -40f * MathF.Sin(t * MathF.PI));
+					int turned = (frame + (int)(MathF.Abs(spin) * t * 1.5f)) % ShardFrames;
+					Vector2 corner = SpellInk.Snap(at - new Vector2(ShardCell * 0.5f, ShardCell * 0.5f));
+					effects.DrawTextureRectRegion(shards, new Rect2(corner.X, corner.Y, ShardCell, ShardCell),
+						new Rect2(turned * ShardCell, 0f, ShardCell, ShardCell), new Color(1f, 1f, 1f, 1f - t * t));
 				}
-				effects.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 			}
 		}
 
 		// The warm light rising out of the shards, then going to him.
 		if (mote >= 0f && Player is Player player)
 		{
-			Vector2 from = moteFrom - GlobalPosition;
 			Vector2 at;
 			if (mote < MoteDelay)
-				at = from + new Vector2(0f, -36f * (mote / MoteDelay));
+				at = moteFrom + new Vector2(0f, -36f * (mote / MoteDelay));
 			else
 			{
 				float t = Mathf.Clamp((mote - MoteDelay) / MoteSeconds, 0f, 1f);
 				float eased = t * t * (3f - 2f * t);
-				Vector2 start = from + new Vector2(0f, -36f);
-				Vector2 end = player.GlobalPosition - GlobalPosition + new Vector2(0f, -40f);
+				Vector2 start = moteFrom + new Vector2(0f, -36f);
+				Vector2 end = player.GlobalPosition + new Vector2(0f, -40f);
 				at = start.Lerp(end, eased) + new Vector2(0f, -60f * MathF.Sin(t * MathF.PI));
 			}
-			effects.DrawCircle(at, 16f, new Color(GoldHi, 0.18f));
-			effects.DrawCircle(at, 8f, new Color(GoldHi, 0.35f));
+			DrawLight(effects, at, 12f);
 			DrawGlint(effects, at, 0.6f, 1f);
 		}
 	}
