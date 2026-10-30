@@ -571,26 +571,34 @@ public static class SpellEvolutionCatalog
 		{
 			Id = SpiritualWeapon.TwinBladesId,
 			DisplayName = "Twin Blades",
-			Description = "A second sword joins the first and hunts its own quarry. Every sword strikes 10% softer.",
+			// SpiritualWeapon.TickDagger and Stab: one dagger however many swords, on the main-hand sword's
+			// quarry from its other flank, in the gap after each of its cuts, for DaggerShare of a blow (2026-10-30,
+			// Eric: "Twin sword mutation should create a second smaller dagger, and be capped at two blades").
+			// It was one more sword at -10% each, which the levels already give; no number on the card is a
+			// SpellData stat now, so EvolutionStatReaders has nothing to route.
+			Description = "A small dagger of light fights beside your sword. After each of the sword's cuts it darts in "
+				+ $"from the other side and stabs the same enemy for {SpiritualWeapon.DaggerShare * 100f:0}% of a cut. "
+				+ "Only ever one dagger, however many swords you have.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = 1,
-			DamageMultiplier = 0.9f,
 			VisualTag = "SpiritTwinBlades",
-			SynergyTag = "Arcane / More swords",
-			SynergyDescription = "Two duels at once."
+			SynergyTag = "Arcane / Off-hand",
+			SynergyDescription = "Sword and dagger on one enemy."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
+			// Keeps Riposte's id (saves and the catalog hold it). SpiritualWeapon.Intercept: a free sword
+			// breaks off for a bolt coming at the wizard and swats it aside, then rests DeflectRest (2026-10-30,
+			// Eric: "Riposte description is confusing. Replace with the ability to deflect projectiles"). Not
+			// a damage card: Riposte's +30% and its strike on every parry are gone, and nothing is sent back.
 			Id = SpiritualWeapon.RiposteId,
-			DisplayName = "Riposte",
-			// SpiritualWeapon.ParryBolts: RiposteGuard x the guard, and a parry hands the sword a swing.
-			Description = "Each sword's guard reaches 60% further, and every bolt it parries hands it a strike at once. Strikes hit 30% harder.",
+			DisplayName = "Deflection",
+			Description = "Your swords fly out to knock enemy bolts out of the air before they reach you. "
+				+ "Each sword can deflect about once a second.",
 			MilestoneLevel = 4,
-			DamageMultiplier = 1.3f,
 			VisualTag = "SpiritRiposte",
-			SynergyTag = "Arcane / Parry",
-			SynergyDescription = "The archers feed it."
+			SynergyTag = "Arcane / Deflect",
+			SynergyDescription = "Bolts swatted aside before they land."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -3381,9 +3389,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = Familiar.RavenId,
-			DisplayName = "Raven",
-			Description = $"It grows into a raven of your light: +{(ravenDamage - 1f) * 100f:0}% damage, and its beak "
-				+ $"strikes {(ravenBeak - 1f) * 100f:0}% wider, taking what stands beside its quarry. +1 Arcane tag.",
+			// 2026-10-30, Eric: "'Raven of your light' doesn't make sense. Rename this and describe it differently."
+			DisplayName = "Great Raven",
+			Description = $"Your crow grows into a great raven. It hits {(ravenDamage - 1f) * 100f:0}% harder, and its beak "
+				+ $"strikes {(ravenBeak - 1f) * 100f:0}% wider, catching enemies beside its target. +1 Arcane tag.",
 			MilestoneLevel = 4,
 			DamageMultiplier = ravenDamage,
 			AreaMultiplier = ravenBeak,
