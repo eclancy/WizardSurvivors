@@ -280,6 +280,8 @@ public static class AchievementsPage
 		public bool MetThisRun;
 		/// <summary>"Frees Gravewell - you already had it", or null (<see cref="CodexRows.OwnedRewardLine"/>).</summary>
 		public string OwnedLine;
+		/// <summary>The save the page is built over.</summary>
+		public SaveData Save;
 
 		public bool IsFeat => Kind == AchievementKind.Feat || Kind == AchievementKind.Collection;
 	}
@@ -312,6 +314,7 @@ public static class AchievementsPage
 				var item = new Item
 				{
 					Deed = deed,
+					Save = save,
 					Kind = deed.Kind,
 					StageId = deed.StageId ?? string.Empty,
 					Secret = secret,
@@ -643,7 +646,10 @@ public static class AchievementsPage
 		if (item.Secret != null)
 			return SecretRow(item, showChapter);
 
-		CodexRows.Entry entry = CodexRows.DeedEntry(item.Deed, item.Done, item.Progress, SpellIcon, focusStop: true);
+		// The save goes in so the row can say a reward is already owned, and keep a locked secret
+		// wizard's name off it (CodexRows.HidesWizard).
+		CodexRows.Entry entry = CodexRows.DeedEntry(item.Deed, item.Done, item.Progress, SpellIcon,
+			focusStop: true, save: item.Save, palette: CodexRows.Stone);
 		if (!item.Done)
 		{
 			if (item.MetThisRun)
@@ -655,8 +661,6 @@ public static class AchievementsPage
 			}
 			if (!string.IsNullOrEmpty(item.RunNote) && entry.Progress != null)
 				entry.ProgressText = $"{entry.ProgressText}  ·  {item.RunNote}";
-			if (item.OwnedLine != null)
-				entry.Meta = item.OwnedLine;
 		}
 		return CodexRows.BuildRow(entry, CodexRows.Stone);
 	}

@@ -741,7 +741,7 @@ public static class CodexRows
 	/// <param name="save">When given, a reward the save already owns says so: "Frees Gravewell - you
 	/// already had it" (a spell bought before the shop stopped selling spells, now behind a vault).</param>
 	public static Entry DeedEntry(AchievementDefinition deed, bool done, AchievementProgress progress,
-		Func<string, Texture2D> spellIcon, bool focusStop = true, SaveData save = null)
+		Func<string, Texture2D> spellIcon, bool focusStop = true, SaveData save = null, Palette palette = null)
 	{
 		var entry = new Entry
 		{
@@ -768,17 +768,36 @@ public static class CodexRows
 				entry.Progress = progress.Fraction;
 				entry.ProgressText = progress.Display;
 			}
-			if (OwnedRewardLine(deed, save) is string owned)
+			if (HidesWizard(deed, save))
+			{
+				// His name is his reward (.ai/side-events.md, "Secret wizards"): until he is free the
+				// row says only that someone is, and shows his shape - the character select's card.
+				entry.Meta = "Frees someone";
+				Texture2D portrait = WizardPortrait(deed.CharacterUnlockId);
+				entry.MetaGlyph = portrait != null ? BuildSilhouette(portrait, palette ?? Stone) : entry.MetaGlyph;
+			}
+			else if (OwnedRewardLine(deed, save) is string owned)
 				entry.Meta = owned;
 		}
 		return entry;
 	}
 
+	/// <summary>
+	/// A deed that frees a SECRET wizard (UnlockCatalog's <c>IsSecret</c>) who is not free yet: listed
+	/// once his chapter opens (sealed before that, <see cref="AchievementDefinitions.IsSealed"/>), but
+	/// never naming him - "The Open Cell" frees Tituba, "The Coursing" Laelaps. With no save in hand (the
+	/// results screen's closest deed) he counts as locked, so nothing is ever named by accident.
+	/// </summary>
+	public static bool HidesWizard(AchievementDefinition deed, SaveData save) =>
+		deed != null && !string.IsNullOrEmpty(deed.CharacterUnlockId)
+		&& UnlockCatalog.GetCharacter(deed.CharacterUnlockId)?.IsSecret == true
+		&& !GlobalStatsManager.IsCharacterUnlocked(save, deed.CharacterUnlockId);
+
 	/// <summary>A deed as a row. See <see cref="DeedEntry"/>.</summary>
 	public static PanelContainer BuildDeedRow(AchievementDefinition deed, bool done, AchievementProgress progress,
 		Func<string, Texture2D> spellIcon, Palette palette, bool focusStop = true, SaveData save = null)
 	{
-		return BuildRow(DeedEntry(deed, done, progress, spellIcon, focusStop, save), palette);
+		return BuildRow(DeedEntry(deed, done, progress, spellIcon, focusStop, save, palette), palette);
 	}
 
 	/// <summary>
