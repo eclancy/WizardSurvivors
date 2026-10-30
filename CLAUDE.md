@@ -57,6 +57,15 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
   chunks with a guaranteed anchor, schema 17, three to four secrets per chapter, and the build
   order. **Read it before adding a secret, a landmark or a hidden reward.**
 - `.ai/performance.md` — what a frame costs (PC harness and Pixel 9), the `--profile` frame profiler, how to measure on the phone, and the rules for a cheap swarm (`EnemyRegistry` instead of `GetNodesInGroup("enemies")` in per-frame code, no string-built `StringName`s in hot paths, tiles through the atlas). **Read it before adding per-frame work or a spell that scans enemies.**
+- `.ai/world-map.md` — the stage select is a generated world map (`tools/art/world_map.py` writes the
+  picture and `worldmap.json`; `WorldMap`, `WorldMapView`, `WorldMapCompass`): the wizard walks the road
+  between stops in campaign order, the compass strip, the card, and `StageRewards`, the one authority on
+  what a chapter holds. **A new chapter must be placed on the map** (`PLACES` in the generator) or
+  `RegressionChecks.ValidateWorldMap` says so. Read it before adding a chapter or touching the stage select.
+- `.ai/achievements-and-secrets.md` and `.ai/endgame-castle.md` — the 2026-10-30 designs: every
+  non-starter spell earned through an achievement (feats, chapter deeds, secret spell vaults), the
+  achievements menu, the secret catalogue, and the castle chapters after the Emberdeep. Read them before
+  touching `UnlockCatalog`, the shop, secrets or the campaign order.
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - **`LICENSE` and `NOTICE` at the repo root.** Source-available, all rights reserved: the code
