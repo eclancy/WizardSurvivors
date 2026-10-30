@@ -1032,7 +1032,11 @@ public partial class _UiShot : Node
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
 			// --found-secrets=id,id: marks those stage secrets found in the in-memory save (writes off),
-			// to photograph the Unlocks page's Secrets section with something in it.
+			// to photograph the achievements page's found secrets.
+			// --seen-secrets=id,id: marks those secrets SEEN - their near tell on screen once, not yet
+			// found (.ai/achievements-and-secrets.md 4.3) - so the page's middle state, a named row with
+			// what was seen, can be photographed. Writes off. Put it after --fresh-save, which replaces
+			// the save it marks.
 			// A Boss Rush (issue #12) instead of the chapter; writes off, since its end records a best.
 			else if (arg == "--boss-rush")
 			{
@@ -1060,6 +1064,19 @@ public partial class _UiShot : Node
 				var secretsSave = GetNodeOrNull<SaveManager>("/root/SaveManager");
 				foreach (string id in arg.Substring("--found-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
 					secretsSave?.Data.RecordSecretFound(id.Trim());
+			}
+			// --demo-achievements: a save part way along the road, in memory (BuildDemoAchievementsSave),
+			// so every kind of row on the achievements page is on it at once - done, in progress, a
+			// chapter's sealed secrets, a sealed wizard. Put it FIRST: it replaces the save, and the
+			// --found-secrets and --seen-secrets after it mark the one it puts in.
+			else if (arg == "--demo-achievements")
+				ReplaceSave(BuildDemoAchievementsSave());
+			else if (arg.StartsWith("--seen-secrets="))
+			{
+				SaveManager.WritesDisabled = true;
+				SaveData seenSave = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+				foreach (string id in arg.Substring("--seen-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+					seenSave?.RecordSecretGlimpsed(id.Trim());
 			}
 			else if (arg.StartsWith("--shore="))
 			{
@@ -1516,6 +1533,44 @@ public partial class _UiShot : Node
 		data.ArcaneUpgradeLevels["luck"] = 5;
 		data.ArcaneUpgradeLevels["crit_chance"] = 2;
 		GlobalStatsManager.UnlockSpell(data, "molten_shard");
+		return data;
+	}
+
+	// The --demo-achievements save: two runs in, neither won. The Forest lost at 9:12 as the Pyromancer
+	// (level 17, four Fire held) with its grove held on the way, and the Fallow Fields lost at 7:50 as the
+	// Frostweaver - the Fields open from the save's opened list, as on a save from before the campaign
+	// order - so the Broken Circle, Laelaps's chapter, is not open and his deed is a sealed row, as are
+	// Tituba's and Vainamoinen's. First Blood, Elementalist, Fire Adept and the grove's deed are done,
+	// everything else is part way, and Hollow Star and Gravewell were bought when the shop sold spells:
+	// Survivor pays Hollow Star since schema 19, so it says "you already had it".
+	private static SaveData BuildDemoAchievementsSave()
+	{
+		var data = new SaveData { TotalCurrency = 240 };
+		data.Lifetime.Absorb(new RunResult
+		{
+			Outcome = RunOutcome.Defeat, StageId = "stage_0", CharacterId = "pyromancer",
+			TimeSurvived = 552f, EnemiesKilled = 700, FinalPlayerLevel = 17, ChestsOpened = 9, UndamagedSeconds = 96f,
+			PeakElementCounts = new System.Collections.Generic.Dictionary<string, int> { ["Fire"] = 4, ["Earth"] = 2, ["Arcane"] = 2 },
+			EquippedSpells = Enumerable.Range(0, 5).Select(_ => new RunSpellSnapshot()).ToList(),
+		});
+		data.Lifetime.Absorb(new RunResult
+		{
+			Outcome = RunOutcome.Defeat, StageId = "stage_9", CharacterId = "frostweaver",
+			TimeSurvived = 470f, EnemiesKilled = 390, FinalPlayerLevel = 12, ChestsOpened = 6, UndamagedSeconds = 41f,
+			PeakElementCounts = new System.Collections.Generic.Dictionary<string, int> { ["Ice"] = 3, ["Water"] = 2 },
+			EquippedSpells = Enumerable.Range(0, 4).Select(_ => new RunSpellSnapshot()).ToList(),
+		});
+		data.Lifetime.RecordEventWon("the_grove");
+		foreach (string deed in new[] { "first_blood", "elementalist", "fire_adept", AchievementDefinitions.EventDeedId("the_grove") })
+		{
+			data.UnlockedAchievementIds.Add(deed);
+			AchievementDefinition definition = AchievementDefinitions.GetById(deed);
+			if (!string.IsNullOrEmpty(definition?.SpellUnlockId))
+				GlobalStatsManager.UnlockSpell(data, definition.SpellUnlockId);
+		}
+		GlobalStatsManager.UnlockSpell(data, "hollow_star");
+		GlobalStatsManager.UnlockSpell(data, "gravewell");
+		GlobalStatsManager.UnlockStage(data, "stage_9");
 		return data;
 	}
 

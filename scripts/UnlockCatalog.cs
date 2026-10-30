@@ -405,20 +405,18 @@ public static class UnlockCatalog
 			&& !d.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
 			.Select(d => d.Id);
 
-	/// <summary>Spells sold in the shop, in catalog order.</summary>
+	/// <summary>Every boon, in catalog order.</summary>
 	public static IEnumerable<string> AllBoonIds =>
 		All.Where(d => d.Kind == UnlockKind.Boon).Select(d => d.Id);
 
+	/// <summary>
+	/// The boons the shop sells, the last section of its Powers menu (MainMenu.Shop.cs). The only
+	/// purchases in the catalog: since schema 19 the shop sells no spells
+	/// (.ai/achievements-and-secrets.md 2.4), and ValidateUnlockCatalog refuses a spell or a wizard
+	/// sourced any way but Starter or Achievement.
+	/// </summary>
 	public static IEnumerable<UnlockDefinition> PurchasableBoons =>
 		All.Where(d => d.Kind == UnlockKind.Boon && d.Source == UnlockSource.Purchase);
-
-	/// <summary>
-	/// Empty since schema 19: the shop sells no spells (.ai/achievements-and-secrets.md 2.4), and
-	/// ValidateUnlockCatalog refuses a spell sourced any way but Starter or Achievement. Kept for the
-	/// shop's shelf, which reads it until piece A3 takes the shelf out; an empty shelf draws nothing.
-	/// </summary>
-	public static IEnumerable<UnlockDefinition> PurchasableSpells =>
-		Definitions.Where(d => d.Kind == UnlockKind.Spell && d.Source == UnlockSource.Purchase);
 
 	/// <summary>
 	/// What to show on a locked card. Falls back to a plain string rather than an empty one so a

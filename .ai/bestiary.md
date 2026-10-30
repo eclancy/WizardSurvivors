@@ -361,6 +361,15 @@ and `Heath` / `heath-` are in `bestiary_kit.PREFIXES`, and their Phase 2 is that
 this doc's section 9. Both are drawn - eleven creatures each (`tools/art/cast_fields.py`,
 `cast_heath.py`) - and playable, so neither has a to-do line in the validator's output any more.
 
+### 4.12 The Last Bridge (`stage_11`) and 4.13 The Court (`stage_12`)
+
+The castle's two casts (`.ai/endgame-castle.md` 3.5 and 5.7, in this section's format). Their rosters
+are `StageBestiary.Bridge.cs` and `StageBestiary.Court.cs`, every slot planned on **the Emberdeep's**
+creature for the role (built things, right for his house), and their prefixes `Bridge` / `bridge-` and
+`Court` / `court-` are in `bestiary_kit.PREFIXES`. Drawing them is section 8's recipe unchanged, as piece
+C6. Both are on the validator's bestiary to-do list until drawn. The Cursed Dungeon keeps its roster when
+it moves into the castle, and the Throne has no trickle cast (`.ai/endgame-castle.md` 6.3, 11.5).
+
 ---
 
 ## 5. What exists and what must be drawn

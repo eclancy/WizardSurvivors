@@ -286,6 +286,10 @@ carrier counts, and `ValidateElementReachability`, count them anyway. A Taproot 
 joined them. As a starter it is in every run's pool from the first level-up, and the starter boons
 were already the ones meant to make thin elements reachable early. Selling the seven is separate
 work; until it lands, read every "boons" column in this document as optimistic for those elements.
+*(Since then: the shop sells the three boons still priced - Quicksilver Bead, Deepwater Pearl and
+Saltbound Chain - from 2026-10-26, and since 2026-10-30 they are the last section of its one menu,
+Powers, the shop having stopped selling spells; the other four are chapter deeds. See
+`.ai/achievements-and-secrets.md` 1.3 and 2.4, and `.ai/level-up-screen.md` 4f.)*
 
 ---
 

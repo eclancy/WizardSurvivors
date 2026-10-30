@@ -78,6 +78,10 @@ PREFIXES = {
     # The two early chapters (.ai/campaign.md): cast_fields.py and cast_heath.py.
     "fields-": "Fields",
     "heath-": "Heath",
+    # The castle (.ai/endgame-castle.md 3.5 and 5.7, piece C6): cast_bridge.py and cast_court.py. The
+    # Cursed Dungeon keeps its own roster and the Throne has no trickle cast of its own.
+    "bridge-": "Bridge",
+    "court-": "Court",
 }
 
 CELLS = (32, 48)

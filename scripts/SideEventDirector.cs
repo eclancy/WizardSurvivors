@@ -7,8 +7,8 @@ using WizardSurvivors.scripts;
 // The table below is the whole mapping. Each entry is a chapter, the event that lives there, the
 // Discovery site it pays out and the wayfinder that reveals it; UnlockCatalog says what the site
 // gives. A chapter that is not listed has no event - and so no wayfinder, since there would be
-// nothing for it to point at - which is true of six of the eleven today (two of them the early
-// chapters still being built, whose lines are already here waiting).
+// nothing for it to point at - which is true of seven of the fourteen today (three of them the
+// castle's chapters, still being built, whose null lines are already here waiting).
 //
 // NO TIMER (2026-10-22). This used to start the event at 90 pace seconds, near wherever the player
 // was. Now, the moment the run's terrain exists, it lays the event out in the world from the run's
@@ -62,6 +62,15 @@ public partial class SideEventDirector : Node
 		"stage_9" => ("the_well", () => new WellEvent(), WayfinderKind.Compass),
 		// (the Broken Circle's line is below; leave this one as it is)
 		"stage_10" => ("the_moot", () => new MootFiresEvent(), WayfinderKind.Compass),
+		// THE CASTLE (.ai/endgame-castle.md). No side event is designed for any of the three: the bridge's
+		// goal is the crossing, the Court's its rooms, the Throne's the fight - each through its
+		// ChapterRules (ChapterRulesCatalog), not here. The lines are written so that one designed later is
+		// one line's edit, a line apart from its neighbours. The Cursed Dungeon keeps the Gaoler's key.
+		"stage_11" => null,
+		// (the Court's line is below)
+		"stage_12" => null,
+		// (the Throne's line is below)
+		"stage_13" => null,
 		_ => null,
 	};
 

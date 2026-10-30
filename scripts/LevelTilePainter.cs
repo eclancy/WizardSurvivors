@@ -772,6 +772,43 @@ public partial class LevelTilePainter : Node2D
 
 	private readonly Dictionary<string, WallRoleSources> _wallRoles = new();
 
+	private string _wallArtSet = StageEnvironmentProfile.DefaultWallSet;
+	private string _resolvedWallArtSet;
+
+	/// <summary>
+	/// The chapter's wall set: the tiles.json terrain id whose tiles a wall cell is DRAWN with
+	/// (StageEnvironmentProfile.WallSet, set by Node2DGame from the chapter's profile). The cells are the
+	/// `wall` terrain whatever this says - collision, navigation and the chunk flags read that - so this
+	/// only chooses the art. A set with no tiles in the manifest yet paints the jail set ("wall") instead,
+	/// whole: a chapter names its walls before court_walls.py (say) draws them, and its walls never mix two
+	/// sets role by role (.ai/endgame-castle.md 1.9).
+	/// </summary>
+	public string WallArtSet
+	{
+		get => _wallArtSet;
+		set
+		{
+			string set = string.IsNullOrWhiteSpace(value) ? StageEnvironmentProfile.DefaultWallSet : value;
+			if (set == _wallArtSet)
+				return;
+			_wallArtSet = set;
+			// Sources already built were for the other set.
+			_resolvedWallArtSet = null;
+			_wallRoles.Clear();
+		}
+	}
+
+	/// <summary>The set walls are actually drawn with: <see cref="WallArtSet"/> once the manifest has it, the jail set until then.</summary>
+	private string ResolvedWallArtSet
+	{
+		get
+		{
+			if (_resolvedWallArtSet == null && _catalog != null)
+				_resolvedWallArtSet = _catalog.TileVariants(_wallArtSet, "fill").Count > 0 ? _wallArtSet : WallTerrainId;
+			return _resolvedWallArtSet ?? WallTerrainId;
+		}
+	}
+
 	// The chance a cell of each role carries dressing, before the no-neighbour rule halves it. Faces
 	// carry most - they are what the eye reads as a jail - the tops of the vertical walls a sconce or
 	// a chain now and then, and the plain tops a little moss. No role may exceed MaxWallDressChance,
@@ -822,8 +859,8 @@ public partial class LevelTilePainter : Node2D
 		WallRoleSources set = EnsureWallRoleSources(roleKey);
 		if (set.Plain.Length == 0)
 		{
-			// No jail art for this role (a manifest without it): the flat void wall, as before, rather
-			// than a wall painted as nothing.
+			// No art for this role in the chapter's wall set (WallArtSet - the jail set unless the
+			// chapter has its own): the flat void wall, as before, rather than a wall painted as nothing.
 			if (_wallSources.Count == 0 && !_wallSourcesTried)
 				EnsureWallSources();
 			if (_wallSources.Count == 0) return -1;
@@ -851,7 +888,7 @@ public partial class LevelTilePainter : Node2D
 			return known;
 		var plain = new List<int>();
 		var dressed = new List<int>();
-		foreach (CuratedTileEntry e in _catalog.TileVariants(WallTerrainId, roleKey))
+		foreach (CuratedTileEntry e in _catalog.TileVariants(ResolvedWallArtSet, roleKey))
 		{
 			// TileVariants falls back to the fills for a role the manifest lacks; a top is the
 			// right thing to paint then, but not the fills' dressing.
