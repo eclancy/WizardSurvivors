@@ -7,8 +7,8 @@ public static partial class SecretCatalog
 	/// moot (follow the runes).
 	/// </summary>
 	/// <remarks>
-	/// To build: BC1 the Fallen Star (the vault - gather, on SecretGather, then linger), BC2 the Hare's
-	/// Form, BC3 the Shepherd's Bothy and BC4 the Speaker's Stone (the keepsake - sequence).
+	/// Built: BC1 the Fallen Star, the vault (gather, on SecretGather, then linger; 2026-10-30). To build:
+	/// BC2 the Hare's Form, BC3 the Shepherd's Bothy and BC4 the Speaker's Stone (the keepsake - sequence).
 	/// </remarks>
 	private static class BrokenCircle
 	{
@@ -16,9 +16,18 @@ public static partial class SecretCatalog
 
 		internal static SecretDefinition[] Build() => new[]
 		{
-			Vault("fallen_star", Stage, "The Fallen Star", SecretVerb.Gather, "starfall", "Starfall",
+			// Gather seven shards strewn along a dead-straight burn, in any order, then linger 2 s in the
+			// crater it leads to (FallenStar.cs). Nothing solid: he stands in the crater.
+			Vault(FallenStarId, Stage, "The Fallen Star", SecretVerb.Gather, "starfall", "Starfall",
 				seen: "A line of burnt heather running dead straight across the heath, glinting at intervals.",
-				found: "A star that fell on the heath and broke. Its seven shards gathered, the crater gave up its light."),
+				found: "A star that fell on the heath and broke. Its seven shards gathered, the crater gave up its light.") with
+			{
+				IsBuilt = true,
+				CreateSite = () => new global::FallenStar(),
+				RepeatReward = "Its shards gathered again, the crater gave up a chest",
+			},
 		};
 	}
+
+	public const string FallenStarId = "fallen_star";
 }

@@ -19,7 +19,7 @@ public partial class _UiShot
 		private bool leashTested;
 		private int hops;
 
-		private bool HasVaultsABranch() => Director.Vault is PaleHart or Pinfold;
+		private bool HasVaultsABranch() => Director.Vault is PaleHart or Pinfold or FallenStar;
 
 		// Bodies Hold() must not clear: a branch's own (the forge's kills, set down to die in its ring) and a
 		// vault's (the Pinfold's guards, which it wakes itself the moment he comes near, on the walk in).
@@ -40,8 +40,102 @@ public partial class _UiShot
 				case Pinfold pound:
 					WorkPinfold(pound);
 					return true;
+				case FallenStar star:
+					WorkFallenStar(star);
+					return true;
 				default:
 					return false;
+			}
+		}
+
+		// --- BC1, the Fallen Star: gather, then linger -------------------------------------------------------
+
+		// Out of the trail's order, on purpose: "in any order" is the verb.
+		private static readonly int[] GatherOrder = { 3, 0, 6, 1, 5, 2, 4 };
+		private int gathered;
+		private float lingeredBefore;
+
+		private void WorkFallenStar(FallenStar star)
+		{
+			SecretGather gather = star.Gather;
+			switch (step)
+			{
+				case 100:
+				{
+					chestsBefore = Director.Game.GetChildren().Count(c => c is ChestReward);
+					Check($"seven shards lie along the trail ({gather?.Count})", gather != null && gather.Count == FallenStar.Shards);
+					// Along one straight line: each within 160 px of the line from the trail's far end to the crater.
+					Vector2 a = star.TrailStart, b = star.GlobalPosition;
+					Vector2 n = (b - a).Normalized();
+					float worst = gather.Points.Max(p => Mathf.Abs((p - a).Cross(n)));
+					float length = a.DistanceTo(b);
+					GD.Print($"VAULTPROBE the trail runs {length:0} px to the crater, {star.BurnCount} burn marks; the shards lie within {worst:0} px of its line");
+					Check("the shards lie along one straight line", worst <= 160f);
+					Check("the burn runs the trail's length (a mark every 42 px, most on open heath)", star.BurnCount >= (int)(length / FallenStar.BurnStep * 0.6f));
+					Check("it starts two chunks out from the crater or more (its far tell)", length >= 1.5f * 1536f);
+					// In the crater before the shards are gathered: nothing.
+					stand = star.GlobalPosition;
+					step++;
+					wait = FallenStar.LingerSeconds + 0.6f;
+					return;
+				}
+				case 101:
+				{
+					Check("lingering in the crater before the shards are gathered does nothing", !star.Risen && star.Lingered <= 0f);
+					gathered = 0;
+					step = 102;
+					return;
+				}
+				case 102:
+				{
+					stand = gather.Points[GatherOrder[gathered]];
+					step = 103;
+					wait = 0.3f;
+					return;
+				}
+				case 103:
+				{
+					int k = GatherOrder[gathered];
+					Check($"walking over shard {k} takes it ({gather.Gathered} of {gather.Count})", gather.IsTaken(k) && gather.Gathered == gathered + 1);
+					gathered++;
+					if (gathered == 3)
+						Shot("on the trail: three shards taken, the burn running on");
+					step = gathered < GatherOrder.Length ? 102 : 104;
+					return;
+				}
+				case 104:
+				{
+					Check("all seven gathered, out of order", gather.IsComplete);
+					stand = star.GlobalPosition;
+					step++;
+					wait = 1.0f;
+					return;
+				}
+				case 105:
+				{
+					lingeredBefore = star.Lingered;
+					Check($"a second in the crater is not enough ({lingeredBefore:0.00} s of {FallenStar.LingerSeconds:0})", !star.Risen && lingeredBefore > 0.5f);
+					Shot("lingering: the star's light rising in its stone");
+					stand = star.GlobalPosition + new Vector2(0f, 320f);
+					step++;
+					wait = 0.5f;
+					return;
+				}
+				case 106:
+				{
+					Check($"stepping out lets it sink back ({lingeredBefore:0.00} -> {star.Lingered:0.00} s)", star.Lingered < lingeredBefore && !star.Risen);
+					stand = star.GlobalPosition;
+					step++;
+					wait = FallenStar.LingerSeconds + 0.3f;
+					return;
+				}
+				case 107:
+				{
+					Check("two seconds in the crater with every shard: the light rises", star.Risen);
+					step = 6;
+					wait = 1.6f;
+					return;
+				}
 			}
 		}
 
