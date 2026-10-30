@@ -58,6 +58,28 @@ public partial class HollowChoirBoss : BossEnemy
 		CallDeferred(nameof(SummonTheRest));
 	}
 
+	// Where an echo stands: on the ring round the first voice, at its own bearing - or, on walled ground,
+	// the nearest bearing and radius on that ring that something could walk out of. The Sunken Cave is
+	// caverns now (.ai/endgame-castle.md 7.3), and an echo set down on the bare ring landed inside a rock
+	// mass in _BossProbe and stood there the whole fight, out of reach of the player's feet. The first
+	// voice stands on ground Node2DGame.FindBossSpawnPosition vetted, so its own spot is the last resort.
+	private Vector2 EchoPosition(float angle)
+	{
+		MazeNavigation nav = MazeNavigation.Active;
+		foreach (float radius in new[] { ChoirSpreadRadius, ChoirSpreadRadius * 0.7f, ChoirSpreadRadius * 0.4f })
+		{
+			for (int step = 0; step < 12; step++)
+			{
+				// 0, then 15 degrees either way, then 30, out to 90.
+				float turn = (step + 1) / 2 * (Mathf.Tau / 24f) * (step % 2 == 0 ? 1f : -1f);
+				Vector2 at = GlobalPosition + Vector2.FromAngle(angle + turn) * radius;
+				if (nav == null || nav.IsReachable(at))
+					return at;
+			}
+		}
+		return GlobalPosition;
+	}
+
 	// Deferred because _Ready runs while this node is being added, and adding siblings to the same
 	// parent mid-add is the kind of thing Godot tolerates until one day it does not.
 	private void SummonTheRest()
@@ -90,7 +112,7 @@ public partial class HollowChoirBoss : BossEnemy
 			arena.AddChild(echo);
 
 			float angle = Mathf.Tau * (i + 1) / Mathf.Max(1, VoiceCount);
-			echo.GlobalPosition = GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ChoirSpreadRadius;
+			echo.GlobalPosition = EchoPosition(angle);
 		}
 
 		// Everyone learns everyone. Done here rather than in each echo's _Ready because only this
