@@ -556,9 +556,13 @@ public static class StageEnvironmentCatalog
 		}
 		,
 
-		// THE COURT (stage_12), stand-in: the Cursed Dungeon's flagstones under its cold haze. C3 gives it
-		// its floors per wing, its carpet runners and its own walls; it already names that wall set, which
-		// paints as the jail walls until court_walls.py draws it.
+		// THE COURT (stage_12, C3, .ai/endgame-castle.md 5): his halls. The castle's flags under laid marble,
+		// oak boards and each wing's carpet runner (terrain_court.py), panelled walls hung with his cold fire
+		// and the banners of a house with no arms (court_walls.py, the `court_wall` set), and every piece of
+		// furniture placed by CourtRules from the layout - so no scattered props (propCount 0, and the
+		// palette names no themes) and no scattered traps: the Kitchens' ovens are the Court's one hazard and
+		// CourtRooms places them (5.9). A cold haze a shade warmer than the Dungeon's under it: a house, not
+		// a gaol, but nobody has lit a fire in it.
 		[StageEnvironmentKind.Court] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Court,
 			"court",
@@ -577,9 +581,9 @@ public static class StageEnvironmentCatalog
 			0,
 			new[] { "res://assets/bonelight/tiles/floor_stonetile_0.png" },
 			48f,
-			propCount: 20)
+			propCount: 0)
 		{
-			HazeTint = new Color(0.14f, 0.14f, 0.22f, 0.10f),
+			HazeTint = new Color(0.15f, 0.14f, 0.21f, 0.10f),
 			GlowTint = new Color(0.28f, 0.22f, 0.34f, 0.05f),
 			WeatherTint = new Color(0.06f, 0.08f, 0.12f, 0.024f),
 			WeatherOffset = new Vector2(60f, 30f),
