@@ -32,15 +32,26 @@ It has to run on the Windows PC: it needs Inno Setup, the Android release keysto
   `.ai/audio-manifest.md`.
 - The losing-streak ("pity") Arcane Energy bonus is removed.
 
+## Two branches: `main` is releasable, `main-ff86ni` is not yet
+
+**`main` is what ships.** **`main-ff86ni`** (the development branch) carries A1 on top of it:
+every spell earned through an achievement, the gate on wizards (which also fixes the Emberdeep
+being unreachable on a new save), Fireball to the Long Coil, schema 19. A1 moves nine spells into
+spell vaults that are not built in the world yet, so **on `main-ff86ni` a new save cannot earn
+Hunter's Draw, the Familiar, Starfall, Frost Shard, Molten Shard, Gravewell, Kindled Ward, Sleet
+Runes or Stormsweep.** Saves that already own them keep them. Do not merge `main-ff86ni` into `main`
+or release from it until the vaults are built (A4 and the chapter agents,
+`.ai/achievements-and-secrets.md` section 9).
+
 ## Branches still to merge or finish
 
-Merge each into `main` with a merge commit, then build and run the validator
-(`-- --no-save-writes`, always: A1 bumps the schema).
+Merge each into `main-ff86ni` with a merge commit, then build and run the validator
+(`-- --no-save-writes`, always: schema 19 migrates a real save the moment it loads).
 
 | branch | what | state |
 |---|---|---|
-| `wip/achievements-core` | A1: every spell earned through an achievement, the gate on wizards, Fireball to the Long Coil, schema 19 | finishing in the cloud session; merge first |
-| `wip/achievements-page` | A2: the achievements page in the main menu and pause screen | finishing in the cloud session; merge after A1 |
+| `wip/achievements-core` | A1 | **merged into `main-ff86ni`** (held off `main`, above) |
+| `wip/achievements-page` | A2: the achievements page in the main menu and pause screen | finishing in the cloud session; merges into `main-ff86ni` |
 | `wip/evolutions2-sky` | phase 2 cards for Stormsweep, Sleet Runes and Aegis Ward (Starfall landed) | **unfinished WIP commit d8048b3**; also owes those three spells' pixel-art pass |
 | `wip/evolutions2-blasts` | phase 2 cards: Solar Flare landed; Arcane Explosion, Fireball and Meteor Swarm not started | merge main first (their pixel-art passes landed) |
 
