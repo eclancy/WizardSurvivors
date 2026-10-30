@@ -122,9 +122,19 @@ public static class AchievementManager
 		}
 
 		// A deed done before its reward moved to it (schema 19 moved four) is paid its reward now, and
-		// the gate chapters this save has met are written open for good.
+		// the gate chapters this save has met are written open for good - announced on the run that met
+		// them, which a boss victory alone never does for a gate (StageCatalog.ChapterOpenedBy skips it).
 		AddToSummary(summary, Reconcile(data));
-		GlobalStatsManager.RecordMetGates(data);
+		foreach (StageDefinition gate in GlobalStatsManager.RecordMetGates(data))
+		{
+			summary.Entries.Add(new RunUnlockEntry
+			{
+				Kind = RunUnlockKind.Chapter,
+				Id = gate.Id,
+				Name = gate.DisplayName,
+				Source = "Every wizard on the road is free",
+			});
+		}
 
 		return summary;
 	}
