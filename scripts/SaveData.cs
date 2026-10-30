@@ -13,8 +13,11 @@ public class SaveData
 	// campaign order that moved the Cursed Dungeon to fifth (.ai/campaign.md); 14 grants Starfall
 	// to a finished campaign the way 12 granted John Dee; 15 grants the Familiar the same way, and 16
 	// the facing family (Stormsweep and Sleet Runes). 17 adds the stage secrets' two fields,
-	// FoundSecretIds and FoundUpgradeLevels (.ai/stage-secrets.md section 5, issue #20).
-	public const int CurrentSchemaVersion = 18;
+	// FoundSecretIds and FoundUpgradeLevels (.ai/stage-secrets.md section 5, issue #20). 18 refunds
+	// the retired level-up charges. 19 makes every spell an achievement's (.ai/achievements-and-secrets.md
+	// section 3): GlimpsedSecretIds and LifetimeStats.EventsWon, the event deeds seeded from what the save
+	// owns, moved rewards reconciled, and the Emberdeep kept open for anyone who had met the old gate.
+	public const int CurrentSchemaVersion = 19;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -71,6 +74,27 @@ public class SaveData
 
 	public int FoundUpgradeLevel(string upgradeId) =>
 		FoundUpgradeLevels.TryGetValue(upgradeId, out int level) ? level : 0;
+
+	/// <summary>
+	/// Every secret whose near tell has been on screen at least once, in any run (SecretCatalog ids):
+	/// what turns a hidden achievement from a count into a row with its name and what was seen
+	/// (.ai/achievements-and-secrets.md 4.3). Written by the run's SecretDirector (piece A4) and saved with
+	/// the next save, not at once - a seen mark lost to a crash costs nothing.
+	/// </summary>
+	public List<string> GlimpsedSecretIds { get; set; } = new();
+
+	public bool HasGlimpsedSecret(string secretId) =>
+		!string.IsNullOrWhiteSpace(secretId)
+		&& GlimpsedSecretIds.Any(id => id.Equals(secretId.Trim(), System.StringComparison.OrdinalIgnoreCase));
+
+	/// <summary>Marks a secret seen. False when it already was.</summary>
+	public bool RecordSecretGlimpsed(string secretId)
+	{
+		if (string.IsNullOrWhiteSpace(secretId) || HasGlimpsedSecret(secretId))
+			return false;
+		GlimpsedSecretIds.Add(secretId.Trim());
+		return true;
+	}
 
 	/// <summary>The Boss Rush's records (issue #12, BossRushCatalog): the most bosses one rush has felled.</summary>
 	/// <remarks>
@@ -216,6 +240,9 @@ public class SaveData
 		if (SchemaVersion < 18)
 			MigrateRetiredLevelUpCharges();
 
+		if (SchemaVersion < 19)
+			MigrateToAchievementUnlocks();
+
 		if (log)
 			GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
 				$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards, " +
@@ -238,11 +265,15 @@ public class SaveData
 		//
 		// Discovery wizards are excluded: they did not exist when everything was free, and a wizard
 		// rescued from a cell is earned by going there (.ai/side-events.md), not handed to an old save.
-		foreach (string characterId in UnlockCatalog.AllWizardIds)
+		//
+		// From the frozen lists, not the live catalog. Since schema 19 the rescued wizards are
+		// Achievement entries, and a live "is it a Discovery" test would hand Tituba and Vainamoinen to
+		// every pre-campaign save that loads.
+		foreach (string characterId in WizardsAtSchema18)
 		{
 			// Only the wizards that existed when everything was free, which were the starters. A
 			// wizard added since - John Dee, at 12 - is earned, not handed to an old save.
-			if (UnlockCatalog.GetCharacter(characterId)?.Source == UnlockSource.Discovery
+			if (DiscoveryWizardsAtSchema18.Contains(characterId, System.StringComparer.OrdinalIgnoreCase)
 				|| WizardsAddedAtSchema12.Contains(characterId, System.StringComparer.OrdinalIgnoreCase))
 				continue;
 			if (!UnlockedCharacterIds.Any(id => id.Equals(characterId, System.StringComparison.OrdinalIgnoreCase)))
@@ -264,25 +295,24 @@ public class SaveData
 		// The gate as it stood at 9: the wizards added since (at 12) are not part of it, or a save
 		// that had everything at 9 would be refused its discoveries for want of a wizard who did not
 		// exist yet.
+		// From the frozen lists (schema 19): the discoveries are deeds' rewards now, and the catalog
+		// may grow, so the live catalog no longer says what this step meant.
 		bool hadEverything =
-			UnlockCatalog.AllSpellIds.All(id => UnlockCatalog.GetSpell(id)?.Source == UnlockSource.Discovery
+			SpellsAtSchema18.All(id => DiscoverySpellsAtSchema18.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
-			&& UnlockCatalog.AllWizardIds.All(id => UnlockCatalog.GetCharacter(id)?.Source == UnlockSource.Discovery
+				|| HadSpellAtSchema18(id))
+			&& WizardsAtSchema18.All(id => DiscoveryWizardsAtSchema18.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
+				|| HadWizardAtSchema18(id));
 		if (!hadEverything)
 			return;
 
-		foreach (UnlockDefinition definition in UnlockCatalog.All.Where(d => d.Source == UnlockSource.Discovery))
-		{
-			if (definition.Kind == UnlockKind.Character)
-				GlobalStatsManager.UnlockCharacter(this, definition.Id);
-			else if (definition.Kind == UnlockKind.Spell)
-				GlobalStatsManager.UnlockSpell(this, definition.Id);
-		}
+		foreach (string characterId in DiscoveryWizardsAtSchema18)
+			GlobalStatsManager.UnlockCharacter(this, characterId);
+		foreach (string spellId in DiscoverySpellsAtSchema18)
+			GlobalStatsManager.UnlockSpell(this, spellId);
 	}
 
 	/// <summary>
@@ -368,12 +398,12 @@ public class SaveData
 	private void MigrateCollectorIntoCompletedCampaign()
 	{
 		bool hadEverything =
-			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+			SpellsAtSchema18.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
-			&& UnlockCatalog.AllWizardIds.All(id => WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
+				|| HadSpellAtSchema18(id))
+			&& WizardsAtSchema18.All(id => WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| HadWizardAtSchema18(id));
 		if (!hadEverything)
 			return;
 
@@ -396,11 +426,11 @@ public class SaveData
 	private void MigrateStarfallIntoCompletedCampaign()
 	{
 		bool hadEverything =
-			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+			SpellsAtSchema18.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
-			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
+				|| HadSpellAtSchema18(id))
+			&& WizardsAtSchema18.All(HadWizardAtSchema18);
 		if (!hadEverything)
 			return;
 
@@ -423,10 +453,10 @@ public class SaveData
 	private void MigrateFamiliarIntoCompletedCampaign()
 	{
 		bool hadEverything =
-			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+			SpellsAtSchema18.All(id => SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
-			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
+				|| HadSpellAtSchema18(id))
+			&& WizardsAtSchema18.All(HadWizardAtSchema18);
 		if (!hadEverything)
 			return;
 
@@ -449,9 +479,9 @@ public class SaveData
 	private void MigrateFacingSpellsIntoCompletedCampaign()
 	{
 		bool hadEverything =
-			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
-				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
-			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
+			SpellsAtSchema18.All(id => SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| HadSpellAtSchema18(id))
+			&& WizardsAtSchema18.All(HadWizardAtSchema18);
 		if (!hadEverything)
 			return;
 
@@ -519,6 +549,131 @@ public class SaveData
 		TotalCurrency += refund;
 		return refund;
 	}
+
+	/// <summary>
+	/// Schema 19: every spell that is not a starter is an achievement's (.ai/achievements-and-secrets.md
+	/// section 3). It only adds: nothing anybody owns is taken away, and no Arcane Energy changes hands.
+	/// </summary>
+	/// <remarks>
+	/// The steps, in the doc's order:
+	///   1. initialise GlimpsedSecretIds and LifetimeStats.EventsWon;
+	///   2. seed EventsWon from what the save owns, through the seven discovery unlocks as they stood at
+	///      18 (<see cref="DiscoveriesAtSchema18"/>), and record as done - quietly - every event and secret
+	///      deed whose fact the save already holds, so the next run's end does not announce as new an
+	///      event won a month ago. A save credited with discoveries by schema 10, or with Wishing Coin and
+	///      Gilded Mote by schema 9's payback, owns them and so has their deeds: what it was credited with;
+	///   3. reconcile: every deed done is granted its current unlock (Survivor done gets Hollow Star,
+	///      Unwound done gets Fireball), never its Arcane Energy - The Long Road Back done keeps its Fireball
+	///      and is not paid the 300 its deed pays now;
+	///   4. a save that met the schema 18 gate - every spell of the 35 and every wizard of the 7, frozen
+	///      here - gets the Emberdeep written into its opened list, which the gate honours (rule 1), so
+	///      whatever the gate is, a save that could enter the Emberdeep still can; and any gate chapter
+	///      met under the new rule is written open too;
+	///   5. shop spells: nothing. A bought spell is in UnlockedSpellIds and stays; its vault still pays the
+	///      run reward and the page mark when found.
+	/// Internal for RegressionChecks.ValidateAchievementMigration, which runs it a second time on a
+	/// migrated save to prove it changes nothing then.
+	/// </remarks>
+	internal void MigrateToAchievementUnlocks()
+	{
+		// Read before anything is added: the old gate as the save stood at 18.
+		bool metOldGate = MetFinalGateAtSchema18();
+
+		GlimpsedSecretIds ??= new List<string>();
+		Lifetime ??= new LifetimeStats();
+		Lifetime.EventsWon ??= new List<string>();
+
+		foreach ((string siteId, UnlockKind kind, string id) in DiscoveriesAtSchema18)
+		{
+			bool owned = kind switch
+			{
+				UnlockKind.Character => UnlockedCharacterIds.Any(c => c.Equals(id, System.StringComparison.OrdinalIgnoreCase)),
+				UnlockKind.Boon => UnlockedBoonIds.Any(b => b.Equals(id, System.StringComparison.OrdinalIgnoreCase)),
+				_ => UnlockedSpellIds.Any(s => s.Equals(id, System.StringComparison.OrdinalIgnoreCase)),
+			};
+			if (owned)
+				Lifetime.RecordEventWon(siteId);
+		}
+
+		AchievementContext context = AchievementContext.ForSave(this);
+		foreach (AchievementDefinition deed in AchievementDefinitions.All)
+		{
+			if (deed.CompletesInRun && !GlobalStatsManager.IsAchievementUnlocked(this, deed.Id) && deed.IsComplete(context))
+				UnlockedAchievementIds.Add(deed.Id);
+		}
+
+		AchievementManager.Reconcile(this);
+
+		if (metOldGate)
+			GlobalStatsManager.UnlockStage(this, FinalChapterAtSchema18);
+		GlobalStatsManager.RecordMetGates(this);
+	}
+
+	/// <summary>
+	/// The seven discovery unlocks as they stood at schema 18 - (site, kind, id) - frozen here so the
+	/// schema 19 step reads a save in the terms it was written in, whatever UnlockCatalog becomes.
+	/// </summary>
+	internal static readonly (string SiteId, UnlockKind Kind, string Id)[] DiscoveriesAtSchema18 =
+	{
+		("the_grove", UnlockKind.Spell, "bramble_seed"),
+		("bog_lanterns", UnlockKind.Spell, "contagion"),
+		("caravan_master", UnlockKind.Spell, "iron_palisade"),
+		("gaolers_key", UnlockKind.Character, "tituba"),
+		("the_thaw", UnlockKind.Character, "vainamoinen"),
+		("the_well", UnlockKind.Boon, "wishing_coin"),
+		("the_moot", UnlockKind.Boon, "gilded_mote"),
+	};
+
+	/// <summary>
+	/// Every spell in the catalog at schema 18, the 35 the old final gate counted. The steps before 19 read
+	/// this rather than UnlockCatalog.AllSpellIds: they used to read the live list, so a spell added later
+	/// would have changed what a step that already shipped did to an old save - which is why each new spell
+	/// needed a "SpellsAddedAtSchemaN" list. A new spell needs nothing now.
+	/// </summary>
+	private static readonly string[] SpellsAtSchema18 =
+	{
+		"cinderbreath", "cone_of_cold", "chain_lightning", "obsidian_spike", "magic_missile", "aegis_ward",
+		"arcane_explosion", "frost_shard", "meteor_swarm", "solar_flare", "cyclone_slash", "void_lance",
+		"scorching_ray", "glacial_spike", "toxic_spore_burst", "black_tentacles", "gale_blade", "thorn_vine",
+		"shadow_bolt", "spiritual_weapon", "riptide", "mirefoot", "fireball", "molten_shard", "gravewell",
+		"hollow_star", "kindled_ward", "hunters_draw", "starfall", "familiar", "stormsweep", "sleet_runes",
+		"iron_palisade", "contagion", "bramble_seed",
+	};
+
+	/// <summary>The starters among them at 18, owned by every save without being listed in it.</summary>
+	private static readonly string[] StarterSpellsAtSchema18 =
+	{
+		"cinderbreath", "cone_of_cold", "chain_lightning", "obsidian_spike", "magic_missile", "aegis_ward",
+	};
+
+	/// <summary>The seven wizards the old final gate counted (Laelaps was outside it, the sandbox is no wizard).</summary>
+	private static readonly string[] WizardsAtSchema18 =
+	{
+		"pyromancer", "frostweaver", "stormcaller", "geomancer", "tituba", "vainamoinen", "john_dee",
+	};
+
+	private static readonly string[] StarterWizardsAtSchema18 = { "pyromancer", "frostweaver", "stormcaller", "geomancer" };
+
+	/// <summary>The two wizards found in the world at 18 - Discovery entries then, deeds' rewards since 19.</summary>
+	private static readonly string[] DiscoveryWizardsAtSchema18 = { "tituba", "vainamoinen" };
+
+	/// <summary>The three spells found in the world at 18.</summary>
+	private static readonly string[] DiscoverySpellsAtSchema18 = { "iron_palisade", "contagion", "bramble_seed" };
+
+	/// <summary>The chapter the old gate opened.</summary>
+	private const string FinalChapterAtSchema18 = "stage_7";
+
+	private bool HadSpellAtSchema18(string spellId) =>
+		StarterSpellsAtSchema18.Contains(spellId, System.StringComparer.OrdinalIgnoreCase)
+		|| UnlockedSpellIds.Any(id => id.Equals(spellId, System.StringComparison.OrdinalIgnoreCase));
+
+	private bool HadWizardAtSchema18(string wizardId) =>
+		StarterWizardsAtSchema18.Contains(wizardId, System.StringComparer.OrdinalIgnoreCase)
+		|| UnlockedCharacterIds.Any(id => id.Equals(wizardId, System.StringComparison.OrdinalIgnoreCase));
+
+	/// <summary>The schema 18 gate: every spell and every wizard, in the frozen lists.</summary>
+	internal bool MetFinalGateAtSchema18() =>
+		SpellsAtSchema18.All(HadSpellAtSchema18) && WizardsAtSchema18.All(HadWizardAtSchema18);
 
 	/// <summary>
 	/// Schema 9: passive spells left the game and boons replaced them.
@@ -614,6 +769,12 @@ public class SaveData
 			foundSecretIds.Add(id);
 		}
 
+		var glimpsedSecretIds = new Godot.Collections.Array<string>();
+		foreach (string id in GlimpsedSecretIds)
+		{
+			glimpsedSecretIds.Add(id);
+		}
+
 		var foundUpgradeLevels = new Godot.Collections.Dictionary<string, int>();
 		foreach (KeyValuePair<string, int> entry in FoundUpgradeLevels)
 		{
@@ -659,6 +820,7 @@ public class SaveData
 			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels,
 			["FoundSecretIds"] = foundSecretIds,
 			["FoundUpgradeLevels"] = foundUpgradeLevels,
+			["GlimpsedSecretIds"] = glimpsedSecretIds,
 			["BossRushBestFelled"] = BossRushBestFelled,
 			["BossRushBestClearSeconds"] = BossRushBestClearSeconds,
 			["RunTelemetryHistory"] = telemetryHistory,
@@ -826,6 +988,18 @@ public class SaveData
 				if (!string.IsNullOrWhiteSpace(id))
 				{
 					result.FoundSecretIds.Add(id);
+				}
+			}
+		}
+
+		if (root.ContainsKey("GlimpsedSecretIds"))
+		{
+			foreach (Variant value in root["GlimpsedSecretIds"].AsGodotArray())
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.GlimpsedSecretIds.Add(id);
 				}
 			}
 		}

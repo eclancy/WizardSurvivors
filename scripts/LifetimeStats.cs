@@ -45,6 +45,27 @@ public sealed class LifetimeStats
 	public List<string> ChestSetsCompleted { get; set; } = new();
 	public List<string> CharactersPlayed { get; set; } = new();
 
+	/// <summary>
+	/// Every side event ever won, by site id (SideEventDirector.ForStage): what each event's Road deed
+	/// measures (.ai/achievements-and-secrets.md 2.6). Written by DiscoveryRewards the moment the event
+	/// is won - not at run end, so it is not in <see cref="Absorb"/> - and seeded at schema 19 from the
+	/// unlocks a save already owned.
+	/// </summary>
+	public List<string> EventsWon { get; set; } = new();
+
+	public bool HasWonEvent(string siteId) =>
+		!string.IsNullOrWhiteSpace(siteId)
+		&& EventsWon.Any(id => id.Equals(siteId.Trim(), StringComparison.OrdinalIgnoreCase));
+
+	/// <summary>Records a won event. False when it had been won before.</summary>
+	public bool RecordEventWon(string siteId)
+	{
+		if (string.IsNullOrWhiteSpace(siteId) || HasWonEvent(siteId))
+			return false;
+		EventsWon.Add(siteId.Trim());
+		return true;
+	}
+
 	public float BestTimeOnStage(string stageId) =>
 		!string.IsNullOrWhiteSpace(stageId) && BestTimeByStage.TryGetValue(stageId, out float best) ? best : 0f;
 
@@ -143,6 +164,7 @@ public sealed class LifetimeStats
 			["ChestItemsCollected"] = ToArray(ChestItemsCollected),
 			["ChestSetsCompleted"] = ToArray(ChestSetsCompleted),
 			["CharactersPlayed"] = ToArray(CharactersPlayed),
+			["EventsWon"] = ToArray(EventsWon),
 		};
 	}
 
@@ -170,6 +192,9 @@ public sealed class LifetimeStats
 		if (dict.ContainsKey("ChestItemsCollected")) result.ChestItemsCollected = FromArray(dict["ChestItemsCollected"].AsGodotArray());
 		if (dict.ContainsKey("ChestSetsCompleted")) result.ChestSetsCompleted = FromArray(dict["ChestSetsCompleted"].AsGodotArray());
 		if (dict.ContainsKey("CharactersPlayed")) result.CharactersPlayed = FromArray(dict["CharactersPlayed"].AsGodotArray());
+		// Schema 19. A save without the key reads as no event won; the schema 19 step seeds it from
+		// what the save owns (SaveData.MigrateToAchievementUnlocks).
+		if (dict.ContainsKey("EventsWon")) result.EventsWon = FromArray(dict["EventsWon"].AsGodotArray());
 
 		return result;
 	}
