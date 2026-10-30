@@ -354,6 +354,13 @@ public static class AchievementDefinitions
 			Measure = c => c.Lifetime.HasDefeatedBoss("emberdeep_warden") ? 1f : 0f,
 			Target = 1,
 		},
+		// THE CASTLE'S CHAPTER CLEARS (.ai/endgame-castle.md 1.4). Arcane Energy, never a spell, wizard or
+		// boon: the castle is past the Emberdeep's gate, and a gate may never count what is earned behind
+		// it (.ai/achievements-and-secrets.md 2.5). Not listed until their chapters are playable
+		// (IsChapterBuilt); each boss fights on its stand-in under its own id until then.
+		BossClearArcane("bridge_crossed", "Across the Water", "bridge_constable", "the Last Bridge", 350),
+		BossClearArcane("court_emptied", "No One Left", "court_seneschal", "the Court", 400),
+		BossClearArcane("throne_taken_back", "Taken Back", "throne_dark_wizard", "the Throne", 1000),
 		// The two early chapters (.ai/campaign.md) pay in boons, for the reason the Frozen Waste and
 		// the Sands do. Both boons were sold-but-never-sold (the shop registers no boons), so until then
 		// no new save could ever be dealt them. Listed only once their chapter is playable.
@@ -674,6 +681,24 @@ public static class AchievementDefinitions
 		Description = $"Defeat the boss of {place}.",
 		RewardText = $"Unlocks {boonName}",
 		BoonUnlockId = boonId,
+		Category = AchievementCategory.Exploration,
+		Kind = AchievementKind.Road,
+		Visibility = AchievementVisibility.ChapterOpen,
+		StageId = StageOfBoss(bossId),
+		BossId = bossId,
+		Measure = c => c.Lifetime.HasDefeatedBoss(bossId) ? 1f : 0f,
+		Target = 1,
+	};
+
+	// A chapter clear that pays Arcane Energy, as the Emberdeep's does: the castle's three.
+	private static AchievementDefinition BossClearArcane(string id, string name, string bossId, string place, int amount) => new()
+	{
+		Id = id,
+		DisplayName = name,
+		Description = $"Defeat the boss of {place}.",
+		// "1,000", as "Defeat 2,000 enemies" is written, whatever the machine's culture.
+		RewardText = amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " Arcane Energy",
+		CurrencyReward = amount,
 		Category = AchievementCategory.Exploration,
 		Kind = AchievementKind.Road,
 		Visibility = AchievementVisibility.ChapterOpen,

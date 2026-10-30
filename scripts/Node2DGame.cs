@@ -55,7 +55,8 @@ public partial class Node2DGame : Node2D
 	public float RunPace => TimerVictorySeconds > 0f ? TimerVictorySeconds / ReferenceRunSeconds : 1f;
 
 	/// <summary>The run clock as a position on the reference run. Every pacing check reads this, not timeElapsed.</summary>
-	public float PaceSeconds => timeElapsed / RunPace;
+	/// <remarks>Hook 6: a chapter's rules may pin it (ChapterRules.PinnedPaceSeconds - the Throne's end state).</remarks>
+	public float PaceSeconds => chapterRules?.PinnedPaceSeconds ?? timeElapsed / RunPace;
 
 	private float PaceMinutes => Mathf.Max(0.0f, PaceSeconds / 60.0f);
 	// Fallbacks only. The spawn ring is measured from the visible rectangle now (see
@@ -256,6 +257,11 @@ public partial class Node2DGame : Node2D
 	private TerrainStreamer? terrainStreamer;
 	// Read-only, for the debug harnesses (_UiShot --shore) that need to find a shoreline.
 	public TerrainStreamer? Terrain => terrainStreamer;
+	// The chapter's own rules (ChapterRules, .ai/endgame-castle.md 1.9), or null for a chapter with none -
+	// every chapter of the road. Asked at seven hook points, each marked "Hook N" where it is asked.
+	private ChapterRules? chapterRules;
+	/// <summary>This run's chapter rules, for what belongs to the chapter (its boss, its rooms); null for none.</summary>
+	public ChapterRules? Rules => chapterRules;
 	private ulong terrainSeed;
 	private StageEnvironmentKind terrainKind;
 	private IReadOnlyList<string> terrainTerrainIds = System.Array.Empty<string>();
@@ -510,6 +516,8 @@ public partial class Node2DGame : Node2D
 		bestiary = LoadBestiaryForStage();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
+		// Before anything is placed: the terrain, the side event and the secrets all ask hook 3.
+		CreateChapterRules();
 		ApplyBalancePresetFromSave();
 		// After the preset, which scales the burst window itself, so the two compose.
 		MaxEnemies = Mathf.RoundToInt(MaxEnemies * WideViewEnemyCapScale);
@@ -736,6 +744,49 @@ public partial class Node2DGame : Node2D
 		LoadInitialTerrain();
 		ShowStageIntroLabel();
 		UpdateSpawnScaling();
+		StartChapterRules();
+	}
+
+	// The chapter's rules, if it has any (ChapterRulesCatalog). A Node under the run, so it can process
+	// and is freed with it; named for the log.
+	private void CreateChapterRules()
+	{
+		StageDefinition? stage = StageCatalog.GetByIndex(Global.SelectedStageIdx);
+		Func<ChapterRules>? create = stage != null ? ChapterRulesCatalog.ForStage(stage.Id) : null;
+		if (create == null)
+			return;
+		chapterRules = create();
+		chapterRules.Name = "ChapterRules";
+		chapterRules.Game = this;
+		chapterRules.Stage = stage;
+		AddChild(chapterRules);
+		GD.Print($"Node2DGame: {stage!.DisplayName} plays by its own rules ({chapterRules.GetType().Name}).");
+	}
+
+	// Hooks 1 and 7: run start, and the objective line under the run timer.
+	private void StartChapterRules()
+	{
+		if (chapterRules == null)
+			return;
+		chapterRules.RunStarted();
+		Control? objective = chapterRules.CreateObjective();
+		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
+		if (objective == null || uiOverlay == null)
+		{
+			objective?.QueueFree();
+			return;
+		}
+		objective.Name = "ChapterObjective";
+		objective.MouseFilter = Control.MouseFilterEnum.Ignore;
+		objective.AnchorLeft = 0f;
+		objective.AnchorRight = 1f;
+		objective.OffsetLeft = 0f;
+		objective.OffsetRight = 0f;
+		objective.OffsetTop = ChapterRules.ObjectiveTop;
+		objective.OffsetBottom = ChapterRules.ObjectiveBottom;
+		uiOverlay.AddChild(objective);
+		// Added after the HUD's SafeArea.Apply, so inset on its own (the side event's line had to learn this).
+		SafeArea.ApplyTo(objective);
 	}
 
 	// THE ONLY PLACE THE PLAYER'S HEALTH IS SHOWN.
@@ -1249,10 +1300,15 @@ public partial class Node2DGame : Node2D
 		// Which water art (tools/art/water.py): a forest pond, swamp murk, the Frozen Waste's black
 		// water with an ice shelf, or a stone pool. Each chapter's profile says which.
 		levelPainter.WaterStyle = StageEnvironmentCatalog.Get(kind).WaterStyle;
+		// Which wall art the chapter's walls are drawn with: the jail set unless it has its own
+		// (StageEnvironmentProfile.WallSet, .ai/endgame-castle.md 1.9).
+		levelPainter.WallArtSet = StageEnvironmentCatalog.Get(kind).WallSet;
 		levelPainter.GroundTerrain = layout.GroundTerrain;
 		levelPainter.BaseTerrain = layout.BaseTerrain;
 
-		bool isMaze = layout.Topology == StageTopology.Maze;
+		// The maze's rules for any walled ground: the Cursed Dungeon's maze, and any topology built in a
+		// partial file of LevelGenerator's that says it has walls (LevelLayout.Walled).
+		bool isMaze = layout.Walled;
 		// THE STAGE HAS NO EDGE (issue #35). It used to be one 181x181 grid painted here, with the
 		// player clamped three tiles inside it. Now the ground is streamed in chunks round wherever
 		// the player is (TerrainStreamer, .ai/terrain.md "Chunk streaming"); nothing is painted yet,
@@ -1826,6 +1882,14 @@ public partial class Node2DGame : Node2D
 				CreateDecorSet(forestGroundAccents, 50, 0.86f, 1.06f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
 			}
+			case StageEnvironmentKind.Bridge:
+			case StageEnvironmentKind.Court:
+			case StageEnvironmentKind.Throne:
+				// THE CASTLE (.ai/endgame-castle.md): nothing from the shared decor sets - no rock, bramble
+				// or dead tree on a laid floor. A castle chapter's furniture is its own (the bridge's parapet
+				// and gatehouses, the Court's rooms, the throne) and is placed by its ChapterRules, so its
+				// agent never edits this switch.
+				break;
 			default:
 				// Today that is the Cave (and the placeholder room). Crystals and rubble as before;
 				// what grows underground is bramble and the odd dead tree where the roof has fallen
@@ -5747,7 +5811,8 @@ public partial class Node2DGame : Node2D
 		// Health rides the balance preset the same way elites do, so hardcore keeps its teeth and
 		// casual does not turn the fight into a ten-minute chore.
 		boss.Health = Mathf.RoundToInt(definition.Health * presetElitePowerScale * healthScale);
-		boss.Position = FindBossSpawnPosition();
+		// Hook 4: a chapter whose boss has a place of its own (the bridge's gate).
+		boss.Position = chapterRules?.BossSpawnPoint(definition) ?? FindBossSpawnPosition();
 		boss.Connect(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated)));
 		AddChild(boss);
 		bossInstance = boss;
@@ -5993,7 +6058,8 @@ public partial class Node2DGame : Node2D
 	{
 		Vector2 away = fellAt - (player?.GlobalPosition ?? fellAt);
 		Vector2 direction = away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up;
-		Vector2 at = ReachablePoint(fellAt + direction * VictoryPortalPastFall);
+		// Hook 5: a chapter whose way home is a place (the castle gate, the throne room doors).
+		Vector2 at = chapterRules?.VictoryPortalPoint(fellAt) ?? ReachablePoint(fellAt + direction * VictoryPortalPastFall);
 		victoryPortal = new ArcanePortal { Name = "VictoryPortal", Position = at };
 		CallDeferred(Node.MethodName.AddChild, victoryPortal);
 		SfxPlayer.Global(SfxCatalog.MetaUnlock);
@@ -6344,6 +6410,9 @@ public partial class Node2DGame : Node2D
 	/// </remarks>
 	private bool IsImpassablePosition(Vector2 position)
 	{
+		// Hook 3: ground the chapter has closed (the fallen deck behind the bridge's front).
+		if (chapterRules != null && chapterRules.IsPlacementBlocked(position))
+			return true;
 		if (terrainStreamer == null)
 			return false;
 
@@ -6394,6 +6463,10 @@ public partial class Node2DGame : Node2D
 
 	private Vector2 GetRandomSpawnPositionAroundPlayer()
 	{
+		// Hook 2: a chapter that chooses its own spawn points (the bridge's band). Vetted by the caller
+		// as any point off the ring is.
+		if (chapterRules != null && chapterRules.TryPickSpawnPoint(player.GlobalPosition, out Vector2 chosen))
+			return ClampPositionToStageBounds(chosen);
 		float angle = PickSpawnBearing();
 		var direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
 		float radius = GetSpawnRadiusForDirection(direction);

@@ -200,6 +200,52 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Heath,
 			Gate = StageGate.PreviousBoss,
 		},
+		// THE CASTLE (.ai/endgame-castle.md): his seat, across the water from the end of the road. Three
+		// chapters after the Emberdeep - the Last Bridge, the Court and the Throne - with the Cursed
+		// Dungeon moved in between the first two by piece C2 (its line in CampaignOrder, not here). New
+		// ids, appended, for the reason the early chapters' were (.ai/campaign.md section 3).
+		//
+		// Not playable until each is built (section 9). A closed chapter is skipped by the order, so the
+		// Warden of the Deep opens nothing until the bridge exists and nobody is stopped by one. Each
+		// entry below is its own chapter's: its builder flips IsPlayable last (one line), and the
+		// validator's campaign to-do line for it must be gone first.
+		new()
+		{
+			Id = "stage_11", Index = 11,
+			DisplayName = "The Last Bridge",
+			TerrainCategory = "Bridge deck",
+			FlavorText = "A long stone bridge across the dark sea to the castle on its rock, and it falls in behind you.",
+			CorruptionText = "His seat is across the water.",
+			EnvironmentKind = StageEnvironmentKind.Bridge,
+			Gate = StageGate.PreviousBoss,
+			IsPlayable = false,
+		},
+		new()
+		{
+			Id = "stage_12", Index = 12,
+			DisplayName = "The Court",
+			TerrainCategory = "Castle halls",
+			FlavorText = "The halls of his house: galleries, a great hall laid for a feast, and rooms behind rooms.",
+			CorruptionText = "A court with no one left in it.",
+			EnvironmentKind = StageEnvironmentKind.Court,
+			Gate = StageGate.PreviousBoss,
+			IsPlayable = false,
+		},
+		new()
+		{
+			Id = "stage_13", Index = 13,
+			DisplayName = "The Throne",
+			TerrainCategory = "Throne hall",
+			FlavorText = "One hall of black stone, its doors shut behind you, and the throne at its end.",
+			CorruptionText = "He is here.",
+			EnvironmentKind = StageEnvironmentKind.Throne,
+			// The second gate chapter (.ai/endgame-castle.md 1.6): the Seneschal beaten AND every wizard
+			// freed. "Every wizard whose rescue comes before this chapter" (GlobalStatsManager.GateWizardIds)
+			// is every wizard here, Tituba included, so "he is reachable only when every wizard is free" is
+			// true exactly where he is.
+			Gate = StageGate.PreviousBossAndWizards,
+			IsPlayable = false,
+		},
 	};
 
 	// THE CAMPAIGN, IN THE ORDER IT IS PLAYED - and the only place that order is written.
@@ -213,9 +259,15 @@ public static class StageCatalog
 	//
 	// The Cursed Dungeon is fifth, after four open chapters (.ai/campaign.md): a maze is a harder
 	// ask than an open field, and as the second chapter it was also the second-toughest spawn table
-	// in the game. The final chapter is last and is a gate chapter (PreviousBossAndWizards): its
-	// previous boss AND the wizards freed before it. Chapters outside the campaign (the Sketchbook)
-	// are not listed; they must be Open.
+	// in the game. The Emberdeep is the first gate chapter (PreviousBossAndWizards): its previous boss
+	// AND the wizards freed before it. The castle comes after it (.ai/endgame-castle.md), boss-gated,
+	// and ends on a second gate chapter, the Throne; the last chapter is always a gate. Chapters
+	// outside the campaign (the Sketchbook) are not listed; they must be Open.
+	//
+	// The castle's lines are written now and skipped until each chapter is playable. The Dungeon's
+	// own line moves between the Last Bridge and the Court in piece C2 (.ai/endgame-castle.md 1.3),
+	// which is why the castle's three are kept a line apart below: C2's edit lands on a line of its
+	// own and never on one of theirs.
 	private static readonly string[] CampaignOrder =
 	{
 		"stage_0",  // 1  Enchanted Forest - Elderbark
@@ -228,6 +280,10 @@ public static class StageCatalog
 		"stage_5",  // 8  Frozen Waste - the Still Warden
 		"stage_6",  // 9  Scorched Sands - the Long Coil
 		"stage_7",  // 10 The Emberdeep - the Warden of the Deep (the Long Coil and every wizard on the road first)
+		"stage_11", // 11 The Last Bridge - the Constable (castle, not yet playable)
+		// (the Cursed Dungeon's line comes here when C2 moves it into the castle)
+		"stage_12", // 12 The Court - the Seneschal (castle, not yet playable)
+		"stage_13", // 13 The Throne - the procession, then him (the Seneschal and every wizard first; not yet playable)
 	};
 
 	private static StageDefinition[] campaign;

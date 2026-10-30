@@ -241,14 +241,22 @@ public static class RegressionChecks
 	// a found level of Growth, Amount or a charge would undercut the Apotheosis floor measured with the
 	// shop at its cap; and two keepsakes of one stat would let a save find it twice.
 	// THE BOSS RUSH (issue #12, BossRushCatalog). Its roster is derived, not written, so what can go
-	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
-	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
+	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the arena's
+	// (the Emberdeep's, StageCatalog.GateChapter: the run would end on the wrong fight - and a castle
+	// boss built before C2's RoadOrder would land after it), or arrivals that are not strictly before the
 	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
 	// Traps fit their map (2026-10-28, "there shouldn't be fire vents outside. double check that all
 	// traps make sense for the map they're in"). A flame vent is an iron grate set in a floor: indoors
 	// only. Spike plates are built too: only where somebody built things. The lists are the decision.
-	private static readonly StageEnvironmentKind[] IndoorChapters = { StageEnvironmentKind.Castle };
-	private static readonly StageEnvironmentKind[] BuiltChapters = { StageEnvironmentKind.Castle, StageEnvironmentKind.Ruins };
+	// The castle's three are written in now (.ai/endgame-castle.md 1.9) so its chapters' agents never edit
+	// this file to place a trap: the Court and the Throne are indoors, and the bridge is built though open.
+	private static readonly StageEnvironmentKind[] IndoorChapters =
+		{ StageEnvironmentKind.Castle, StageEnvironmentKind.Court, StageEnvironmentKind.Throne };
+	private static readonly StageEnvironmentKind[] BuiltChapters =
+	{
+		StageEnvironmentKind.Castle, StageEnvironmentKind.Ruins,
+		StageEnvironmentKind.Bridge, StageEnvironmentKind.Court, StageEnvironmentKind.Throne,
+	};
 
 	private static void ValidateHazardPlacement(List<string> warnings)
 	{
@@ -272,7 +280,7 @@ public static class RegressionChecks
 			return;
 		}
 		if (finale == null || !ReferenceEquals(roster[roster.Count - 1], finale))
-			warnings.Add($"Boss Rush: the roster ends on '{roster[roster.Count - 1].Id}', not the final chapter's boss '{finale?.Id}'.");
+			warnings.Add($"Boss Rush: the roster ends on '{roster[roster.Count - 1].Id}', not the arena's boss '{finale?.Id}' ({BossRushCatalog.Arena?.DisplayName}).");
 		if (roster.Select(b => b.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != roster.Count)
 			warnings.Add("Boss Rush: a boss is in the roster twice.");
 		foreach (BossDefinition boss in roster)
@@ -495,9 +503,14 @@ public static class RegressionChecks
 			warnings.Add($"World map: {problem}");
 			return;
 		}
+		// A chapter not built yet may stand off the map for now (.ai/endgame-castle.md 1.9): the world map
+		// is its own piece (C8), and drawing the castle waits on the Dungeon's move. Its missing stop is
+		// then an item on that chapter's campaign to-do line (ValidateCampaignToDo), and the screen leaves
+		// it out quietly (WorldMap.BuildStops). A PLAYABLE chapter with no stop is a fault, as always, so
+		// none can flip with its place undrawn.
 		foreach (StageDefinition stage in StageCatalog.All)
 		{
-			if (map.Get(stage.Id) == null)
+			if (map.Get(stage.Id) == null && stage.IsPlayable)
 				warnings.Add($"World map: {stage.DisplayName} ({stage.Id}) has no place on the map - add it to PLACES in tools/art/world_map.py and draw its landmark.");
 		}
 		WorldMapStop rush = map.Get(WorldMapLayout.BossRushId);
@@ -1387,6 +1400,22 @@ public static class RegressionChecks
 		}
 		if (!catalog.TileVariants(LevelGenerator.WallTerrain, "edge_bottom").Any(e => e.Dressing == "sconce"))
 			warnings.Add("Ground: the maze walls' faces have no lit sconce. Re-run: python tools/art/tiles.py");
+
+		// A chapter's own wall set (StageEnvironmentProfile.WallSet; court_walls.py, ruin_walls.py...) is
+		// held to the same roles the moment the manifest has any of it: the painter takes a set whole or not
+		// at all (LevelTilePainter.WallArtSet), so a set missing a role would paint that role as the void.
+		// A set nobody has drawn yet paints the jail walls, and is its chapter's to-do, not a fault.
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			string set = StageEnvironmentCatalog.Get(kind).WallSet;
+			if (set == StageEnvironmentProfile.DefaultWallSet || catalog.TileVariants(set, "fill").Count == 0)
+				continue;
+			foreach (string role in wallRoles)
+			{
+				if (!catalog.TileVariants(set, role).Any(e => e.Role == role && e.Dressing == null))
+					warnings.Add($"Ground: {kind}'s wall set '{set}' has no plain '{role}' tile, so those cells paint as the black void. Re-run: python tools/art/tiles.py");
+			}
+		}
 		foreach (string shade in new[] { "shade_n", "shade_w", "shade_nw", "shade_corner" })
 		{
 			if (!catalog.TileVariants("wall_shadow", shade).Any(e => e.Role == shade))
@@ -1598,13 +1627,25 @@ public static class RegressionChecks
 		var generator = new LevelGenerator();
 		var autotiler = new TerrainAutotiler();
 
-		foreach (StageEnvironmentKind kind in new[] { StageEnvironmentKind.Swamp, StageEnvironmentKind.Volcanic })
+		// The two open stages that stamp the most, and every chapter on a topology built in a partial file
+		// of LevelGenerator's (the bridge's band, the Court's layout, the Ruins' walls, the Cave's
+		// caverns): each is held to the rule the day its file is built, with no edit here.
+		var seamKinds = new List<StageEnvironmentKind> { StageEnvironmentKind.Swamp, StageEnvironmentKind.Volcanic };
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			StageTopology built = generator.Describe(kind).Topology;
+			if (built != StageTopology.Open && built != StageTopology.Maze)
+				seamKinds.Add(kind);
+		}
+
+		foreach (StageEnvironmentKind kind in seamKinds)
 		{
 			LevelLayout layout = generator.Describe(kind);
 			foreach ((int cx, int cy) in new[] { (0, 0), (3, -2) })
 			{
-				TileResolution[,] narrow = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m), layout.BaseTerrain);
-				TileResolution[,] wide = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m * 2), layout.BaseTerrain);
+				// Cleaned as the game cleans it: walled ground is not (Node2DGame, TerrainStreamer).
+				TileResolution[,] narrow = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m), layout.BaseTerrain, cleanup: !layout.Walled);
+				TileResolution[,] wide = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m * 2), layout.BaseTerrain, cleanup: !layout.Walled);
 				int differ = 0;
 				for (int x = 0; x < c; x++)
 					for (int y = 0; y < c; y++)
@@ -2003,6 +2044,18 @@ public static class RegressionChecks
 				warnings.Add($"Campaign: {gate.DisplayName} stays closed to a save that has beaten its previous boss and freed every wizard.");
 		}
 
+		// NOTHING UNBUILT IS EVER WRITTEN INTO A SAVE (.ai/endgame-castle.md 1.9). An unbuilt gate's
+		// previous playable chapter is earlier than it will be - the Throne's is the Emberdeep until the
+		// bridge and the Court exist - so a save with the Warden of the Deep beaten and every wizard free
+		// "meets" it; writing that down (RecordMetGates, at every run's end) would hand the Throne to that
+		// save the day it flips, past a bridge and a court it never crossed. Every boss beaten and every
+		// wizard free is the save most likely to be handed something.
+		SaveData veteran = SaveThroughGates();
+		foreach (BossDefinition beaten in BossCatalog.All)
+			veteran.Lifetime.BossesDefeated.Add(beaten.Id);
+		foreach (StageDefinition written in GlobalStatsManager.RecordMetGates(veteran).Where(s => !s.IsPlayable))
+			warnings.Add($"Campaign: {written.DisplayName} is not playable, but a save that has beaten every boss had it written into its opened chapters (GlobalStatsManager.RecordMetGates).");
+
 		ValidateCampaignToDo(warnings);
 	}
 
@@ -2055,6 +2108,10 @@ public static class RegressionChecks
 	// playable. A PLAYABLE chapter with any of these is not a to-do but a fault, and says so.
 	private static void ValidateCampaignToDo(List<string> warnings)
 	{
+		// The world map is asked once, for the castle's chapters that have no stop yet (ValidateWorldMap
+		// leaves those to this list).
+		WorldMapLayout map = WorldMapLayout.Load(out _);
+		var generator = new LevelGenerator();
 		foreach (StageDefinition stage in StageCatalog.Campaign)
 		{
 			var todo = new List<string>();
@@ -2064,14 +2121,24 @@ public static class RegressionChecks
 			MusicSet own = MusicCatalog.OwnSetForStage(stage.Index);
 			if (own != null && own.StandIn != null && !own.IsRendered)
 				todo.Add($"music plays '{own.StandIn.Id}' until {own.Id}_bed/_pulse/_lead.wav are rendered and imported");
+			// The castle's plumbing (.ai/endgame-castle.md 1.9): a topology named and not yet built, rules
+			// designed and still the null line, a place on the world map not yet drawn.
+			LevelLayout ground = generator.Describe(stage.EnvironmentKind);
+			if (ground.DeclaredTopology != ground.Topology)
+				todo.Add($"its ground is open field until LevelGenerator.{ground.DeclaredTopology}.cs builds the {ground.DeclaredTopology} topology");
+			if (ChapterRulesCatalog.IsAwaitingRules(stage.Id))
+				todo.Add("its rules are still the null line in ChapterRulesCatalog");
+			// (A playable chapter with no stop is ValidateWorldMap's fault to report, not a to-do.)
+			if (!stage.IsPlayable && map != null && map.Get(stage.Id) == null)
+				todo.Add("it has no place on the world map (PLACES in tools/art/world_map.py)");
 
 			if (todo.Count == 0)
 				continue;
 			if (stage.IsPlayable)
 				warnings.Add($"Campaign: {stage.DisplayName} is playable but still has stand-ins - " + string.Join("; ", todo) + ".");
 			else
-				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {stage.DisplayName} ({stage.Id}) is not playable yet - "
-					+ string.Join("; ", todo) + "; then its side event line, its ground, and IsPlayable = true last.");
+				warnings.Add($"Campaign to-do (.ai/campaign.md 7, .ai/endgame-castle.md 9): {stage.DisplayName} ({stage.Id}) is not playable yet - "
+					+ string.Join("; ", todo) + "; then IsPlayable = true, last.");
 		}
 
 		// A thing found in the world needs somewhere to find it. A discovery whose site no chapter's
@@ -2146,7 +2213,9 @@ public static class RegressionChecks
 		SaveData done = SaveWithEverything();
 		done.SchemaVersion = 12;
 		done.Migrate(log: false);
-		StageDefinition final = StageCatalog.FinalChapter;
+		// The gate chapter (the Emberdeep), which is what such a save had met - not FinalChapter, which is
+		// the castle's Throne and not playable yet, so reading it would quietly check nothing.
+		StageDefinition final = StageCatalog.GateChapter;
 		if (final != null && final.IsPlayable && !GlobalStatsManager.IsStageAvailable(done, final))
 			warnings.Add($"Migration: a save with every spell and wizard cannot enter {final.DisplayName} after schema 13.");
 	}
@@ -3663,7 +3732,9 @@ public static class RegressionChecks
 		foreach (string id in UnlockCatalog.AllWizardIds.Where(id => !id.Equals("john_dee", StringComparison.OrdinalIgnoreCase)))
 			complete.UnlockedCharacterIds.Add(id);
 		complete.Migrate();
-		StageDefinition finale = StageCatalog.FinalChapter;
+		// The gate chapter, not the last: the Emberdeep was the finale these saves had met, and the last
+		// chapter is the castle's Throne now - not playable yet, which would turn this check off quietly.
+		StageDefinition finale = StageCatalog.GateChapter;
 		if (!GlobalStatsManager.IsCharacterUnlocked(complete, "john_dee")
 			|| (finale != null && finale.IsPlayable && !GlobalStatsManager.IsStageAvailable(complete, finale)))
 			warnings.Add("A save that had freed every wizard and recovered every spell at schema 11 loses the Emberdeep: SaveData.MigrateCollectorIntoCompletedCampaign did not credit John Dee, or schema 19 did not keep the gate open.");

@@ -53,8 +53,13 @@ public static class BossRushCatalog
 	/// </remarks>
 	public const float ArcaneBonusShare = 0.5f;
 
-	/// <summary>The chapter the rush is fought in: the campaign's last.</summary>
-	public static StageDefinition Arena => StageCatalog.FinalChapter;
+	/// <summary>
+	/// The chapter the rush is fought in: the Emberdeep, the first gate chapter (StageCatalog.GateChapter).
+	/// It was the campaign's last (FinalChapter), which is the Throne once the castle comes after the
+	/// gate - and the rush is the road's wardens on the road's summit, not a fight in his hall
+	/// (.ai/endgame-castle.md 1.8, unchanged by Eric's choice).
+	/// </summary>
+	public static StageDefinition Arena => StageCatalog.GateChapter;
 
 	/// <summary>
 	/// Every campaign boss that has a scene of its own, in campaign order; the final chapter's is

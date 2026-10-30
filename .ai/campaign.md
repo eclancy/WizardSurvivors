@@ -105,7 +105,8 @@ Everything that used to encode the order now reads it:
 | the locked hint | `StageDefinition.LockedHint`, derived (`StageCatalog.LockedHintFor`) | a literal per chapter ("clear the Cursed Dungeon") |
 | the stage select's order | `StageCatalog.InDisplayOrder` (campaign, then the chapters outside it) | roster order, so the Dungeon was second |
 | the deeds page's order | `AchievementDefinitions.All` puts the chapter clears in campaign order in their own slots | written order |
-| the final chapter | `StageCatalog.FinalChapter` (last in the order, the one `CampaignComplete` gate) | implied |
+| the final chapter | `StageCatalog.FinalChapter` (last in the order: the castle's Throne since `.ai/endgame-castle.md`'s plumbing, a gate chapter) | implied |
+| the gate chapter | `StageCatalog.GateChapter` (the first `PreviousBossAndWizards` chapter, the Emberdeep): what Boss Rush's arena and the migration checks read | `FinalChapter`, until the castle came after it |
 
 **Not playable means skipped.** `PreviousChapter` and `ChapterOpenedBy` step over a chapter whose
 `IsPlayable` is false, so the order is live before the new chapters exist: Elderbark opens the Cave
