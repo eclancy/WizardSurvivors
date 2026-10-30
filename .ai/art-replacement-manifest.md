@@ -529,6 +529,14 @@ their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn win
 `scenes/shaders/cyclone_whirl.gdshader` on the world's 2-unit cell; Wind Shear's crescents and the
 Endless Chase's throws are stamped in world-grid cells. Section 9 has its audit.
 
+`HollowStar`, `IronPalisade`, `Starfall`, `ThunderStrike` (Gale Blade's Thunderhead) and `LatticeField`
+(the Lattice) no longer have it either (2026-10-29): Hollow Star's well is one shader on one quad
+(`scenes/shaders/hollow_star_well.gdshader`), every line these spells drew is a `SpellStrokes` stroke
+on the world's 2-unit cell (`spell_strokes.gdshader`), Iron Palisade's stakes and caltrops are steel-row
+pixels drawn upright in world coordinates, and every fade among them - and the Familiar's, Gravewell's
+and Mirefoot's wisps' - is a dither (`spell_dither.gdshader`). Section 9, "The trap and star spells'
+shared pieces" and after, has each part.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
@@ -930,6 +938,25 @@ icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall
 | `WispSwarm` | Passed as cells; faded with alpha | Faded by dither, its dark seam with it |
 | `ThunderStrike` | **Failed**: three translucent `DrawPolyline`s and two soft discs | Strokes: a white-hot spine 3 px across, a hot body, the edge as a dithered glow; the knot a white point in a dithered hot glow; the flicker a dissolve |
 | `LatticeField` | **Failed**: `DrawLine` arcs and translucent halos | Strokes: hot spines with a dithered edge, kinked as before; each linked body's halo a ring of the ramp's mid at the old halo's edge, dithered to half (a status mark, not an area marker; a fill of dots read as a screen door) |
+
+### The Familiar
+
+| Part | Audit | Now |
+|---|---|---|
+| The creatures (`tools/art/familiar.py`, x2) | Pass - opaque, on-palette, binary alpha. The dog's toned-down eye is untouched | Unchanged |
+| The blink | **Failed**: the sprite faded out and in with alpha | Dissolves by texel dither, whole art pixels |
+| Jaws, claws, pecks, puffs, howls, feathers | Passed as cells; failed on their alpha fades | Faded by dither |
+
+### The trap and star spells: what only a build checked, and what still needs eyes
+
+Built, validated (`ContentValidator`: 0 errors, the usual test-wizard warning) and photographed with
+`_UiShot` before and after (`vis_traps_*`). Not photographed in the act: the Familiar's blink (0.14 s;
+it rides the same texel dither as Gravewell's fading pit, which was), Twin Stars' tether and Nova
+Seed's shards only at the game's zoom in a scattered crowd. Still for eyes in a real run: the phone's
+portrait canvas - nothing here is layout, but what the strokes and the dither cost on the Pixel 9 is
+unmeasured (`--profile` shows Starfall's section) - and whether Glacial Spike's fixed-size spike reads
+right in a level 8 crowd now that only its ice debris grows with Area. `.ai/spell-roster.md` still says
+Glacial Spike's "drawing follows" its Area: it is the debris that does.
 
 ### Cyclone Slash
 
