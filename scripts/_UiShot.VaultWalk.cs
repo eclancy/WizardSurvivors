@@ -26,6 +26,7 @@ public partial class _UiShot
 	{
 		SwallowHole => new SwallowHoleWalk { Director = director, Hero = hero },
 		BrokenWard => new BrokenWardWalk { Director = director, Hero = hero },
+		BuriedRunes => new BuriedRunesWalk { Director = director, Hero = hero },
 		_ => new VaultProbe { Director = director, Hero = hero },
 	};
 
@@ -648,5 +649,111 @@ public partial class _UiShot
 			}
 			return false;
 		}
+	}
+
+	// THE BURIED RUNES (8.8): nothing shows while he keeps moving; a short stop grows the calm but shows
+	// nothing, and walking on lets the wind back; two seconds still near the middle shows all three stones;
+	// he walks onto each in turn and digs it; the third sends the light to him.
+	private partial class BuriedRunesWalk : VaultWalk
+	{
+		private BuriedRunes runes;
+		private int sub;
+		private float mark;
+		private int digging;
+
+		protected override bool ExpectSolid => false;
+		protected override float WorkLimit => 60f;
+
+		protected override bool Work(float delta, float seconds)
+		{
+			runes ??= Vault as BuriedRunes;
+			if (runes == null)
+			{
+				Check("the vault is a BuriedRunes", false);
+				Finish();
+				return false;
+			}
+			Vector2 c = runes.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+					Check($"no stone shows on arrival ({runes.Shown} shown)", runes.Shown == 0);
+					mark = seconds;
+					sub = 1;
+					return false;
+				case 1:
+				{
+					// Keep walking, round the middle, for three seconds.
+					float a = (seconds - mark) * 1.6f;
+					SteerTo(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 220f, 1f);
+					if (seconds - mark < 3f)
+						return false;
+					Check($"walking through the field shows nothing ({runes.Shown} shown, settled {runes.Settled:0.00})", runes.Shown == 0);
+					Steering = false;
+					Pin = Hero.GlobalPosition;
+					mark = seconds;
+					sub = 2;
+					return false;
+				}
+				case 2:
+					// A short stop: the calm grows, nothing shows yet.
+					if (seconds - mark < 1.3f)
+						return false;
+					Check($"a short stop starts the snow settling ({runes.Settled:0.00}) and shows nothing yet ({runes.Shown})", runes.Settled > 0.2f && runes.Shown == 0);
+					Shot("standing still: the wind drops round him");
+					mark = seconds;
+					sub = 3;
+					return false;
+				case 3:
+					// Walk on: the wind comes back.
+					if (!SteerTo(c, 12f) && seconds - mark < 4f)
+						return false;
+					Check($"walking on, it stops settling ({runes.Settled:0.00}) and nothing shows ({runes.Shown})", runes.Settled == 0f && runes.Shown == 0);
+					mark = seconds;
+					sub = 4;
+					return false;
+				case 4:
+					// Now stand at the middle and hold.
+					if (seconds - mark < StillCheckEarly)
+						return false;
+					Check($"before two seconds still, nothing shows ({Hero.StillSeconds:0.0} s, {runes.Shown} shown)", runes.Shown == 0);
+					sub = 5;
+					return false;
+				case 5:
+					if (seconds - mark < 2.6f)
+						return false;
+					Check($"two seconds still at the middle: all three stones show ({runes.Shown})", runes.Shown == BuriedRunes.RuneCount);
+					Shot("the snow has settled: the stones show");
+					mark = seconds;
+					sub = 6;
+					return false;
+				case 6:
+				{
+					// Walk onto each in turn.
+					if (!SteerTo(runes.RuneAt(digging), 10f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 7;
+					return false;
+				}
+				case 7:
+					if (seconds - mark < 0.3f)
+						return false;
+					Check($"stone {digging + 1} dug ({runes.Dug} dug)", runes.IsDug(digging) && runes.Dug == digging + 1);
+					if (digging == 1)
+						Shot("two dug");
+					digging++;
+					mark = seconds;
+					if (digging < BuriedRunes.RuneCount)
+					{
+						sub = 6;
+						return false;
+					}
+					return true;
+			}
+			return false;
+		}
+
+		private const float StillCheckEarly = 1.5f;
 	}
 }

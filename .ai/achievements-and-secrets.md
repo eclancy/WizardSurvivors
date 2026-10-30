@@ -755,6 +755,18 @@ No *strike* here: it is the thaw's.
 | I3 | The Watch-Fire | planned, keepsake | 10-12 | guarded, then linger | a cold brazier on a ridge | a chest; 150 Arcane Energy, once |
 | I4 | **The Ice Window** | **new** | mid | **circle** a clear pane of lake ice with something warm frozen under it | the one clear patch in white ice | a flask and 25 Arcane Energy |
 
+**I2 built (2026-10-30, `wip/vaults-b`):** `BuriedRunes.cs`, the blowing snow and the calm
+`scenes/shaders/drift_field.gdshader` (two quads: streaks in the air with the wind, dense in a 640 px
+field and thinning out over two chunks; on the ground, the calm - clear ground ringed by the drift the
+wind dropped, solid cells, never a dithered wash), art `tools/art/secret_frost.py` (three flat stones
+each cut with the Sleet Rune diamond and a different mark in it; drifts that all lie one way). Stillness
+is `Player.StillSeconds`: in the field the calm grows from his feet as he holds, and at 2 s every stone
+within 400 px shows, with the warm glint on its cut, and stays shown; walking on lets the wind back. He
+digs each by walking onto it, any order; the third sends the light to him. Nothing solid. Walked on seed
+4242, fresh save, all pass (moving shows nothing, a 1.3 s stop grows the calm and shows nothing and
+resets, 2 s at the middle shows all three, the three dug). Needs eyes: whether a player in a horde
+thinks to stop, and whether the streaks over the bodies are too thick in a crowd.
+
 ### 8.9 Scorched Sands (`stage_6`) - event: the caravan master (catch)
 
 | id | secret | status | where | how it is found | tell | pays |
