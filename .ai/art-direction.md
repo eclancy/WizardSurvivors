@@ -299,11 +299,44 @@ effect itself, drawn out of the same number the hit tests:
 - **Pre-hit warnings** are the falling or swelling thing itself (a meteor in the sky, a fattening
   cap), never the area it will hit.
 
-Not markers, and kept: **enemy telegraphs** (`GroundSlamAttack`, `AttackTelegraph`,
-`TelegraphedGroundHit` - they warn the player and must stay), a status mark on one enemy (a carrier's
-mark, a link's halo), and the stand-still gauge at the player's feet (`StanceGlow`), which shows a
-state, not an area. A one-shot shockwave of the effect's own light at the moment of the hit that ends
-on the radius (Arcane Explosion's sheet, Solar Flare's front, Riptide's foam) is an animation.
+Not markers, and kept: a status mark on one enemy (a carrier's mark, a link's halo), and the
+stand-still gauge at the player's feet (`StanceGlow`), which shows a state, not an area. A one-shot
+shockwave of the effect's own light at the moment of the hit that ends on the radius (Arcane
+Explosion's sheet, Solar Flare's front, Riptide's foam) is an animation.
+
+### Enemy attacks telegraph with an icon, and mark the ground only as an outline
+
+Enemy telegraphs were exempt from the rule above until 0.9.3, and were drawn as translucent shapes
+growing on the floor: a lunger's streak, a slammer's swelling disc, a boss's wedge filling in. Eric,
+playing 0.9.2: *"the attacks on enemies that are telegraphed through transparent buildups animations
+are weird. like the jump attacks. remove them. if you need to telegraph an attack, do so with icon
+animation."* So:
+
+- **The clock is an icon over the attacker** (`scripts/TelegraphIcon.cs`, drawn by
+  `tools/art/telegraph_icons.py`): a 16-pixel glyph that pops in empty (steel), fills from the bottom
+  a whole art row at a time in the fire ramp as the wind-up runs out, blinks a step hotter through the
+  last third, and flashes white-hot on the strike. Six glyphs - `!` (a special: the dark, a sweeping
+  beam), claws (a lunge or charge), an arrow onto the ground (a slam, or a hit falling on a spot), a
+  reticle (a shot), a starburst (a blast or a scream all round it), a skull (a summon). One warning
+  ramp for every attacker, fire, because warm reads first in a cold world; the attacker's own colour
+  is on the outline. x3 over an ordinary body (48 world units, the status marks' size - x2 was a speck
+  on the phone), x4 over a boss, on `DrawLayers.AttackIcon` (12) over every body and bolt.
+- **Where the ground matters, the shape is an opaque dashed outline** (`scripts/TelegraphOutline.cs`):
+  a boss's ring or wedge, a charge's lane, a slammer's or exploder's ring, a hit placed away from its
+  maker (`TelegraphedGroundHit`, which also wears the icon in its middle), the lantern-tender's light.
+  Whole cells on the 2-unit grid, in the attacker's warning colour over a stroke of occlusion so it
+  reads on a pale floor and a dark one; full size from the first frame, never grown; it blinks white
+  with the icon at the end. The strike is the same outline solid and white-hot, dissolving through
+  the Bayer matrix (the only fade the contract allows). It is drawn from the numbers
+  `GroundSlamAttack.Contains` tests, in world units whatever the attacker's scale.
+- **No area worth marking, no outline**: the lunger (it dashes at you; the claw says so), the summoner
+  (it hurts nobody), the caster (its aim tick is a short opaque stroke along each bolt's heading, in
+  the second half of the wind-up).
+
+Never a translucent disc, a fill, or a shape that grows over the wind-up. Still on the list for eyes:
+the lantern-tender's dark is a fog that thickens over its wind-up - the attack's own substance, kept,
+with its safe edge now an outline - and three status states that are not attacks (the Hollow Choir's
+revive arc, Mother Rot's regen threads, a burrower's mound) are still drawn translucent.
 
 **Bonelight-specific caution.** The world is cold, so the warm elements (Fire, Light, Earth,
 Lightning) pop hardest and the cold ones (Ice, Water, Metal, Wind) are competing with the
@@ -568,4 +601,7 @@ Phase 2 is also where wave tuning has to be revisited, per the size note in §1.
   ScorchingRay's world effect) and both are why art cannot be replaced one sprite at a time.
 - Add a material colour without adding its five-tone row to §3.
 - Draw a ring, disc or preview round a player spell's hit area (§3, "The player's spells carry no
-  area markers"). Draw the effect out to the radius it tests instead. Enemy telegraphs are exempt.
+  area markers"). Draw the effect out to the radius it tests instead.
+- Telegraph an enemy attack with a translucent or growing shape (§3, "Enemy attacks telegraph with an
+  icon"). The icon over the attacker is the clock; an opaque dashed outline marks the ground, when
+  the ground matters.

@@ -41,10 +41,12 @@ combination and should be deliberate.
 | `Enemy.AdjustSteering(chaseDirection, distanceToPlayer)` | The steering hook. **The returned vector's length is a speed multiplier** — unit to walk, longer to dash, `Vector2.Zero` to hold exactly still (which also suppresses the separation nudge, so a planted enemy cannot drift off its own tell). |
 | `MazeNavigation` (the name is historical) | The one shared navigation field, on every procedural stage: routes round maze walls and water, and the `chaseDirection` a subclass receives already has it folded in. Cost is flat in enemy count. Design, cost and the checks are in `.ai/terrain.md` section 9. A behaviour should take `chaseDirection` and never build its own pathing. |
 | `AttackTelegraph` | The wind-up clock: cooldown → wind-up → resolve exactly once. Deliberately not a Node — a swarm scene should not pay for a child node per attacker. |
-| `GroundSlamAttack` | Warning ring, then everything inside it is hit. The ring drawn and the radius hit are the same number by construction. |
+| `GroundSlamAttack` | A marked shape, then everything inside it is hit. The outline drawn and the radius hit are the same number by construction. |
+| `Enemy.ReadAttackTell` + `TelegraphIcon` | The icon over the attacker's head through a wind-up: pops in, fills, blinks, flashes on the strike. A class says what it is winding up (glyph and progress) and `Enemy` does the rest. See "Telegraphs are icons" below. |
+| `TelegraphOutline` | The ground a shape covers, as an opaque dashed pixel outline, and its strike. Never a translucent fill (0.9.3). |
 | `Enemy.StartDeath()` | Virtual. Drops rewards, leaves the `enemies` group and zeroes collision *in the same frame*, then plays `death`. The hook for every tier 2 behaviour. |
 | `Enemy.ResetForRespawn()` | Virtual. Called when the recycler moves an abandoned enemy back to the ring. |
-| `_Draw()` | `QueueRedraw` already runs every physics frame, so a tell costs only the draw. |
+| `_Draw()` / `DrawGroundTells` | `QueueRedraw` already runs every physics frame, so a tell costs only the draw. What lies on the floor (an outline) goes in `DrawGroundTells`; what belongs to the body (a caster's aim tick) in `_Draw`. |
 | The player's shove | `Enemy.ComputePlayerShove`, read off `Player.ShoveVelocity`. An ordinary enemy in the walking player's lane steps aside as he approaches and is pushed aside once he touches it; the player is slowed per body he is pushing (`Player.CrowdSlowPerEnemy`). Anything with `IsMiniBoss` (`Enemy.BlocksPlayer`) is not pushed and still blocks him, through `Enemy.BlockerCollisionLayer`. See 8, item 10. |
 | The `attack` animation | The art contract already reserves **`attack`, 6 frames, non-looping** on every sheet. The slot for every wind-up exists. |
 | Swarm pressure | `Node2DGame.SwarmPressure.cs` (`.ai/run-pacing.md` 10.3): while the trickle chokes on the cap, `Enemy.SwarmSpeedScale` speeds stragglers, the recycler brings bodies back ahead of the player, and `Enemy.AbsorbIntoSwarm` folds one body into another (health, `SwarmMass`, XP summed). Only bodies `SpawnEnemy` marked `SwarmEligible` - never an elite, event body, minion or boss - and only the exact `Enemy` type folds. See 8, item 11. |
@@ -55,7 +57,9 @@ combination and should be deliberate.
 
 `Enemy` plays exactly one animation by name — `death`. Every telegraphed enemy in the game draws a
 geometric tell and stands in its `moving` loop while doing it. The art shipped (278 frames across
-the roster); the code has never asked for it.
+the roster); the code has never asked for it. *(Since written: `PlayAttackAnimation` is called on
+every `Beat.Started`, and the geometric tell is now an icon over the head plus, where the ground
+matters, a dashed outline - see "Telegraphs are icons", section 8.)*
 
 This is the highest-value single change in this document. It improves all five existing behaviours
 at once, it needs no new art, and "archers kneel and wind up" is *mostly just this* — the kneel is
@@ -282,8 +286,16 @@ Every line below is load-bearing, and most were learned by getting them wrong.
 3. **`Vector2.Zero` from `AdjustSteering` means hold exactly still** — it also suppresses the
    separation nudge, which is what stops a planted enemy sliding out from under its own tell.
 4. **The returned vector's length is a speed multiplier.** Return a unit vector to walk at `Speed`.
-5. **Drawing is local space; hitting is global.** The ring drawn and the radius hit must be the
-   same number by construction, not by two numbers that agree today.
+5. **Drawing is local space; hitting is global.** The outline drawn and the radius hit must be the
+   same number by construction, not by two numbers that agree today. (`TelegraphOutline` draws round
+   the canvas's own origin in world units, through the inverse of the body's scale, so an elite's
+   ring is drawn at the radius it hits.)
+5a. **It telegraphs with an icon, never a translucent build-up** (0.9.3). Override
+   `Enemy.ReadAttackTell` - glyph and wind-up progress, read only - and the icon over its head
+   follows. If the ground matters, draw the shape with `GroundSlamAttack.Draw` (or
+   `TelegraphOutline`) in `DrawGroundTells`: an opaque dashed outline, full size from frame one.
+   `RegressionChecks.ValidateTelegraphIcons` reports an enemy class that holds an `AttackTelegraph`
+   or `GroundSlamAttack` and does not override `ReadAttackTell`.
 6. **A `death` animation, or the node frees instantly.** That is the documented fallback, not a bug.
 7. **Anything that spawns enemies is capped** — live *and* lifetime — and its offspring pay no XP.
 8. **Add a `RegressionChecks` assertion.** `dotnet build` validates none of this.
@@ -417,6 +429,48 @@ Every line below is load-bearing, and most were learned by getting them wrong.
     at the edges and no stacks; whether a boss walking through its swarm looks like the swarm parting
     or like bodies popping off it; and whether standing in a full swarm on the phone now hurts too
     much.
+
+### Telegraphs are icons (0.9.3)
+
+Eric, playing 0.9.2: *"the attacks on enemies that are telegraphed through transparent buildups
+animations are weird. like the jump attacks. remove them. if you need to telegraph an attack, do so
+with icon animation."* Every wind-up had been a translucent shape growing on the floor. Now a tell
+has two parts, and only the first is always there (`.ai/art-direction.md` section 3 has the art
+rules):
+
+- **The icon - the clock.** `Enemy` makes an icon node (`DrawLayers.AttackIcon`, over every body and
+  bolt) once in `_Ready`, only for a class that overrides `ReadAttackTell`, and ticks a
+  `TelegraphIcon` from its physics step: it pops in on the wind-up's first frame, fills from the
+  bottom as `progress` runs to 1, blinks in the last third (`TelegraphIcon.PulseLit`), and flashes on
+  the falling edge - the strike. It reads the clocks and never touches them, so every wind-up time,
+  `AttackTelegraph`'s clock and `ResetForRespawn` are exactly as they were (a recycled body's icon is
+  cleared in `Enemy.ResetForRespawn`), and it never shows on a corpse.
+- **The outline - the place, when the place matters.** `GroundSlamAttack.Draw` is an opaque dashed
+  outline at full reach from the first frame (`TelegraphOutline`), blinking white with the icon, and a
+  solid white outline dissolving on the strike. `Contains` is untouched and still the only authority on
+  the hit.
+
+| Attacker | Icon | On the ground |
+|---|---|---|
+| Lunger | claws | nothing - the translucent streak and brace ring are gone; the dash is aimed at the player when the wind-up ends, so the claw is the whole read |
+| Slammer, Rime Guard | slam | dashed ring / dashed wedge |
+| Exploder | starburst | dashed ring |
+| Summoner | skull | nothing - the ring and spawn motes are gone; a summon hurts nobody |
+| Caster (`RangedEnemy`) | reticle | an opaque aim tick per bolt in the second half (the translucent mote is gone) |
+| Boo | starburst (wail) | dashed ring; its phase mark is a placed hit |
+| Lantern-tender | reticle (strikes), slam (oil), `!` (the dark) | the oil's dashed wedge; the dark's safe edge as a dashed ring; each strike's ring under the falling flame |
+| Bosses | claws for a lane (Gaoler, Deep Warden's charge), `!` for a sweeping beam (Archivist, Deep Warden's sweep), reticle for the Kid Wizard's fan, slam otherwise | the dashed ring, wedge or lane |
+| `TelegraphedGroundHit` | the slam glyph in the middle of the spot | dashed ring (ice, embers, stone-falls, a burrower surfacing) |
+
+`_UiShot --tells` stands a lunger, a slammer, an exploder, a summoner and a caster round the player
+mid wind-up (`--fx-lead=34`; add `--burst=9,7 --fx-lead=4` to see an icon pop, fill, blink and flash),
+and `--tells-boss=res://scenes/GaolerBoss.tscn` does one boss; both canvases
+(`--resolution 540x1212 -- --portrait --safe-area` for the phone).
+
+**Still needs eyes in motion:** whether a fast wind-up's blink (the lunger's 0.7 s: about a quarter of a
+second of blinking) reads as urgency or as flicker; whether a packed swarm with three or four icons up
+at once is still readable; whether the Archivist's always-on beam, whose `!` refills every 1.45 s,
+becomes noise; and the Ninth Stone's close, which lays nine icons at once.
 
 ---
 
@@ -603,7 +657,7 @@ per-boss.
 |---|---|---|
 | **Untargetable-but-alive** | `Enemy.SetTargetable(bool)` | Leaves and rejoins the `"enemies"` group and zeroes collision — the same teardown `StartDeath` does, minus the dying. Every targeting path and every AoE sweep in this game reads that group, so one method makes a boss invisible to all of them with no change to any. |
 | **A travelling telegraph** | `BossEnemy.PlantsDuringWindUp` | `GroundSlamAttack` always drew on the caster and resolved at the caster's position, so a boss that simply does not plant carries its warning with it. The primitive turned out to be one bool. |
-| **Telegraph shapes** | `TelegraphShape` + `GroundSlamAttack.Contains` | Ring, Cone and Line. One method decides all three, and both the damage and the paint read it, so a shape cannot be drawn one size and hit at another. |
+| **Telegraph shapes** | `TelegraphShape` + `GroundSlamAttack.Contains` | Ring, Cone and Line. One method decides all three, and the damage and the dashed outline (`TelegraphOutline`) are drawn from the same numbers, so a shape cannot be drawn one size and hit at another. |
 | **Phase changes** | `BossEnemy.BuildPhaseThresholds` / `OnPhaseEntered` | Health fractions, crossed in order and only ever forward. The default is the single enrage threshold, so a boss that overrides nothing behaves exactly as Elderbark always has. |
 | **Linked health** | `HollowChoirBoss` | Deliberately *not* a framework: no manager node, no shared pool. Each voice holds its siblings and the check is three pointer comparisons on the frame one falls. |
 
