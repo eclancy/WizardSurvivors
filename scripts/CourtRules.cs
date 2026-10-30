@@ -130,6 +130,7 @@ public partial class CourtRules : ChapterRules
 				GD.Print($"COURT room {r.Id,-18} centre ({r.Centre.X:0}, {r.Centre.Y:0}) world {r.World}");
 		}
 		fowlCheck = args.Contains("--court-fowl-check");
+		tour = args.Contains("--court-tour");
 	}
 
 	public override void _ExitTree()
@@ -140,6 +141,11 @@ public partial class CourtRules : ChapterRules
 			map.QueueFree();
 		holder = null;
 		map = null;
+		// Let go of the textures now rather than whenever the collector gets to this object, or the engine
+		// counts them as still in use when the game quits.
+		textures.Clear();
+		mapTexture?.Dispose();
+		mapTexture = null;
 	}
 
 	// --- The furniture -----------------------------------------------------------------------------
@@ -339,6 +345,8 @@ public partial class CourtRules : ChapterRules
 		UpdateMap(feet);
 		if (fowlCheck)
 			StepFowlCheck(d, player);
+		else if (tour)
+			StepTour(d, player);
 	}
 
 	private void Enter(CourtRoom room)
@@ -408,6 +416,8 @@ public partial class CourtRules : ChapterRules
 			OffsetTop = 124f,
 			OffsetBottom = 124f + side,
 			StretchMode = TextureRect.StretchModeEnum.Scale,
+			// Its rect is the size asked for, not the texture's 192 cells: KeepSize let it run off the screen edge.
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 		};
@@ -432,7 +442,13 @@ public partial class CourtRules : ChapterRules
 		if (mapFoundShown != found.Count)
 		{
 			mapFoundShown = found.Count;
-			map.Texture = RenderMap();
+			// One texture for the run, redrawn in place as rooms are found.
+			Image image = RenderMap();
+			if (mapTexture == null)
+				mapTexture = ImageTexture.CreateFromImage(image);
+			else
+				mapTexture.Update(image);
+			map.Texture = mapTexture;
 		}
 		Vector2I cell = Layout.WorldToCell(feet);
 		mapDot.Position = new Vector2(cell.X * mapScale - 2f, cell.Y * mapScale - 2f);
@@ -440,7 +456,9 @@ public partial class CourtRules : ChapterRules
 
 	// One pixel a cell: the halls a dim stone, a room unseen dimmer, a room found washed in its wing's
 	// colour, a hidden room nothing at all until it is found. The throne room doors, a pale mark.
-	private ImageTexture RenderMap()
+	private ImageTexture mapTexture;
+
+	private Image RenderMap()
 	{
 		int w = Layout.Grid.Width, h = Layout.Grid.Height;
 		Image image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
@@ -471,7 +489,7 @@ public partial class CourtRules : ChapterRules
 		if (doors.Size != Vector2I.Zero)
 			for (int x = doors.Position.X + doors.Size.X / 2 - 2; x <= doors.Position.X + doors.Size.X / 2 + 2; x++)
 				image.SetPixel(x, doors.Position.Y, new Color(0.86f, 0.88f, 0.93f, 1f));
-		return ImageTexture.CreateFromImage(image);
+		return image;
 	}
 
 	private bool IsHiddenWayCell(Vector2I cell)
@@ -649,5 +667,61 @@ public partial class CourtRules : ChapterRules
 				fowlCheck = false;
 				break;
 		}
+	}
+
+	// --- The headless tour (--court-tour) ----------------------------------------------------------
+	//
+	// Stands the player in every room in turn - the Solar through its hidden way - and says what each
+	// did: whether it was found, its chest or guard, the ward, the map. With _MazeProbe on the Court:
+	//   "$GODOT_BIN" --headless --path . scenes/_MazeProbe.tscn -- --stage=12 --seconds=40 --bot=still --court-tour --no-save-writes
+	// The rooms' reactions are logged by what they leave in the world (a chest, an enemy, a map), not
+	// by asking the rooms what they meant to do.
+
+	private bool tour;
+	private float tourClock;
+	private int tourStop = -1;
+	private int foundEvents;
+	private int foundBeforeTour;
+
+	private void StepTour(float delta, Player player)
+	{
+		if (tourStop < 0)
+		{
+			RoomFound += _ => foundEvents++;
+			// The stair is found on the first frame, before the tour starts listening.
+			foundBeforeTour = found.Count;
+			tourStop = 0;
+			tourClock = -1.5f;
+		}
+		tourClock += delta;
+		if (tourClock < 0.8f)
+			return;
+		tourClock = 0f;
+		if (tourStop > 0)
+		{
+			CourtRoom was = rooms[tourStop - 1];
+			int chests = Game.GetChildren().Count(n => n is ChestReward);
+			string extra = was switch
+			{
+				ChapelRoom c => $"ward {(c.WardActive ? "holding" : "down")}",
+				TreasuryRoom t => $"the Chamberlain {(t.Guard != null ? $"stands ({t.Guard.Name}, {t.Guard.Health} HP)" : "absent")}",
+				MapRoom => $"map {(map != null && IsInstanceValid(map) ? "shown" : "NOT shown")}",
+				KitchensRoom k => $"{k.FlasksLeft} flask(s) in the larder",
+				KeepsakeDoorsRoom kd => $"{kd.OpenCount}/10 doors open",
+				GreatHallRoom g => $"{g.FowlOnTheTables}/12 fowl on the tables",
+				_ => "",
+			};
+			GD.Print($"COURT tour: {was.Place.Id,-18} found={was.Found} (current room {CurrentRoom?.Place.Id ?? "a hall"}); "
+				+ $"chests in the world {chests}; {extra}");
+		}
+		if (tourStop >= rooms.Count)
+		{
+			GD.Print($"COURT tour: done - {found.Count} places found, {CountedRoomsFound}/{Layout.CountedRooms} counted rooms, "
+				+ $"{foundEvents} RoomFound events after the start - {(CountedRoomsFound == Layout.CountedRooms && foundEvents == found.Count - foundBeforeTour ? "PASS" : "FAIL")}");
+			tour = false;
+			return;
+		}
+		CourtRoom next = rooms[tourStop++];
+		player.GlobalPosition = next.Place.Kind == "keepsake" ? next.Place.Centre + new Vector2(0f, 60f) : next.Place.Centre + new Vector2(0f, 40f);
 	}
 }

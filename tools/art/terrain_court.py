@@ -159,34 +159,38 @@ marble_border.lit = ST[0]
 
 
 def body_boards(c):
-    """Oak boards, laid east-west: six planks to the tile on fixed rows, end joints staggered.
+    """Oak boards, laid east-west: four planks to the tile on fixed rows, end joints staggered.
 
     Gold's deep stop for the wood and its shade for the grain - the one warm brown the contract holds
     for a floor, and pigment only. Every plank's seam is on the same row in every variant, so boards
     run on through any neighbour; the end joints and the grain are the variant's own.
     """
     c.rect(0, 0, SIZE - 1, SIZE - 1, GD[4])
-    for row in range(6):
-        top = row * 8
+    # Four planks to the tile, not six: at 8 px a plank the seams photographed as a field of stripes
+    # across a whole room (the Map Room, 2026-10-30). The seam is broken now and then, where two
+    # boards meet tight, and only a plank here and there catches the key along its edge.
+    for row in range(4):
+        top = row * 12
         for x in range(SIZE):
-            c.set(x, top, OCC)                      # the seam
-            if hashed(x, row, 2201) < 0.7:
-                c.set(x, top + 1, GD[3])            # the plank's lit edge
-        # End joints, two a plank row at the variant's own places, kept off the tile edges.
-        for k in range(2):
+            if hashed(x // 3, row, 2201) < 0.82:
+                c.set(x, top, OCC)                  # the seam
+            if hashed(x, row, 2202) < 0.18:
+                c.set(x, top + 1, GD[3])            # a lit edge, here and there
+        # An end joint on some plank rows, at the variant's own place, kept off the tile edges: two a
+        # row read as brickwork, not boards.
+        for k in range(1 if hashed(row, 9, 2204 + T.VARIANT) < 0.55 else 0):
             jx = 6 + int(hashed(row, k, 2203 + T.VARIANT) * 36)
-            for y in range(top + 1, top + 8):
+            for y in range(top + 1, top + 12):
                 c.set(jx, y, OCC)
-                c.set(jx + 1, y, GD[3] if y == top + 1 else GD[4])
-        # Grain: a broken streak along the plank.
-        gy = top + 3 + int(hashed(row, 3, 2207) * 3)
+        # Grain: a broken streak along the plank, in the wood's own shade.
+        gy = top + 4 + int(hashed(row, 3, 2207) * 5)
         gx = int(hashed(row, 4, 2208 + T.VARIANT) * 30)
-        for x in range(gx, gx + 10 + int(hashed(row, 5, 2209) * 8)):
-            if hashed(x, row, 2210) < 0.75:
+        for x in range(gx, gx + 8 + int(hashed(row, 5, 2209) * 8)):
+            if hashed(x, row, 2210) < 0.55:
                 c.set(x % SIZE, gy, GD[3])
     # A knot, now and then.
     if T.VARIANT in (1, 3, 5):
-        kx, ky = T.inside(T.VARIANT, 2215, 6), 4 + 8 * int(hashed(T.VARIANT, 6, 2216) * 5)
+        kx, ky = T.inside(T.VARIANT, 2215, 6), 6 + 12 * int(hashed(T.VARIANT, 6, 2216) * 3.99)
         c.set(kx, ky, OCC)
         c.set(kx + 1, ky, GD[3])
 
@@ -201,7 +205,7 @@ def boards_border(c, x, y, depth, along):
         c.set(x, y, GD[4] if (along // 13) % 2 or depth != 1 else GD[3])
 
 
-boards_border.lit = GD[2]
+boards_border.lit = GD[3]
 
 
 # --- the runners -----------------------------------------------------------------------------------
