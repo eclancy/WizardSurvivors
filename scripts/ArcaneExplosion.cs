@@ -42,14 +42,31 @@ namespace WizardSurvivors.scripts
 		[Export]
 		public float TotalLifetime = 5.0f; // total time before freeing the node; 0 = infinite
 		private float lifeElapsed = 0f;
-		private float elapsed = 0f;
-		private float duration = 0.6f;
 		private float fireTimer = 0f;
-		// cooldown tracking
-		private ParticleProcessMaterial particleMaterial;
-		private GpuParticles2D particles;
-		private AnimatedSprite2D animatedSprite;
 		private CollisionShape2D collisionShape;
+
+		// THE BLAST IS PIXEL ART (2026-10-29, "does not look up to our typical visual fidelity"). It was
+		// spell_fx.py's 32 px ring saved at x2 and shown at range / 32 - its art pixels 6 to 14 world px
+		// wide - over a ring of 64 white GPU particles one world px wide, with every evolution's tint
+		// multiplied over both. Now it is one quad through scenes/shaders/arcane_blast.gdshader, drawn
+		// from `range`, the distance TriggerExplosion tests: a front of the force that lands on that
+		// radius and breaks up there, every art pixel on the world's 2 px grid. The evolutions are painted
+		// there rather than tinted, from what each one does (StartBlast).
+		private const string BlastShaderPath = "res://scenes/shaders/arcane_blast.gdshader";
+		private const float BlastSeconds = 0.4f;
+		private static Shader blastShader;
+		private static readonly StringName ParamRadius = "radius";
+		private static readonly StringName ParamProgress = "progress";
+		private static readonly StringName ParamSeed = "seed";
+		private static readonly StringName ParamDual = "dual";
+		private static readonly StringName ParamStatic = "static_nova";
+		private static readonly StringName ParamSupernova = "supernova";
+		private static readonly StringName ParamEventHorizon = "event_horizon";
+		private static readonly StringName ParamGilded = "gilded";
+		private ShaderMaterial blastMaterial;
+		private float blastAge = -1f;
+		private float blastRadius;
+		private int blastCount;
 
 		public override void _Ready()
 		{
@@ -58,24 +75,10 @@ namespace WizardSurvivors.scripts
 			ZAsRelative = false;
 			ZIndex = DrawLayers.Air;
 			RefreshComputedStats();
-			// We'll trigger explosions on a cooldown timer regardless of enemy proximity
-			particles = GetNode<GpuParticles2D>("Particles");
-			animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 			collisionShape = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
-
-			if (animatedSprite != null)
-			{
-				animatedSprite.Visible = false;
-				animatedSprite.AnimationFinished += OnAnimationFinished;
-			}
-
-			if (particles != null)
-			{
-				particles.Emitting = false;
-				particleMaterial = particles.ProcessMaterial as ParticleProcessMaterial;
-				if (particleMaterial != null)
-					particleMaterial.Set("emission_ring_radius", 0f);
-			}
+			blastShader ??= GD.Load<Shader>(BlastShaderPath);
+			blastMaterial = new ShaderMaterial { Shader = blastShader };
+			Material = blastMaterial;
 
 			// Apply initial scaling if weapon is already set
 			UpdateScale();
@@ -87,17 +90,11 @@ namespace WizardSurvivors.scripts
 
 		private void UpdateScale()
 		{
-			if (animatedSprite == null)
-				return;
-
-			// The sprite is 64x64 pixels. Scale it to match the weapon's range.
-			// Assuming the base sprite at scale 1.0 represents a range of ~32 pixels (half the sprite size)
+			// The collision circle follows the range as it always did; the blast is drawn from the range
+			// itself (_Draw), so there is no sprite to scale.
 			float baseRange = 32.0f;
 			float scaleFactor = range / baseRange;
 
-			animatedSprite.Scale = new Vector2(scaleFactor, scaleFactor);
-
-			// Also scale the collision shape to match
 			if (collisionShape != null && collisionShape.Shape is CircleShape2D circle)
 			{
 				// The original circle radius is ~23, scale it proportionally
@@ -135,17 +132,50 @@ namespace WizardSurvivors.scripts
 				}
 			}
 
-			if (particleMaterial == null)
+			if (blastAge < 0f)
 				return;
-
-			if (elapsed < duration)
-			{
-				elapsed += (float)delta;
-				float t = Mathf.Clamp(elapsed / duration, 0f, 1f);
-				particleMaterial.Set("emission_ring_radius", Mathf.Lerp(0f, range, t));
-			}
-			// visual expansion handled by elapsed/duration
+			blastAge += (float)delta;
+			if (blastAge >= BlastSeconds)
+				blastAge = -1f;
+			else
+				blastMaterial?.SetShaderParameter(ParamProgress, blastAge / BlastSeconds);
+			QueueRedraw();
 		}
+
+		// One quad over the blast, sized in world px - what TriggerExplosion measured in - whatever this
+		// node's scale; the shader decides every pixel and discards the rest.
+		public override void _Draw()
+		{
+			if (blastAge < 0f)
+				return;
+			float half = (blastRadius + 4f) / MathF.Max(0.01f, GlobalScale.X);
+			DrawRect(new Rect2(-half, -half, half * 2f, half * 2f), Colors.White);
+		}
+
+		// The blast's look, from what this detonation does: a second front for Dual Shockwave, the storm's
+		// crackle for Static Nova, the fire ramp for Supernova, a collapse for anything that pulls inward
+		// (Event Horizon), gold for a Legendary. Set once a blast, with the radius it hit.
+		private void StartBlast(bool isVortex)
+		{
+			if (blastMaterial == null)
+				return;
+			blastRadius = range;
+			blastAge = 0f;
+			blastCount++;
+			blastMaterial.SetShaderParameter(ParamRadius, blastRadius);
+			blastMaterial.SetShaderParameter(ParamProgress, 0f);
+			blastMaterial.SetShaderParameter(ParamSeed, (blastCount * 0.6180339f) % 1f * 97f);
+			blastMaterial.SetShaderParameter(ParamDual, SpellData?.HasEvolution(DualShockwaveId) ?? false);
+			blastMaterial.SetShaderParameter(ParamStatic, SpellData?.HasEvolution(StaticNovaId) ?? false);
+			blastMaterial.SetShaderParameter(ParamSupernova, SpellData?.HasEvolution(SupernovaId) ?? false);
+			blastMaterial.SetShaderParameter(ParamEventHorizon, isVortex);
+			blastMaterial.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
+			QueueRedraw();
+		}
+
+		private const string DualShockwaveId = "arcane_explosion_dual_shockwave";
+		private const string StaticNovaId = "arcane_explosion_static_nova";
+		private const string SupernovaId = "arcane_explosion_supernova";
 
 		/// <summary>Detonate now. Called by Player when the charge comes due.</summary>
 		public void TriggerNow()
@@ -156,13 +186,6 @@ namespace WizardSurvivors.scripts
 
 		private void TriggerExplosion()
 		{
-			// Play the animation once
-			if (animatedSprite != null)
-			{
-				animatedSprite.Visible = true;
-				animatedSprite.Play();
-			}
-
 			// Apply to all enemies within range.
 			//
 			// The group, not GetTree().CurrentScene.GetChildren(). The old form only saw enemies
@@ -201,13 +224,7 @@ namespace WizardSurvivors.scripts
 			}
 
 			OpenLingeringRift();
-
-			// Trigger particles and visual expansion
-			if (particles != null)
-			{
-				particles.Emitting = true;
-			}
-			elapsed = 0f;
+			StartBlast(isVortex);
 		}
 
 		// Lingering Rift (Effect ZoneDuration = seconds): the ground the blast went off on keeps hurting
@@ -226,7 +243,6 @@ namespace WizardSurvivors.scripts
 			if (parent == null)
 				return;
 
-			ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Arcane);
 			var rift = new LingeringZone
 			{
 				Name = "LingeringRift",
@@ -235,19 +251,14 @@ namespace WizardSurvivors.scripts
 				TickSeconds = 0.5f,
 				AppliesSlow = false,
 				DamagePerTick = Math.Max(1, Mathf.RoundToInt(damage * RiftTickShare)),
-				FillColor = ramp.Edge with { A = 0.34f },
-				EdgeColor = ramp.Hot with { A = 0.6f },
 				SpellData = SpellData,
 				PlayerRef = player,
 			};
+			// A tear in the ground with the force wound out of it to the zone's radius, not a translucent
+			// disc (scenes/shaders/arcane_rift.gdshader).
+			BlastPoolSurface.Attach(rift, BlastPoolSurface.Kind.ArcaneRift);
 			parent.AddChild(rift);
 			rift.GlobalPosition = GlobalPosition;
-		}
-
-		private void OnAnimationFinished()
-		{
-			if (animatedSprite != null)
-				animatedSprite.Visible = false;
 		}
 
 		public void SetSpellLevel(int level)
@@ -275,7 +286,6 @@ namespace WizardSurvivors.scripts
 			knockbackRange = MathF.Max(0f, BaseKnockbackRange + (SpellData?.GetEffectValueAtLevel(SpellEffect.Knockback, CurrentLevel) ?? 0f)
 				+ (SpellData?.GetKnockbackBonusAtLevel(CurrentLevel) ?? 0f));
 			knockbackSpeed = MathF.Max(0f, BaseKnockbackSpeed);
-			duration = MathF.Max(0.1f, 0.6f * DurationMultiplier);
 		}
 
 		private void ApplyLegacyWeapon(Weapon value)

@@ -1302,3 +1302,22 @@ While this was in hand another session converted `LingeringZone`'s own drawing t
 `fireball.png` is no longer drawn by anything; it and `spell_fx.py`, which draws other spells' sprites too,
 were left in place. Photographed before (`vis_blasts_b_*fb*`) and after (`vis_blasts_a*_fb*`). Still needs
 eyes: Hellfire Nova's blast on a phone, where its band is most of the screen for a fifth of a second.
+
+### Arcane Explosion
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd, with Magic Missile beside it so its charge
+comes due (`--ripen-every=3`): the base spell and level 8 with Dual Shockwave + Supernova, Static Nova +
+Event Horizon and Lingering Rift + Supernova at `--zoom=1.6` on the Cursed Dungeon; Lingering Rift +
+Supernova at the game's zoom on the Frozen Waste, and that and the base on the Sketchbook's paper. No
+wizard's Apotheosis rides on it.
+
+| Part | Audit | Now |
+|---|---|---|
+| The blast, every milestone | **Failed.** `spell_fx.py`'s 32 px ring, saved at x2 and shown at `range / 32` - x3.1 at the base reach, about x7 under Supernova - so its art pixels were 6 to 14 world px wide; every card's tint multiplied over it | `scenes/shaders/arcane_blast.gdshader` on the ArcaneExplosion node, drawn from `range`, the distance `TriggerExplosion` tests: a flash at the heart capped at 22 px; a front of force half a body wide, nine lobes that only ever fall back from it, white-hot on its leading edge and cooling to the ramp's violet behind, landing on the radius a quarter of a second in and breaking up by dither; sparks of it thrown ahead that fall inside the radius, a few motes in its wake; the middle clear, so the wizard is seen in his own spell. **Painted per card:** Dual Shockwave throws a second, thinner front a beat behind the first; Static Nova's front crackles with Lightning; Supernova's burns down Fire's ramp behind its white edge; Event Horizon's - whatever pulls inward - starts on the radius and collapses into a small dithered dark heart, which is the pull it does; a Legendary's front is gold |
+| The ring of particles under it | **Failed.** 64 white `GPUParticles2D`, one world px each, on an emission ring that grew to the range | Removed from `ArcaneExplosion.tscn` |
+| Lingering Rift | **Failed.** `LingeringZone` drawing itself: a translucent violet disc, screen-wide under Supernova | `BlastPoolSurface` through `scenes/shaders/arcane_rift.gdshader`, on the ground: a hole torn in the floor at the middle, dithered dark and lipped with arcane light; arms of the light wound out of it, turning slowly in toward it, their width in world px so a wide rift has longer arms rather than fatter ones and the floor shows between them, their ragged ends falling short of `Radius`; a flare on every half-second bite, so it pulses on the beat it hurts on; a dissolve from the edge in at the end. No lip at the reach - a ring of flakes there read as a dotted outline |
+
+`arcane-explosion.png` is no longer drawn by the scene (`SpellData_ArcaneExplosion.tres` still carries an
+unused `AtlasTexture` of it); it and `spell_fx.py` were left in place. Photographed before
+(`vis_blasts_b_*ae*`) and after (`vis_blasts_a*_ae*`). Still needs eyes: the blast's real cadence in a run
+(the harness detonates it far more often than play does), and Supernova's front on a phone.
