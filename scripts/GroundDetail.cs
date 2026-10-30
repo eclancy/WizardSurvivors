@@ -149,6 +149,24 @@ public static class GroundDetail
 			new("cotton_grass", Site.Shore, null, 0.07f, 4),
 			new("tufts", Site.Shore, null, 0.04f, 1),
 		},
+
+		// THE CASTLE (.ai/endgame-castle.md): STAND-INS, each its own piece's block to replace (C1 the
+		// bridge's detail_bridge.py - cracks, scorch, dropped bolts, pitch stains; C3 the Court's; C4 the
+		// Throne's), a blank line apart. Laid stone, so only what lies on laid stone: no growing thing.
+		[StageEnvironmentKind.Bridge] = new[]
+		{
+			G("cracks", 0.012f, 1), G("rubble", 0.004f), G("pebbles", 0.003f, 1),
+		},
+
+		[StageEnvironmentKind.Court] = new[]
+		{
+			G("cracks", 0.006f, 1), G("pebbles", 0.002f, 1),
+		},
+
+		[StageEnvironmentKind.Throne] = new[]
+		{
+			G("cracks", 0.004f, 1),
+		},
 	};
 
 	private static Rule[] RuinsRules() => new[]

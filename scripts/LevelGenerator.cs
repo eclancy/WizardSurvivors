@@ -4,10 +4,26 @@ using System.Collections.Generic;
 namespace WizardSurvivors.scripts;
 
 /// <summary>Broad generation topology for a stage archetype.</summary>
+/// <remarks>
+/// Open and Maze are generated in LevelGenerator.cs. Every topology after them is generated in a
+/// PARTIAL FILE OF ITS OWN, LevelGenerator.&lt;Name&gt;.cs, and is played as Open until that file says
+/// it is built (LevelGenerator.TopologyBuild) - so a chapter can name its topology on the day it is
+/// planned, and the agent who builds the topology creates one file and edits only its own chapter's
+/// palette block (.ai/endgame-castle.md 1.9). The values are written here once, by the plumbing, so
+/// that nobody building one edits this enum or the dispatch.
+/// </remarks>
 public enum StageTopology
 {
 	Open,   // scattered organic blobs on open ground (forest, desert, swamp...)
 	Maze,   // wall-tile labyrinth with wide corridors (castle)
+	/// <summary>The Last Bridge: a band across the world with the drop either side (LevelGenerator.Band.cs, piece C1).</summary>
+	Band,
+	/// <summary>A layout read from a file, the same every run: the Court and the Throne (LevelGenerator.Authored.cs, piece C3).</summary>
+	Authored,
+	/// <summary>The Mystic Ruins' broken walls, on the maze's lattice (LevelGenerator.Ruin.cs, piece V1).</summary>
+	Ruin,
+	/// <summary>The Sunken Cave's caverns, on the maze's lattice (LevelGenerator.Caverns.cs, piece V2).</summary>
+	Caverns,
 }
 
 /// <summary>
@@ -23,7 +39,16 @@ public sealed class LevelLayout
 	public string GroundMaterial { get; init; }
 	public string GroundTerrain { get; init; } = "";
 	public IReadOnlyList<string> PropThemes { get; init; } = Array.Empty<string>();
+	/// <summary>The topology the ground is generated with: the palette's, or Open while that is not built yet.</summary>
 	public StageTopology Topology { get; init; } = StageTopology.Open;
+	/// <summary>The topology the palette names, built or not. Differs from <see cref="Topology"/> only while it is not built.</summary>
+	public StageTopology DeclaredTopology { get; init; } = StageTopology.Open;
+	/// <summary>
+	/// The ground has walls (the `wall` terrain), so it plays by the maze's rules: no cleanup pass (it
+	/// would eat corridor ends), every enemy steers by the flow field, and spawns and recycling measure
+	/// walking distance (Node2DGame, MazeNavigation.IsMaze). The Maze, and any built topology that says so.
+	/// </summary>
+	public bool Walled { get; init; }
 	/// <summary>Every non-floor terrain id this stage can generate, for building tile sources up front.</summary>
 	public IReadOnlyList<string> Terrains { get; init; } = Array.Empty<string>();
 }
@@ -53,7 +78,7 @@ public sealed class LevelLayout
 /// The returned grid includes a margin of neighbouring cells on every side; cleanup and autotile
 /// roles need to see past the chunk's edge to get its border cells right.
 /// </remarks>
-public sealed class LevelGenerator
+public sealed partial class LevelGenerator
 {
 	private readonly struct BlobSpec
 	{
@@ -246,22 +271,180 @@ public sealed class LevelGenerator
 			// funerary set: the heath's monuments are its own standing stones (BuildDecorProps).
 			PropThemes = new[] { "flora", "bones" },
 		},
+
+		// THE CASTLE (.ai/endgame-castle.md). Three STAND-IN palettes, each its own piece's to replace,
+		// a blank line apart. Each already names its topology, which plays as Open until its partial file
+		// builds it (TopologyBuild); until then the ground is the stand-in floor below with a few patches,
+		// which is a playable field and nothing more. Walkable blobs only, plus the existing pit: a new
+		// blocking terrain has to agree in four shared places (.ai/terrain.md section 2).
+
+		// THE LAST BRIDGE (stage_11, C1): a Band (LevelGenerator.Band.cs). Stand-in: the Ruins' stone with
+		// laid patches, and the deck's gaps as the existing `pit` (3.8). C1 replaces the floor with the deck
+		// (terrain_bridge.py) and the drop with the `abyss` water.
+		[StageEnvironmentKind.Bridge] = new Palette
+		{
+			GroundMaterial = "graystone",
+			Blobs = new[]
+			{
+				new BlobSpec("cobble", 2.0f, 2.0f, 3.4f),
+				new BlobSpec("pit", 0.5f, 1.4f, 2.2f),
+			},
+			Density = 0.004f,
+			// The garrison's braziers and chain-posts. Not bones: the bridge's dead are names on the
+			// parapet, never bodies (3.9).
+			PropThemes = new[] { "torture" },
+			Topology = StageTopology.Band,
+		},
+
+		// THE COURT (stage_12, C3): Authored (LevelGenerator.Authored.cs, reading court_layout.json).
+		// Stand-in: the Dungeon's flagstones. C3 gives it its floors per wing and its carpet runners.
+		[StageEnvironmentKind.Court] = new Palette
+		{
+			GroundMaterial = "stonetile",
+			Blobs = new[]
+			{
+				new BlobSpec("cobble", 1.6f, 2.0f, 3.4f),
+			},
+			Density = 0.004f,
+			// A household's stores: crates and spilled goblets.
+			PropThemes = new[] { "treasure" },
+			Topology = StageTopology.Authored,
+		},
+
+		// THE THRONE (stage_13, C4): Authored, one bounded hall (throne_room.py, read by the Court's reader).
+		// Stand-in: a bare floor of laid dark tile, nothing on it.
+		[StageEnvironmentKind.Throne] = new Palette
+		{
+			GroundMaterial = "darktile",
+			Blobs = Array.Empty<BlobSpec>(),
+			Density = 0f,
+			PropThemes = new[] { "torture" },
+			Topology = StageTopology.Authored,
+		},
 	};
+
+	// --- Topologies in partial files ------------------------------------------------------------
+	//
+	// THE PATTERN (.ai/endgame-castle.md 1.9). A topology past Open and Maze lives in a file of its own,
+	// LevelGenerator.<Name>.cs, which implements ONE partial method below, Build<Name>Topology, by filling
+	// in a TopologyBuild: the chunk generator, and whether the ground it makes has walls. A topology whose
+	// file does not exist, or whose file leaves Generate null (the two stubs C0 wrote), is generated as
+	// Open - so its chapter plays on open ground until the day it is built, and building it is that one
+	// file plus the chapter's own palette block. Nothing else in this file, Node2DGame or the validators
+	// has to change: Describe reports the topology and its walls, and RegressionChecks holds every built
+	// one to the seam rule.
+	//
+	// What a generator must keep, which is the whole contract TerrainStreamer relies on:
+	//   - every cell a PURE FUNCTION of (seed, world tile): a hash of where it is, never the next number
+	//     off an RNG walked in chunk order (.ai/terrain.md section 7, the seam rule);
+	//   - the padded grid filled completely, [0, 0] being world tile (X0, Y0);
+	//   - open floor written as BaseSentinel, walls as WallTerrain, anything else a terrain id tiles.json
+	//     defines; the helpers here (FillOpenGround, StampBlobs, GenerateMaze, DistanceToSpawn) are theirs
+	//     to call.
+
+	/// <summary>One chunk, as a topology's generator is handed it.</summary>
+	public readonly struct TopologyChunk
+	{
+		public StageEnvironmentKind Kind { get; init; }
+		public ulong Seed { get; init; }
+		public int ChunkX { get; init; }
+		public int ChunkY { get; init; }
+		public int ChunkTiles { get; init; }
+		public int Margin { get; init; }
+		/// <summary>The world tile of grid[0, 0]: ChunkX * ChunkTiles - Margin.</summary>
+		public int X0 { get; init; }
+		/// <summary>The world tile of grid[0, 0]: ChunkY * ChunkTiles - Margin.</summary>
+		public int Y0 { get; init; }
+		/// <summary>Tiles round world tile (0, 0) where water, lava and pits never generate.</summary>
+		public float SafeRadius { get; init; }
+		/// <summary>The padded grid's side: ChunkTiles + 2 * Margin.</summary>
+		public int Size => ChunkTiles + Margin * 2;
+	}
+
+	/// <summary>What a topology's partial file supplies. The default (all null and false) is "not built".</summary>
+	public struct TopologyBuild
+	{
+		/// <summary>Fills one padded chunk grid. Null: not built, and the chapter is generated as Open.</summary>
+		public Action<string[,], TopologyChunk> Generate;
+		/// <summary>The ground has walls, so it plays by the maze's rules (LevelLayout.Walled).</summary>
+		public bool Walled;
+		/// <summary>
+		/// The topology makes its own start, so the open disc ClearSpawn forces round world tile (0, 0)
+		/// is not stamped over it - an authored layout whose start is a doorway, say. False: cleared as
+		/// every other stage is.
+		/// </summary>
+		public bool OwnsSpawnClearing;
+	}
+
+	// One partial method per topology. The defining declarations are here, written once; each
+	// implementing declaration is in its topology's file. A declaration with no implementation compiles
+	// to nothing, and the build it was handed stays "not built".
+	static partial void BuildBandTopology(ref TopologyBuild build);
+	static partial void BuildAuthoredTopology(ref TopologyBuild build);
+	static partial void BuildRuinTopology(ref TopologyBuild build);
+	static partial void BuildCavernsTopology(ref TopologyBuild build);
+
+	// Resolved on first use rather than in a static initialiser: C# does not order the static fields of
+	// a partial class across its files, so a topology file's own statics (a layout read from JSON, say)
+	// may not exist yet while this class's initialisers run. By the first chunk they all do.
+	private static TopologyBuild[] topologyBuilds;
+
+	private static TopologyBuild[] TopologyBuilds => topologyBuilds ??= ResolveTopologyBuilds();
+
+	private static TopologyBuild[] ResolveTopologyBuilds()
+	{
+		var builds = new TopologyBuild[Enum.GetValues<StageTopology>().Length];
+		BuildBandTopology(ref builds[(int)StageTopology.Band]);
+		BuildAuthoredTopology(ref builds[(int)StageTopology.Authored]);
+		BuildRuinTopology(ref builds[(int)StageTopology.Ruin]);
+		BuildCavernsTopology(ref builds[(int)StageTopology.Caverns]);
+		return builds;
+	}
+
+	/// <summary>True for Open and Maze, and for a partial-file topology once its file builds it.</summary>
+	public static bool IsTopologyBuilt(StageTopology topology) =>
+		topology is StageTopology.Open or StageTopology.Maze || TopologyBuilds[(int)topology].Generate != null;
+
+	/// <summary>The topology a palette is generated with: its own once built, Open until then.</summary>
+	public static StageTopology EffectiveTopology(StageTopology declared) =>
+		IsTopologyBuilt(declared) ? declared : StageTopology.Open;
+
+	/// <summary>The topology a chapter's palette names, built or not. For the validator's to-do list.</summary>
+	public static StageTopology DeclaredTopologyOf(StageEnvironmentKind kind) => PaletteFor(kind).Topology;
+
+	private static bool IsWalled(StageTopology topology) =>
+		topology == StageTopology.Maze
+		|| (topology is not StageTopology.Open && TopologyBuilds[(int)topology].Walled);
 
 	/// <summary>The ids a stage paints with and the prop themes it scatters. No grid.</summary>
 	public LevelLayout Describe(StageEnvironmentKind kind)
 	{
 		Palette palette = PaletteFor(kind);
+		StageTopology topology = EffectiveTopology(palette.Topology);
+		bool walled = IsWalled(topology);
+		string[] blobs = Array.ConvertAll(palette.Blobs, b => b.Terrain);
+		string[] terrains;
+		if (topology == StageTopology.Maze)
+			terrains = new[] { WallTerrain };
+		else if (walled)
+		{
+			// A walled topology may stamp its palette's blobs between its walls, as well as the walls.
+			terrains = new string[blobs.Length + 1];
+			blobs.CopyTo(terrains, 0);
+			terrains[blobs.Length] = WallTerrain;
+		}
+		else
+			terrains = blobs;
 		return new LevelLayout
 		{
 			BaseTerrain = BaseSentinel,
 			GroundMaterial = palette.GroundMaterial,
 			GroundTerrain = palette.GroundTerrain,
 			PropThemes = palette.PropThemes,
-			Topology = palette.Topology,
-			Terrains = palette.Topology == StageTopology.Maze
-				? new[] { WallTerrain }
-				: Array.ConvertAll(palette.Blobs, b => b.Terrain),
+			Topology = topology,
+			DeclaredTopology = palette.Topology,
+			Walled = walled,
+			Terrains = terrains,
 		};
 	}
 
@@ -299,22 +482,55 @@ public sealed class LevelGenerator
 		int x0 = chunkX * chunkTiles - margin;
 		int y0 = chunkY * chunkTiles - margin;
 
-		if (palette.Topology == StageTopology.Maze)
+		StageTopology topology = EffectiveTopology(palette.Topology);
+		bool ownsClearing = false;
+		switch (topology)
 		{
-			GenerateMaze(grid, x0, y0, seed);
-		}
-		else
-		{
-			for (int x = 0; x < size; x++)
-				for (int y = 0; y < size; y++)
-					grid[x, y] = BaseSentinel;
-			StampBlobs(grid, x0, y0, chunkX, chunkY, chunkTiles, palette, seed, safeRadius);
+			case StageTopology.Maze:
+				GenerateMaze(grid, x0, y0, seed);
+				break;
+			case StageTopology.Open:
+				FillOpenGround(grid, x0, y0, chunkX, chunkY, chunkTiles, palette, seed, safeRadius);
+				break;
+			default:
+				// A topology in a partial file of its own (see TopologyBuild); built, or it would be Open.
+				TopologyBuild build = TopologyBuilds[(int)topology];
+				ownsClearing = build.OwnsSpawnClearing;
+				build.Generate(grid, new TopologyChunk
+				{
+					Kind = kind, Seed = seed,
+					ChunkX = chunkX, ChunkY = chunkY, ChunkTiles = chunkTiles, Margin = margin,
+					X0 = x0, Y0 = y0, SafeRadius = safeRadius,
+				});
+				break;
 		}
 
 		// Force an open-floor clearing around the spawn point. On a maze this opens a small room
 		// round the start, which is what the old single-grid maze did with its centre too.
-		ClearSpawn(grid, x0, y0, spawnClearRadius);
+		if (!ownsClearing)
+			ClearSpawn(grid, x0, y0, spawnClearRadius);
 	}
+
+	/// <summary>
+	/// The Open topology for one padded chunk: floor everywhere, then the palette's blobs. A partial-file
+	/// topology may start from this and carve or raise on top of it (the bridge's deck is open ground with
+	/// the drop either side).
+	/// </summary>
+	private static void FillOpenGround(string[,] grid, int x0, int y0, int chunkX, int chunkY, int chunkTiles,
+		Palette palette, ulong seed, float safeRadius)
+	{
+		int w = grid.GetLength(0);
+		int h = grid.GetLength(1);
+		for (int x = 0; x < w; x++)
+			for (int y = 0; y < h; y++)
+				grid[x, y] = BaseSentinel;
+		StampBlobs(grid, x0, y0, chunkX, chunkY, chunkTiles, palette, seed, safeRadius);
+	}
+
+	/// <summary><see cref="FillOpenGround"/> for a topology file, from the chunk it was handed.</summary>
+	private static void FillOpenGround(string[,] grid, in TopologyChunk chunk) =>
+		FillOpenGround(grid, chunk.X0, chunk.Y0, chunk.ChunkX, chunk.ChunkY, chunk.ChunkTiles,
+			PaletteFor(chunk.Kind), chunk.Seed, chunk.SafeRadius);
 
 	// --- Hashing ----------------------------------------------------------------------------
 	//
@@ -485,6 +701,31 @@ public sealed class LevelGenerator
 	private const int MazeUnit = MazeCorridor + MazeWall;
 	private const int MazeLatticeShift = MazeCorridor / 2;
 
+	/// <summary>
+	/// The four chances the lattice is opened up with. The Cursed Dungeon's are <see cref="Dungeon"/>; a
+	/// topology on the same lattice (the Ruins' broken walls, the Cave's caverns - .ai/endgame-castle.md
+	/// 7.2) passes its own to <see cref="GenerateMaze(string[,], int, int, ulong, in MazeRates)"/> from
+	/// its own file and inherits the proof of connection and the navigation for nothing.
+	/// </summary>
+	private readonly struct MazeRates
+	{
+		public readonly float Braid;
+		public readonly float Loop;
+		public readonly float Hall;
+		public readonly float Door;
+
+		public MazeRates(float braid, float loop, float hall, float door)
+		{
+			Braid = braid;
+			Loop = loop;
+			Hall = hall;
+			Door = door;
+		}
+
+		/// <summary>The Cursed Dungeon's maze, exactly as tuned (.ai/terrain.md section 6).</summary>
+		public static MazeRates Dungeon => new(MazeBraidChance, MazeLoopChance, MazeHallChance, MazeDoorChance);
+	}
+
 	private sealed class MazeBlock
 	{
 		// openE[x, y]: passage between (x, y) and (x + 1, y) inside the block. openS likewise south.
@@ -497,27 +738,27 @@ public sealed class LevelGenerator
 
 	// Which of the MazeBlockCells passages across one border are open, as a bit mask. Keyed on the
 	// border (the block to its west or north, plus which way it faces), so both sides read one value.
-	private static int DoorMask(ulong seed, int bx, int by, int salt)
+	private static int DoorMask(ulong seed, int bx, int by, int salt, float doorChance)
 	{
 		var rng = new Rng(Hash(seed, bx, by, salt));
 		int mask = 0;
 		for (int k = 0; k < MazeBlockCells; k++)
-			if (rng.NextDouble() < MazeDoorChance)
+			if (rng.NextDouble() < doorChance)
 				mask |= 1 << k;
 		if (mask == 0)
 			mask = 1 << rng.Next(MazeBlockCells);
 		return mask;
 	}
 
-	private static MazeBlock BuildMazeBlock(ulong seed, int bx, int by)
+	private static MazeBlock BuildMazeBlock(ulong seed, int bx, int by, in MazeRates rates)
 	{
 		const int n = MazeBlockCells;
 		var block = new MazeBlock
 		{
-			DoorsE = DoorMask(seed, bx, by, SaltDoorEast),
-			DoorsW = DoorMask(seed, bx - 1, by, SaltDoorEast),
-			DoorsS = DoorMask(seed, bx, by, SaltDoorSouth),
-			DoorsN = DoorMask(seed, bx, by - 1, SaltDoorSouth),
+			DoorsE = DoorMask(seed, bx, by, SaltDoorEast, rates.Door),
+			DoorsW = DoorMask(seed, bx - 1, by, SaltDoorEast, rates.Door),
+			DoorsS = DoorMask(seed, bx, by, SaltDoorSouth, rates.Door),
+			DoorsN = DoorMask(seed, bx, by - 1, SaltDoorSouth, rates.Door),
 		};
 		var rng = new Rng(Hash(seed, bx, by, SaltMazeBlock));
 
@@ -565,7 +806,7 @@ public sealed class LevelGenerator
 
 		foreach ((int x, int y) in cells)
 		{
-			if (CountExits(block, x, y) != 1 || rng.NextDouble() >= MazeBraidChance)
+			if (CountExits(block, x, y) != 1 || rng.NextDouble() >= rates.Braid)
 				continue;
 			Shuffle(order, ref rng);
 			int pick = -1;
@@ -595,9 +836,9 @@ public sealed class LevelGenerator
 		{
 			for (int y = 0; y < n; y++)
 			{
-				if (x + 1 < n && !block.OpenE[x, y] && rng.NextDouble() < MazeLoopChance)
+				if (x + 1 < n && !block.OpenE[x, y] && rng.NextDouble() < rates.Loop)
 					block.OpenE[x, y] = true;
-				if (y + 1 < n && !block.OpenS[x, y] && rng.NextDouble() < MazeLoopChance)
+				if (y + 1 < n && !block.OpenS[x, y] && rng.NextDouble() < rates.Loop)
 					block.OpenS[x, y] = true;
 			}
 		}
@@ -610,7 +851,7 @@ public sealed class LevelGenerator
 			{
 				if (!block.OpenE[x, y] || !block.OpenE[x, y + 1] || !block.OpenS[x, y] || !block.OpenS[x + 1, y])
 					continue;
-				if (rng.NextDouble() < MazeHallChance)
+				if (rng.NextDouble() < rates.Hall)
 					block.Hall[x, y] = true;
 			}
 		}
@@ -656,11 +897,16 @@ public sealed class LevelGenerator
 
 	// Rasterise the lattice into the padded grid. Every tile is decided from its own lattice
 	// position and the (cached, per call) blocks around it, so a tile reads the same in any chunk.
-	private static void GenerateMaze(string[,] grid, int x0, int y0, ulong seed)
+	private static void GenerateMaze(string[,] grid, int x0, int y0, ulong seed) =>
+		GenerateMaze(grid, x0, y0, seed, MazeRates.Dungeon);
+
+	/// <summary>The maze lattice at other rates: for a topology on the same lattice, from its own file.</summary>
+	private static void GenerateMaze(string[,] grid, int x0, int y0, ulong seed, in MazeRates rates)
 	{
 		int w = grid.GetLength(0);
 		int h = grid.GetLength(1);
 		var blocks = new Dictionary<(int, int), MazeBlock>();
+		MazeRates chances = rates;
 
 		MazeBlock BlockOf(int i, int j, out int lx, out int ly)
 		{
@@ -670,7 +916,7 @@ public sealed class LevelGenerator
 			ly = j - by * MazeBlockCells;
 			if (!blocks.TryGetValue((bx, by), out MazeBlock b))
 			{
-				b = BuildMazeBlock(seed, bx, by);
+				b = BuildMazeBlock(seed, bx, by, chances);
 				blocks[(bx, by)] = b;
 			}
 			return b;
