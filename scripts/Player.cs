@@ -5499,14 +5499,8 @@ public partial class Player : CharacterBody2D
 		}
 		else
 		{
-			const float scatterRadius = 70f;
 			spots = Math.Min(iceSpots.Length, spikeCount);
-			for (int i = 0; i < spots; i++)
-			{
-				iceSpots[i] = i == 0 ? target
-					: target + new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
-				iceDelays[i] = 0f;
-			}
+			PlaceExtraIceSpikes(nearest, target, spots, radius);
 			underTarget = 0;
 		}
 
@@ -5564,6 +5558,62 @@ public partial class Player : CharacterBody2D
 			}
 		}
 		return CastOutcome.Fired;
+	}
+
+	// Where a cast's spikes after the first rise (2026-10-30). They used to land at random within 70 of
+	// the target, so with a lone enemy the second spike erupted on empty ground beside it - Eric: "a
+	// second spike ... hovers nearby, even when there's a single enemy". Now each goes under another
+	// enemy near the target, nearest first and never inside a spike already placed, so it lands on
+	// someone; when there are fewer enemies than spikes, the rest rise under the target again, one after
+	// another, and read as repeated strikes on it rather than strays.
+	private const float IceExtraReach = 220f;
+	private const float IceRepeatSeconds = 0.18f;
+	private readonly List<Enemy> iceNear = new(48);
+
+	private void PlaceExtraIceSpikes(Node2D target, Vector2 at, int spots, float radius)
+	{
+		iceSpots[0] = at;
+		iceDelays[0] = 0f;
+		int placed = 1;
+		if (spots > 1)
+			EnemyRegistry.CollectNear(at, IceExtraReach, iceNear);
+		while (placed < spots)
+		{
+			Enemy best = null;
+			float bestSq = IceExtraReach * IceExtraReach;
+			foreach (Enemy enemy in iceNear)
+			{
+				if (enemy == target || !IsInstanceValid(enemy) || enemy.IsDying)
+					continue;
+				Vector2 p = enemy.GlobalPosition;
+				float sq = p.DistanceSquaredTo(at);
+				if (sq >= bestSq || IceSpotTaken(p, placed, radius))
+					continue;
+				best = enemy;
+				bestSq = sq;
+			}
+			if (best == null)
+				break;
+			iceSpots[placed] = best.GlobalPosition;
+			iceDelays[placed] = 0f;
+			placed++;
+		}
+		for (int repeat = 1; placed < spots; repeat++, placed++)
+		{
+			iceSpots[placed] = at;
+			iceDelays[placed] = repeat * IceRepeatSeconds;
+		}
+		iceNear.Clear();
+	}
+
+	private bool IceSpotTaken(Vector2 spot, int placed, float radius)
+	{
+		for (int i = 0; i < placed; i++)
+		{
+			if (iceSpots[i].DistanceSquaredTo(spot) < radius * radius)
+				return true;
+		}
+		return false;
 	}
 
 	private IceSpike MakeIceSpike(SpellData spell, PackedScene scene)
