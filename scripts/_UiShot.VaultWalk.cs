@@ -25,6 +25,7 @@ public partial class _UiShot
 	private static Node NewVaultProbe(SecretDirector director, Player hero) => director.Vault switch
 	{
 		SwallowHole => new SwallowHoleWalk { Director = director, Hero = hero },
+		BrokenWard => new BrokenWardWalk { Director = director, Hero = hero },
 		_ => new VaultProbe { Director = director, Hero = hero },
 	};
 
@@ -58,6 +59,8 @@ public partial class _UiShot
 		protected virtual Vector2 Arrive => new Vector2(0f, 230f);
 		/// <summary>True if the vault's foot is solid in the navigation grid; false if it must not be.</summary>
 		protected abstract bool ExpectSolid { get; }
+		/// <summary>Where that is tested: the vault's position, unless what stands solid is elsewhere (a ring of stones).</summary>
+		protected virtual Vector2 SolidPoint => Vault.GlobalPosition;
 		/// <summary>The vault's own work, a frame at a time: true once it has been opened (or the walk failed).</summary>
 		protected abstract bool Work(float delta, float seconds);
 		/// <summary>The longest the work may take, in seconds of game time.</summary>
@@ -108,6 +111,49 @@ public partial class _UiShot
 		protected void StandFeetAt(Vector2 foot)
 		{
 			Hero.GlobalPosition = foot - (Hero.FootPosition - Hero.GlobalPosition);
+		}
+
+		/// <summary>
+		/// Walks him with the movement keys until his FEET are within <paramref name="within"/> of
+		/// <paramref name="foot"/>: true once there (the keys let go). The way a player arrives at something -
+		/// a teleport can be undone by the feet's physics pass before the thing he arrived at looks for him.
+		/// </summary>
+		protected bool SteerTo(Vector2 foot, float within)
+		{
+			Steering = true;
+			Pin = null;
+			Vector2 d = foot - Hero.FootPosition;
+			if (d.Length() <= within)
+			{
+				foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+					Input.ActionRelease(action);
+				Pin = Hero.GlobalPosition;
+				Steering = false;
+				return true;
+			}
+			Vector2 n = d.Normalized();
+			Press("move_right", "move_left", n.X);
+			Press("move_down", "move_up", n.Y);
+			return false;
+		}
+
+		private static void Press(string positive, string negative, float axis)
+		{
+			if (axis > 0.05f)
+			{
+				Input.ActionRelease(negative);
+				Input.ActionPress(positive, Math.Min(1f, axis));
+			}
+			else if (axis < -0.05f)
+			{
+				Input.ActionRelease(positive);
+				Input.ActionPress(negative, Math.Min(1f, -axis));
+			}
+			else
+			{
+				Input.ActionRelease(positive);
+				Input.ActionRelease(negative);
+			}
 		}
 
 		private void Hold()
@@ -183,7 +229,7 @@ public partial class _UiShot
 					Check($"it is five to seven chunks out ({chunks:0.00})", chunks >= SecretDirector.VaultMinChunks - 0.3f && chunks <= SecretDirector.VaultMaxChunks + 1.1f);
 					Check("it is never a target: not in \"enemies\", nor anything in it",
 						!Vault.IsInGroup("enemies") && !Vault.FindChildren("*", "", true, false).Any(n => n.IsInGroup("enemies")));
-					bool solid = Director.Game.Terrain?.IsFenceAtWorld(Vault.GlobalPosition) == true;
+					bool solid = Director.Game.Terrain?.IsFenceAtWorld(SolidPoint) == true;
 					Check(ExpectSolid ? "its foot is solid in the navigation grid" : "it is not solid ground: the horde can walk in", solid == ExpectSolid);
 					Check("not seen before he has been near it", !Director.IsGlimpsed(Vault.SecretId));
 					if (!HadBefore)
@@ -436,6 +482,168 @@ public partial class _UiShot
 					if (seconds - mark < 0.55f)
 						return false;
 					Shot("full: it heaves");
+					return true;
+			}
+			return false;
+		}
+	}
+
+	// THE BROKEN WARD (8.7): five solid stones on open ground, their notches one to five in the seed's order
+	// round the ring; a wrong stone resets the sequence (never locks it), the right order raises the ward, and
+	// the ward throws out what was inside it when it rose and keeps out a pack chasing him for its thirty
+	// seconds; then it breaks and its light goes to him.
+	private partial class BrokenWardWalk : VaultWalk
+	{
+		private BrokenWard ward;
+		private int sub;
+		private float mark;
+		private int touchIndex;
+		private readonly List<Enemy> inside = new();
+		private float closest = float.MaxValue;
+
+		protected override bool ExpectSolid => true;
+		protected override Vector2 SolidPoint => ((BrokenWard)Vault).StoneFoot(0);
+		protected override float WorkLimit => 70f;
+
+		private int StoneWith(int n)
+		{
+			for (int i = 0; i < BrokenWard.StoneCount; i++)
+				if (ward.NotchesOf(i) == n)
+					return i;
+			return -1;
+		}
+
+		// Where he walks to for the stone with n notches: just in from its foot, toward the middle, inside the
+		// touch reach but clear of its solid foot.
+		private Vector2 Approach(int n)
+		{
+			Vector2 foot = ward.StoneFoot(StoneWith(n));
+			return foot + (ward.GlobalPosition - foot).Normalized() * 34f;
+		}
+
+		// The touches the walk makes, in order: a wrong first stone, then one and two, then a wrong four, then
+		// the five in their order.
+		private static readonly int[] Touches = { 2, 1, 2, 4, 1, 2, 3, 4, 5 };
+		private static readonly int[] LitAfter = { 0, 1, 2, 0, 1, 2, 3, 4, 5 };
+
+		protected override bool Work(float delta, float seconds)
+		{
+			ward ??= Vault as BrokenWard;
+			if (ward == null)
+			{
+				Check("the vault is a BrokenWard", false);
+				Finish();
+				return false;
+			}
+			Vector2 c = ward.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+				{
+					var counts = new HashSet<int>();
+					bool open = true;
+					string order = "";
+					for (int i = 0; i < BrokenWard.StoneCount; i++)
+					{
+						counts.Add(ward.NotchesOf(i));
+						Vector2 f = ward.StoneFoot(i);
+						open &= Director.Game.Terrain?.IsBlockedAtWorld(f) != true && Director.Game.Terrain?.IsWallAtWorld(f) != true;
+						order += ward.NotchesOf(i);
+					}
+					GD.Print($"VAULTWALK the notches round the ring: {order}");
+					Check("five stones cut with one to five notches", counts.Count == 5 && counts.Min() == 1 && counts.Max() == 5);
+					Check("every stone stands on open ground (no water, no wall)", open);
+					mark = seconds;
+					sub = 1;
+					return false;
+				}
+				case 1:
+				{
+					// One touch at a time: walk to the stone, check, walk back to the middle.
+					if (touchIndex >= Touches.Length)
+					{
+						Check("the five in their order raise the ward", ward.WardStanding);
+						mark = seconds;
+						Pin = c;
+						Hero.GlobalPosition = c;
+						// Three bodies inside the ring as it rises: it must throw them out.
+						foreach (Vector2 off in new[] { new Vector2(-70f, 20f), new Vector2(60f, -50f), new Vector2(20f, 80f) })
+							if (Body(c + off) is Enemy e)
+								inside.Add(e);
+						mark = seconds;
+						sub = 3;
+						return false;
+					}
+					// Walk to it; a few seconds at most.
+					if (!SteerTo(Approach(Touches[touchIndex]), 6f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 2;
+					return false;
+				}
+				case 2:
+				{
+					if (seconds - mark < 0.25f)
+						return false;
+					int n = Touches[touchIndex];
+					bool wrong = LitAfter[touchIndex] == 0 && touchIndex > 0 || touchIndex == 0;
+					Check($"touched the {n}-notch stone: {ward.Lit} lit (expected {LitAfter[touchIndex]}{(wrong ? ", a wrong stone resets" : "")})",
+						ward.Lit == LitAfter[touchIndex]);
+					if (touchIndex == 3)
+						Shot("a wrong stone: the notches go to embers");
+					if (touchIndex == 7)
+						Shot("four of the five lit");
+					touchIndex++;
+					mark = seconds;
+					sub = 6;
+					return false;
+				}
+				case 6:
+					// Back to the middle, out of every stone's reach, before the next.
+					if (!SteerTo(c, 10f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 1;
+					return false;
+				case 3:
+				{
+					if (seconds - mark < 1.5f)
+						return false;
+					float least = float.MaxValue;
+					foreach (Enemy e in inside)
+						if (e != null && IsInstanceValid(e))
+							least = Math.Min(least, e.GlobalPosition.DistanceTo(c));
+					Check($"what was inside when it rose is thrown out (nearest now {least:0} px, the wall at {BrokenWard.WardRadius:0})", least > BrokenWard.WardRadius - 12f);
+					// Then a pack from outside, chasing him at the middle.
+					for (int k = 0; k < 14; k++)
+					{
+						float a = k * Mathf.Tau / 14f;
+						Body(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 360f);
+					}
+					mark = seconds;
+					sub = 4;
+					return false;
+				}
+				case 4:
+				{
+					foreach (Enemy e in Kept)
+						if (e != null && IsInstanceValid(e))
+							closest = Math.Min(closest, e.GlobalPosition.DistanceTo(c));
+					if (seconds - mark > 3f && seconds - mark - delta <= 3f)
+						Shot("the ward stands: the pack held at its wall");
+					if (seconds - mark < 6f)
+						return false;
+					GD.Print($"VAULTWALK the pack came no nearer than {closest:0} px over 6 s");
+					Check($"the pack never reaches him at the middle (nearest {closest:0} px)", closest > BrokenWard.WardRadius * 0.6f);
+					sub = 5;
+					return false;
+				}
+				case 5:
+					// Its thirty seconds, then it breaks and the light goes to him.
+					if (ward.WardStanding)
+						return false;
+					Check("the ward broke after its time", ward.WardBroken);
+					Shot("the ward breaks: its light goes to him");
 					return true;
 			}
 			return false;
