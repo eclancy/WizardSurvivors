@@ -1,84 +1,16 @@
-[gd_scene load_steps=12 format=3 uid="uid://4fgyl8em10by"]
+[gd_scene load_steps=3 format=3 uid="uid://4fgyl8em10by"]
 
 [ext_resource type="Script" uid="uid://c87mej4djrm54" path="res://scripts/ArcaneExplosion.cs" id="1_700iy"]
-[ext_resource type="Texture2D" uid="uid://rtq1e6yjt0jj" path="res://assets/bonelight/effects/arcane-explosion.png" id="2_700iy"]
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_qx8ky"]
-particle_flag_disable_z = true
-emission_shape = 6
-emission_ring_axis = Vector3(0, 0, 1)
-emission_ring_height = 1.0
-emission_ring_radius = 1.0
-emission_ring_inner_radius = 0.0
-emission_ring_cone_angle = 90.0
-gravity = Vector3(0, 0, 0)
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_qx8ky"]
 radius = 23.021729
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_toxd8"]
-atlas = ExtResource("2_700iy")
-region = Rect2(0, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_ydyj5"]
-atlas = ExtResource("2_700iy")
-region = Rect2(64, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_383xx"]
-atlas = ExtResource("2_700iy")
-region = Rect2(128, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_rc17e"]
-atlas = ExtResource("2_700iy")
-region = Rect2(192, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_y6pa7"]
-atlas = ExtResource("2_700iy")
-region = Rect2(256, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_1rfua"]
-atlas = ExtResource("2_700iy")
-region = Rect2(320, 0, 64, 64)
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_qx8ky"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_toxd8")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_ydyj5")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_383xx")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_rc17e")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_y6pa7")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_1rfua")
-}],
-"loop": false,
-"name": &"default",
-"speed": 24.0
-}]
-
+; Drawn in code (ArcaneExplosion._Draw through scenes/shaders/arcane_blast.gdshader): the blast's front
+; on the world's 2 px grid, out to the range the hit tests. The 32 px sprite scaled by range / 32 and the
+; ring of white GPU particles under it went on 2026-10-29.
 [node name="ArcaneExplosion" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1_700iy")
 
-[node name="Particles" type="GPUParticles2D" parent="."]
-emitting = false
-amount = 64
-lifetime = 0.5
-one_shot = true
-process_material = SubResource("ParticleProcessMaterial_qx8ky")
-
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_qx8ky")
-
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-sprite_frames = SubResource("SpriteFrames_qx8ky")

@@ -1324,3 +1324,44 @@ the cards' tints are pale yellows over a white and gold ramp. On the paper the L
 the gold and orange edges carry it. Photographed before (`vis_blasts_b_*sf*`) and after
 (`vis_blasts_a*_sf*`). Still needs eyes: Daybreak's full-screen flare on a phone, where a dithered front
 of that size is the most fragments this pass draws in one quad.
+
+### Fireball
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell and level 8 with Pyroclasm +
+Hellfire Nova, Cluster Bombs + Armageddon Sun and Iron Comet + Hellfire Nova at `--zoom=1.6` on the Cursed
+Dungeon (stage 1); Pyroclasm + Hellfire Nova at the game's zoom on the Frozen Waste (stage 5), and that and
+the base on the Sketchbook's paper (stage 8). No wizard's Apotheosis rides on it.
+
+| Part | Audit | Now |
+|---|---|---|
+| The ball, every milestone | **Failed.** `fireball.png` (`spell_fx.py`'s 32 px cell saved at x2) at a sprite scale of 1.35 to 1.9, times the node scale Hellfire Nova (x2.2) and Armageddon Sun (x2.0) give it, turned to the heading: art pixels 2.7 to 8.4 world px wide on a tilted grid. Each card's tint was multiplied over it, so Hellfire Nova's ball was a flat red disc with no heart | `scenes/shaders/fireball.gdshader` on the Fireball node, snapped to the world cell before it turns into the ball's frame. The white-hot heart is exactly the collision circle; the flame round it is the old sprite's size (its exports still set it), leads the heart by little and streams back in rippling tongues, its edge torn in clumps of two art pixels, sparks shed off the back. **Painted per card, not tinted:** Pyroclasm crusts over into plates of char with the melt glowing between them (a lava bomb); Cluster Bombs carries its three bomblets round inside the flame, iron shells lit from the key; Iron Comet's heart is an iron ball lit from the key with a glowing rim; Hellfire Nova burns down into the red rows with soot off its tail; Armageddon Sun is a round sun with a corona; a Legendary's flame is gold |
+| Its trail | **Failed.** `GPUParticles2D` with no texture - one world px each - in (1, 0.45, 0.1, 0.8), on no ramp | Removed from `Fireball.tscn`: the shader's tongues and sparks are the trail |
+| The blast | **Failed.** Twenty-four more of those particles. The reach the damage tests - 165 px at the base, 412 at Hellfire Nova - was drawn by nothing | `scripts/FireburstLayer.cs` (one pooled node per arena, in the air, every burst one quad of one material) through `scenes/shaders/fireburst.gdshader`: a white-hot flash at the heart, capped at 30 px so a wide blast is not a white screen, then a band of fire puffs - no wider than a body or two - thrown out to exactly `explosionRadius` in a sixth of a second, hottest along its leading edge, the middle burnt out behind it, breaking into puffs and then up by dither from the outside in, gone in 0.42 s. `ImpactDebris` is thrown to the same radius with it. Hellfire Nova's band runs down the red rows with soot, Armageddon Sun's heart is white light, a Legendary's is gold |
+| Cluster Bombs' bomblets | Debris only (`ImpactDebris`) - on the grid, so passing as debris, but with no fire where the main blast now has it | Each bomblet also bursts in fire to exactly the radius it hits, on the same layer |
+| Pyroclasm's pool of magma | **Failed.** `LingeringZone` drawing itself: two translucent polygons and a soft bubble - at Hellfire Nova's size a 250 px red wash | `scripts/BlastPoolSurface.cs` on the zone (which no longer draws itself) through `scenes/shaders/magma_pool.gdshader`, on the ground under the bodies: melt under drifting plates of char crust, the seams wide and white-hot in the middle and thin toward a bank of charred floor, bubbles breaking the skin, the crust closing and the glow sinking as it ages, and a dissolve from the bank in at the end. The bank wanders only inward of `Radius` |
+
+While this was in hand another session converted `LingeringZone`'s own drawing to a generic pool
+(`lingering_pool.gdshader`, "the Lingering Rift ... still needs eyes"). These two zones now draw through
+`BlastPoolSurface` with `DrawsItself` false, so that shader has no caller; it was left in place.
+`fireball.png` is no longer drawn by anything; it and `spell_fx.py`, which draws other spells' sprites too,
+were left in place. Photographed before (`vis_blasts_b_*fb*`) and after (`vis_blasts_a*_fb*`). Still needs
+eyes: Hellfire Nova's blast on a phone, where its band is most of the screen for a fifth of a second.
+
+### Arcane Explosion
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd, with Magic Missile beside it so its charge
+comes due (`--ripen-every=3`): the base spell and level 8 with Dual Shockwave + Supernova, Static Nova +
+Event Horizon and Lingering Rift + Supernova at `--zoom=1.6` on the Cursed Dungeon; Lingering Rift +
+Supernova at the game's zoom on the Frozen Waste, and that and the base on the Sketchbook's paper. No
+wizard's Apotheosis rides on it.
+
+| Part | Audit | Now |
+|---|---|---|
+| The blast, every milestone | **Failed.** `spell_fx.py`'s 32 px ring, saved at x2 and shown at `range / 32` - x3.1 at the base reach, about x7 under Supernova - so its art pixels were 6 to 14 world px wide; every card's tint multiplied over it | `scenes/shaders/arcane_blast.gdshader` on the ArcaneExplosion node, drawn from `range`, the distance `TriggerExplosion` tests: a flash at the heart capped at 22 px; a front of force half a body wide, nine lobes that only ever fall back from it, white-hot on its leading edge and cooling to the ramp's violet behind, landing on the radius a quarter of a second in and breaking up by dither; sparks of it thrown ahead that fall inside the radius, a few motes in its wake; the middle clear, so the wizard is seen in his own spell. **Painted per card:** Dual Shockwave throws a second, thinner front a beat behind the first; Static Nova's front crackles with Lightning; Supernova's burns down Fire's ramp behind its white edge; Event Horizon's - whatever pulls inward - starts on the radius and collapses into a small dithered dark heart, which is the pull it does; a Legendary's front is gold |
+| The ring of particles under it | **Failed.** 64 white `GPUParticles2D`, one world px each, on an emission ring that grew to the range | Removed from `ArcaneExplosion.tscn` |
+| Lingering Rift | **Failed.** `LingeringZone` drawing itself: a translucent violet disc, screen-wide under Supernova | `BlastPoolSurface` through `scenes/shaders/arcane_rift.gdshader`, on the ground: a hole torn in the floor at the middle, dithered dark and lipped with arcane light; arms of the light wound out of it, turning slowly in toward it, their width in world px so a wide rift has longer arms rather than fatter ones and the floor shows between them, their ragged ends falling short of `Radius`; a flare on every half-second bite, so it pulses on the beat it hurts on; a dissolve from the edge in at the end. No lip at the reach - a ring of flakes there read as a dotted outline |
+
+`arcane-explosion.png` is no longer drawn by the scene (`SpellData_ArcaneExplosion.tres` still carries an
+unused `AtlasTexture` of it); it and `spell_fx.py` were left in place. Photographed before
+(`vis_blasts_b_*ae*`) and after (`vis_blasts_a*_ae*`). Still needs eyes: the blast's real cadence in a run
+(the harness detonates it far more often than play does), and Supernova's front on a phone.
