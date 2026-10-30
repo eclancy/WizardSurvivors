@@ -1050,7 +1050,7 @@ public partial class _UiShot : Node
 				SaveManager.WritesDisabled = true;
 				SaveData seenSave = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
 				foreach (string id in arg.Substring("--seen-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
-					AchievementFacts.MarkGlimpsed(seenSave, id.Trim());
+					seenSave?.RecordSecretGlimpsed(id.Trim());
 			}
 			else if (arg.StartsWith("--shore="))
 			{
@@ -1510,19 +1510,20 @@ public partial class _UiShot : Node
 		return data;
 	}
 
-	// The --demo-achievements save: two runs in. The Forest won as the Pyromancer (fifteen minutes,
-	// level 18, four Fire held, 820 kills) and the Fallow Fields lost at 7:50
-	// as the Frostweaver, so the Fields are open and the Broken Circle - Laelaps's chapter - is not:
-	// his deed is a sealed row. First Blood, Survivor, Veteran, Forest Cleared, Elementalist and Fire
-	// Adept are done, everything else is part way, and two spells the shop sold are owned (Hollow Star and
-	// Gravewell), so a deed that pays one says "you already had it" once A1 moves them onto deeds.
+	// The --demo-achievements save: two runs in, neither won. The Forest lost at 9:12 as the Pyromancer
+	// (level 17, four Fire held) with its grove held on the way, and the Fallow Fields lost at 7:50 as the
+	// Frostweaver - the Fields open from the save's opened list, as on a save from before the campaign
+	// order - so the Broken Circle, Laelaps's chapter, is not open and his deed is a sealed row, as are
+	// Tituba's and Vainamoinen's. First Blood, Elementalist, Fire Adept and the grove's deed are done,
+	// everything else is part way, and Hollow Star and Gravewell were bought when the shop sold spells:
+	// Survivor pays Hollow Star since schema 19, so it says "you already had it".
 	private static SaveData BuildDemoAchievementsSave()
 	{
 		var data = new SaveData { TotalCurrency = 240 };
 		data.Lifetime.Absorb(new RunResult
 		{
-			Outcome = RunOutcome.Victory, StageId = "stage_0", BossId = "forest_treant", CharacterId = "pyromancer",
-			TimeSurvived = 900f, EnemiesKilled = 820, FinalPlayerLevel = 18, ChestsOpened = 11, UndamagedSeconds = 96f,
+			Outcome = RunOutcome.Defeat, StageId = "stage_0", CharacterId = "pyromancer",
+			TimeSurvived = 552f, EnemiesKilled = 700, FinalPlayerLevel = 17, ChestsOpened = 9, UndamagedSeconds = 96f,
 			PeakElementCounts = new System.Collections.Generic.Dictionary<string, int> { ["Fire"] = 4, ["Earth"] = 2, ["Arcane"] = 2 },
 			EquippedSpells = Enumerable.Range(0, 5).Select(_ => new RunSpellSnapshot()).ToList(),
 		});
@@ -1533,7 +1534,8 @@ public partial class _UiShot : Node
 			PeakElementCounts = new System.Collections.Generic.Dictionary<string, int> { ["Ice"] = 3, ["Water"] = 2 },
 			EquippedSpells = Enumerable.Range(0, 4).Select(_ => new RunSpellSnapshot()).ToList(),
 		});
-		foreach (string deed in new[] { "first_blood", "survivor", "veteran", "forest_cleared", "elementalist", "fire_adept" })
+		data.Lifetime.RecordEventWon("the_grove");
+		foreach (string deed in new[] { "first_blood", "elementalist", "fire_adept", AchievementDefinitions.EventDeedId("the_grove") })
 		{
 			data.UnlockedAchievementIds.Add(deed);
 			AchievementDefinition definition = AchievementDefinitions.GetById(deed);

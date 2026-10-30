@@ -27,8 +27,10 @@ namespace WizardSurvivors.scripts;
 /// first with this run's numbers, then everything else not done, then Done behind a toggle (4.6).</item>
 /// <item>Progress where it applies, and what each pays, led by the reward's own glyph (4.4, 4.5).</item>
 /// </list>
-/// What it reads from piece A1 (the deed's kind, chapter, visibility and lines, the save's glimpses)
-/// goes through <see cref="AchievementFacts"/> and nowhere else.
+/// It decides nothing about an achievement itself: its kind, chapter, visibility and words are piece A1's
+/// (<see cref="AchievementDefinition"/>, <see cref="AchievementDefinitions.IsListed(AchievementDefinition, SaveData)"/>,
+/// <see cref="AchievementDefinitions.IsSealed"/>), and what has been seen is the save's
+/// (<see cref="SaveData.HasGlimpsedSecret"/>). The page only sorts and draws.
 /// </remarks>
 public static class AchievementsPage
 {
@@ -196,7 +198,7 @@ public static class AchievementsPage
 	private sealed class Item
 	{
 		public AchievementDefinition Deed;
-		public AchievementFacts.Kind Kind;
+		public AchievementKind Kind;
 		public string StageId = string.Empty;
 		public SecretDefinition Secret;
 		public bool Done;
@@ -212,7 +214,7 @@ public static class AchievementsPage
 		/// <summary>"Frees Gravewell - you already had it", or null (<see cref="CodexRows.OwnedRewardLine"/>).</summary>
 		public string OwnedLine;
 
-		public bool IsFeat => Kind == AchievementFacts.Kind.Feat || Kind == AchievementFacts.Kind.Collection;
+		public bool IsFeat => Kind == AchievementKind.Feat || Kind == AchievementKind.Collection;
 	}
 
 	// One chapter's secrets: what the sealed count row says.
@@ -237,25 +239,27 @@ public static class AchievementsPage
 			AchievementContext lifetime = AchievementContext.ForSave(save);
 			var chapters = new Dictionary<string, ChapterSecrets>(StringComparer.OrdinalIgnoreCase);
 
-			foreach (AchievementDefinition deed in AchievementFacts.Listed)
+			foreach (AchievementDefinition deed in AchievementDefinitions.All.Where(d => IsShown(d, save)))
 			{
-				SecretDefinition secret = AchievementFacts.SecretOf(deed);
+				SecretDefinition secret = string.IsNullOrEmpty(deed.SecretId) ? null : SecretCatalog.Get(deed.SecretId);
 				var item = new Item
 				{
 					Deed = deed,
-					Kind = AchievementFacts.KindOf(deed),
-					StageId = AchievementFacts.StageIdOf(deed),
+					Kind = deed.Kind,
+					StageId = deed.StageId ?? string.Empty,
 					Secret = secret,
 				};
 				item.Done = GlobalStatsManager.IsAchievementUnlocked(save, deed.Id)
-					// The save's found list is the authority on a secret; its deed is a view of it.
-					|| (secret != null && save.HasFoundSecret(secret.Id));
+					// A secret or an event is done the moment it happens (AchievementManager.CompleteNow), and
+					// what it measures - the save's found list, LifetimeStats.EventsWon - is the authority
+					// on that; the deed is a view of it.
+					|| (deed.CompletesInRun && deed.IsComplete(lifetime));
 
 				if (secret != null)
 				{
 					// A secret is counted only where the player can go: a chapter not open has nothing
 					// on the page, not even its count (4.3 - "each open chapter with sealed secrets").
-					bool glimpsed = AchievementFacts.IsGlimpsed(save, secret.Id);
+					bool glimpsed = save.HasGlimpsedSecret(secret.Id);
 					if (!item.Done && !glimpsed && !IsOpen(save, item.StageId))
 						continue;
 					if (!chapters.TryGetValue(item.StageId, out ChapterSecrets chapter))
@@ -275,8 +279,7 @@ public static class AchievementsPage
 						continue;
 					}
 				}
-				else if (!item.Done && !string.IsNullOrEmpty(deed.CharacterUnlockId)
-					&& !GlobalStatsManager.IsCharacterRevealed(save, deed.CharacterUnlockId))
+				else if (!item.Done && AchievementDefinitions.IsSealed(deed, save))
 				{
 					// The character select's rule: a secret wizard is a sealed blank until his chapter opens.
 					item.SealedWizard = true;
@@ -307,6 +310,24 @@ public static class AchievementsPage
 
 	private static bool IsOpen(SaveData save, string stageId) =>
 		GlobalStatsManager.IsStageAvailable(save, StageCatalog.GetById(stageId));
+
+	/// <summary>
+	/// Whether the page has anything to say about a deed - more than A1's
+	/// <see cref="AchievementDefinitions.IsListed(AchievementDefinition, SaveData)"/>, which answers "shown in
+	/// full": a sealed secret wizard's deed is a sealed row here, and a secret in the world that has not
+	/// been seen is a glyph on its chapter's row. A deed for a chapter or a secret not built yet is nothing
+	/// anyone can do, so it is not on the page at all (the nine spell vaults, until their chapters' agents
+	/// build them).
+	/// </summary>
+	private static bool IsShown(AchievementDefinition deed, SaveData save)
+	{
+		if (deed.Visibility == AchievementVisibility.Hidden)
+			return SecretCatalog.Get(deed.SecretId)?.IsBuilt == true && IsBuilt(deed.StageId);
+		return AchievementDefinitions.IsListed(deed, save)
+			|| (AchievementDefinitions.IsSealed(deed, save) && IsBuilt(deed.StageId));
+	}
+
+	private static bool IsBuilt(string stageId) => StageCatalog.GetById(stageId)?.IsPlayable ?? true;
 
 	/// <summary>
 	/// The pause screen's three readings of a deed (4.4). Most deeds are measured against the save's
@@ -585,7 +606,8 @@ public static class AchievementsPage
 		var entry = new CodexRows.Entry
 		{
 			Title = item.Deed.DisplayName,
-			Body = item.Done ? secret.FoundLine : AchievementFacts.SeenLineOf(item.Deed),
+			Body = item.Done ? secret.FoundLine
+				: !string.IsNullOrEmpty(item.Deed.SeenLine) ? item.Deed.SeenLine : secret.SeenLine,
 			Meta = showChapter && !string.IsNullOrEmpty(chapter) ? $"{chapter}  ·  {reward}" : reward,
 			MetaGlyph = CodexRows.RewardGlyph(item.Deed, SpellIcon),
 			MetaIsReward = true,
@@ -632,7 +654,8 @@ public static class AchievementsPage
 	{
 		return CodexRows.BuildRow(new CodexRows.Entry
 		{
-			Title = AchievementFacts.SealedLineOf(item.Deed),
+			// RegressionChecks (A1) holds every sealable deed to having this line.
+			Title = item.Deed.SealedLine,
 			Meta = "Sealed until you reach it",
 			MetaGlyph = BonelightSkin.LoadTextureSafe("res://assets/bonelight/characters/sealed-portrait.png"),
 			Quiet = true,
@@ -647,140 +670,4 @@ public static class AchievementsPage
 			s => s.Id.Equals(spellId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 		return spell?.Icon;
 	}
-}
-
-/// <summary>
-/// What the achievements page and the Spell Index read about an achievement beyond what it has always
-/// carried - its kind, its chapter, whether it is hidden and the words for each state - and about the
-/// save's glimpses. Piece A1 of .ai/achievements-and-secrets.md (section 2.6) adds all of it to
-/// <see cref="AchievementDefinition"/> (<c>Kind</c>, <c>StageId</c>, <c>Visibility</c>, <c>SecretId</c>,
-/// <c>SeenLine</c>, <c>SealedLine</c>), derives a deed from every secret and side event, and gives the save
-/// <c>GlimpsedSecretIds</c>.
-/// </summary>
-/// <remarks>
-/// STUB UNTIL A1 LANDS. This page was built in parallel with A1, against the doc's names; until A1's
-/// fields are on this branch, each answer here is derived from what the code already has - a deed with a
-/// boss is a chapter's, a secret's deed is made here from <see cref="SecretCatalog"/> - and the glimpses
-/// are kept in memory (only <c>_UiShot --seen-secrets</c> writes them). When A1 merges, every body below
-/// becomes a read of its field and nothing outside this class changes.
-/// </remarks>
-internal static class AchievementFacts
-{
-	/// <summary>The doc's four kinds (2): <c>AchievementKind</c> once A1 lands.</summary>
-	internal enum Kind
-	{
-		Feat,
-		Road,
-		Secret,
-		Collection,
-	}
-
-	/// <summary>Every achievement the page may show: the listed deeds and one per secret in the world.</summary>
-	public static IEnumerable<AchievementDefinition> Listed => AchievementDefinitions.Listed.Concat(SecretDeeds.Keys);
-
-	public static Kind KindOf(AchievementDefinition deed)
-	{
-		if (deed == null)
-			return Kind.Feat;
-		if (SecretDeeds.ContainsKey(deed))
-			return Kind.Secret;
-		if (!string.IsNullOrWhiteSpace(deed.BossId) || !string.IsNullOrEmpty(RevealStageOf(deed)))
-			return Kind.Road;
-		return deed.Id is "relic_hunter" or "set_collector" ? Kind.Collection : Kind.Feat;
-	}
-
-	/// <summary>The chapter an achievement belongs to, a StageCatalog id; empty for a Feat.</summary>
-	public static string StageIdOf(AchievementDefinition deed)
-	{
-		if (deed == null)
-			return string.Empty;
-		if (SecretOf(deed) is SecretDefinition secret)
-			return secret.StageId;
-		if (!string.IsNullOrWhiteSpace(deed.BossId))
-		{
-			BossDefinition boss = BossCatalog.GetById(deed.BossId);
-			int index = boss != null ? BossCatalog.StageIndexOf(boss) : -1;
-			return index >= 0 ? StageCatalog.GetByIndex(index).Id : string.Empty;
-		}
-		return RevealStageOf(deed);
-	}
-
-	/// <summary>The secret a deed is the view of, or null.</summary>
-	public static SecretDefinition SecretOf(AchievementDefinition deed) =>
-		deed != null && SecretDeeds.TryGetValue(deed, out SecretDefinition secret) ? secret : null;
-
-	/// <summary>The spell a secret pays through its deed - a vault's (6.4) - or empty.</summary>
-	public static string SpellOf(SecretDefinition secret) => string.Empty;
-
-	/// <summary>Whether a spell is paid by a spell vault, so the Spell Index names the chapter (decision 7).</summary>
-	public static bool IsVaultSpell(string spellId) => false;
-
-	/// <summary>What the player saw (4.3): an observation, never an instruction.</summary>
-	public static string SeenLineOf(AchievementDefinition deed) =>
-		SecretOf(deed) is SecretDefinition secret && SeenLines.TryGetValue(secret.Id, out string line)
-			? line
-			: "You have seen something here.";
-
-	/// <summary>A sealed deed's line: "The Broken Circle holds someone".</summary>
-	public static string SealedLineOf(AchievementDefinition deed)
-	{
-		string stage = StageIdOf(deed);
-		return $"{Capitalised(ChapterPhrase(stage))} holds someone";
-	}
-
-	/// <summary>Whether a secret's near tell has been on screen, once, in any run (4.3).</summary>
-	public static bool IsGlimpsed(SaveData save, string secretId) =>
-		!string.IsNullOrEmpty(secretId) && StubGlimpsed.Contains(secretId);
-
-	/// <summary>Marks a secret seen on <paramref name="save"/> - for <c>_UiShot --seen-secrets</c>.</summary>
-	public static void MarkGlimpsed(SaveData save, string secretId)
-	{
-		if (!string.IsNullOrWhiteSpace(secretId))
-			StubGlimpsed.Add(secretId.Trim());
-	}
-
-	/// <summary>"the Sunken Cave", "the Fallow Fields": a chapter's name as it reads mid-sentence.</summary>
-	public static string ChapterPhrase(string stageId)
-	{
-		string name = StageCatalog.GetById(stageId)?.DisplayName ?? "somewhere";
-		return name.StartsWith("The ", StringComparison.Ordinal) ? "the " + name.Substring(4) : "the " + name;
-	}
-
-	private static string Capitalised(string text) =>
-		string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);
-
-	// A deed that frees a secret wizard belongs to the chapter he is sealed behind.
-	private static string RevealStageOf(AchievementDefinition deed) =>
-		string.IsNullOrEmpty(deed?.CharacterUnlockId) ? string.Empty
-			: UnlockCatalog.GetCharacter(deed.CharacterUnlockId)?.RevealStageId ?? string.Empty;
-
-	// --- stub data: A1 carries all of this -----------------------------------------------------------
-
-	private static readonly HashSet<string> StubGlimpsed = new(StringComparer.OrdinalIgnoreCase);
-
-	// A1's derived secret deed (SecretCatalog.AsAchievement), made here until it exists.
-	private static readonly Dictionary<AchievementDefinition, SecretDefinition> SecretDeeds =
-		SecretCatalog.All.ToDictionary(SecretDeed, s => s);
-
-	private static AchievementDefinition SecretDeed(SecretDefinition secret)
-	{
-		string id = secret.Id;
-		return new AchievementDefinition
-		{
-			Id = "secret_" + id,
-			DisplayName = secret.DisplayName,
-			Description = secret.FoundLine,
-			RewardText = secret.MetaReward == SecretMetaReward.PageOnly ? "A mark on the page" : Capitalised(SecretCatalog.DescribeMeta(secret)),
-			Category = AchievementCategory.Exploration,
-			Measure = c => c.Save != null && c.Save.HasFoundSecret(id) ? 1f : 0f,
-			Target = 1,
-		};
-	}
-
-	// A1's SecretDefinition.SeenLine for the two secrets built so far, word for word.
-	private static readonly Dictionary<string, string> SeenLines = new(StringComparer.OrdinalIgnoreCase)
-	{
-		[SecretCatalog.FencedBloomId] = "A walled garden in the wood, and in it one pale flower that turns to follow you.",
-		[SecretCatalog.FirstTreeId] = "A dead clearing ringed with old stumps, and in the middle a bed of turned earth with nothing in it.",
-	};
 }

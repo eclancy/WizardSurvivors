@@ -623,7 +623,7 @@ public static class CodexRows
 			return wizard;
 		if (deed.CurrencyReward > 0)
 			return StatIcons.Load("energy");
-		if (AchievementFacts.SecretOf(deed) is SecretDefinition secret)
+		if (!string.IsNullOrEmpty(deed.SecretId) && SecretCatalog.Get(deed.SecretId) is SecretDefinition secret)
 			return SecretRewardGlyph(secret);
 		return StatIcons.Load("generic");
 	}
@@ -668,7 +668,7 @@ public static class CodexRows
 	/// </summary>
 	public static Texture2D SealedSecretGlyph(SecretDefinition secret, Palette palette)
 	{
-		string art = !string.IsNullOrEmpty(AchievementFacts.SpellOf(secret)) ? UnknownSpellArt
+		string art = secret?.MetaReward == SecretMetaReward.Spell ? UnknownSpellArt
 			: secret != null && secret.IsKeepsake ? SecretArt + "keepsake.png"
 			: SecretArt + "mark-page.png";
 		return BuildSilhouette(BonelightSkin.LoadTextureSafe(art), palette);
@@ -710,12 +710,15 @@ public static class CodexRows
 
 	/// <summary>
 	/// The Spell Index's glyph for a page not yet found: the warm glint for a spell hidden in a vault -
-	/// the secret's own tell, beside "Hidden somewhere in the Sunken Cave" (decision 7) - and the lock
-	/// for every other way of earning one.
+	/// the secret's own tell, beside UnlockCatalog's "Hidden somewhere in the Sunken Cave" (decision 7) -
+	/// and the lock for every other way of earning one. A vault built or not: the hint names the chapter
+	/// either way, and the glyph goes with the words.
 	/// </summary>
 	public static Texture2D SpellHintGlyph(string spellId)
 	{
-		return AchievementFacts.IsVaultSpell(spellId)
+		bool vault = !string.IsNullOrEmpty(spellId) && SecretCatalog.Defined.Any(
+			s => s.IsVault && s.SpellUnlockId.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+		return vault
 			? BonelightSkin.LoadTextureSafe(SecretArt + "secret.png") ?? StatIcons.Load("lock")
 			: StatIcons.Load("lock");
 	}
