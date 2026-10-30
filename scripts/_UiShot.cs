@@ -1039,6 +1039,12 @@ public partial class _UiShot : Node
 				foreach (string id in arg.Substring("--found-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
 					secretsSave?.Data.RecordSecretFound(id.Trim());
 			}
+			// --demo-achievements: a save part way along the road, in memory (BuildDemoAchievementsSave),
+			// so every kind of row on the achievements page is on it at once - done, in progress, a
+			// chapter's sealed secrets, a sealed wizard. Put it FIRST: it replaces the save, and the
+			// --found-secrets and --seen-secrets after it mark the one it puts in.
+			else if (arg == "--demo-achievements")
+				ReplaceSave(BuildDemoAchievementsSave());
 			else if (arg.StartsWith("--seen-secrets="))
 			{
 				SaveManager.WritesDisabled = true;
@@ -1493,6 +1499,42 @@ public partial class _UiShot : Node
 		data.ArcaneUpgradeLevels["luck"] = 5;
 		data.ArcaneUpgradeLevels["crit_chance"] = 2;
 		GlobalStatsManager.UnlockSpell(data, "molten_shard");
+		return data;
+	}
+
+	// The --demo-achievements save: two runs in. The Forest won as the Pyromancer (fifteen minutes,
+	// level 18, four Fire held, 820 kills) and the Fallow Fields lost at 7:50
+	// as the Frostweaver, so the Fields are open and the Broken Circle - Laelaps's chapter - is not:
+	// his deed is a sealed row. First Blood, Survivor, Veteran, Forest Cleared, Elementalist and Fire
+	// Adept are done, everything else is part way, and two spells the shop sold are owned (Hollow Star and
+	// Gravewell), so a deed that pays one says "you already had it" once A1 moves them onto deeds.
+	private static SaveData BuildDemoAchievementsSave()
+	{
+		var data = new SaveData { TotalCurrency = 240 };
+		data.Lifetime.Absorb(new RunResult
+		{
+			Outcome = RunOutcome.Victory, StageId = "stage_0", BossId = "forest_treant", CharacterId = "pyromancer",
+			TimeSurvived = 900f, EnemiesKilled = 820, FinalPlayerLevel = 18, ChestsOpened = 11, UndamagedSeconds = 96f,
+			PeakElementCounts = new System.Collections.Generic.Dictionary<string, int> { ["Fire"] = 4, ["Earth"] = 2, ["Arcane"] = 2 },
+			EquippedSpells = Enumerable.Range(0, 5).Select(_ => new RunSpellSnapshot()).ToList(),
+		});
+		data.Lifetime.Absorb(new RunResult
+		{
+			Outcome = RunOutcome.Defeat, StageId = "stage_9", CharacterId = "frostweaver",
+			TimeSurvived = 470f, EnemiesKilled = 390, FinalPlayerLevel = 12, ChestsOpened = 6, UndamagedSeconds = 41f,
+			PeakElementCounts = new System.Collections.Generic.Dictionary<string, int> { ["Ice"] = 3, ["Water"] = 2 },
+			EquippedSpells = Enumerable.Range(0, 4).Select(_ => new RunSpellSnapshot()).ToList(),
+		});
+		foreach (string deed in new[] { "first_blood", "survivor", "veteran", "forest_cleared", "elementalist", "fire_adept" })
+		{
+			data.UnlockedAchievementIds.Add(deed);
+			AchievementDefinition definition = AchievementDefinitions.GetById(deed);
+			if (!string.IsNullOrEmpty(definition?.SpellUnlockId))
+				GlobalStatsManager.UnlockSpell(data, definition.SpellUnlockId);
+		}
+		GlobalStatsManager.UnlockSpell(data, "hollow_star");
+		GlobalStatsManager.UnlockSpell(data, "gravewell");
+		GlobalStatsManager.UnlockStage(data, "stage_9");
 		return data;
 	}
 

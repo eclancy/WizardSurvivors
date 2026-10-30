@@ -2112,8 +2112,11 @@ public partial class MainMenu : Control
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
 		AchievementsPage.Result page = AchievementsPage.Build(achievementList, AchievementContext.ForSave(data),
 			AchievementsPage.PageMode.Menu, AchievementsPage.MenuFilter, string.Empty);
+		// The bar under the count only where there is height for it: on a 720-tall PC canvas the heading,
+		// the subtitle, the count and the tabs already stand over the list, and every unit they take is a
+		// row the list cannot show. The phone's portrait canvas has the height to spare.
 		achievementSummary.AddChild(CodexRows.BuildSummary(AchievementsPage.SummaryLine(page, narrow), CodexRows.Stone,
-			page.Total > 0 ? page.Earned / (float)page.Total : 0f));
+			narrow && page.Total > 0 ? page.Earned / (float)page.Total : (float?)null));
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();
