@@ -10,10 +10,12 @@ Eric, 2026-10-29:
 > Let's add significantly more secrets, like a giant crystal that needs to be destroyed to find a
 > related spell, etc."
 
-**Status: design, decided 2026-10-30, not built.** Eric accepted every recommendation (section 10),
-confirming three directly: the final gate is **every wizard freed and the Long Coil beaten**; the shop
-stops selling spells and Arcane Energy keeps the stat upgrades and the boons; Fireball goes to the
-Long Coil. The unlock core (piece A1, section 9) is being built now. Its sister doc,
+**Status: design, decided 2026-10-30; the unlock core (A1) built, the rest not.** Eric accepted every
+recommendation (section 10), confirming three directly: the final gate is **every wizard freed and the
+Long Coil beaten**; the shop stops selling spells and Arcane Energy keeps the stat upgrades and the
+boons; Fireball goes to the Long Coil. The unlock core (piece A1, section 9) is built on branch
+`wip/achievements-core`; **section 11 says what it built and where it departs from this design** -
+read it before building A2, A3 or A4 against it. Its sister doc,
 `.ai/endgame-castle.md`, designs the castle chapters from the same message - and there Eric chose to
 **move the Cursed Dungeon into the castle**, which this doc now follows: the Dungeon, its deed, its
 key event and Tituba, and its spell vault are past the gate (8.5). Castle secrets are listed here
@@ -195,7 +197,8 @@ Shard's shatter is the better story anyway.
 ### 2.3 Wizards and boons
 
 - **Tituba, Väinämöinen, Wishing Coin and Gilded Mote become Road deeds** with their side events as
-  triggers ("Tituba Freed", "Out of the Ice", "The Last Coin", "The Circle Relit"), granted at once as
+  triggers ("Tituba Freed" - built as **"The Open Cell"**, section 11 - "Out of the Ice", "The Last
+  Coin", "The Circle Relit"), granted at once as
   now. Their reveal rules are unchanged: a deed that frees a secret wizard is a sealed row until his
   chapter opens. Tituba's chapter is the castle's dungeon now, so on a new save her row stays sealed
   until late; how the gates treat her is `.ai/endgame-castle.md` 1.6.
@@ -763,7 +766,7 @@ own plan; the two meet only at `SecretCatalog`'s castle files and the achievemen
 
 | piece | what | files it owns | depends on |
 |---|---|---|---|
-| **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it | decided; **in progress** |
+| **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it. **Also touched, section 11:** `SecretCatalog.cs` (additive), `WorldMap.cs`, `_UiShot.cs`, `_BalanceHarness.cs` | **built** (`wip/achievements-core`, section 11) |
 | **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them) |
 | **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods) | A1 |
 | **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | A1 |
@@ -816,3 +819,120 @@ Every recommendation stands. The first three were confirmed directly.
 **Raised since, and answered in the castle doc** (`.ai/endgame-castle.md` 10.2): whether the Throne
 also needs every wizard freed (recommended yes, so Tituba is counted where he is), and the schema 20
 step that moves the Dungeon, which follows this doc's schema 19.
+
+---
+
+## 11. What A1 built (2026-10-30, `wip/achievements-core`)
+
+The unlock and achievement core: sections 2.1-2.6 and 3. Nothing of section 4 (the page, A2), 2.4's
+shop (A3) or the vaults in the world (A4 and the chapter agents) is built.
+
+### 11.1 Where it lives
+
+| piece | where |
+|---|---|
+| the new fields | `AchievementDefinition`: `Kind` (`AchievementKind`: Feat, Road, Secret, Collection), `StageId`, `Visibility` (`AchievementVisibility`: Always, ChapterOpen, Hidden), `CompletesInRun`, `SiteId`, `SecretId`, as 2.6 names them, plus **`SeenLine`** and **`SealedLine`** (4.3's words, so the page invents nothing) |
+| deed ids | a side event's deed is `event_<site id>` (`AchievementDefinitions.EventDeedId`), a secret's `secret_<secret id>` (`SecretDeedId`), made from the id so neither can drift or collide with a hand-written deed. The Collection deed is `grimoire_restored` |
+| derived event deeds | `AchievementDefinitions.SideEventDeeds`: one per site in `SideEventDirector.ForStage`, its reward read from `UnlockCatalog.ForDiscoverySite`, its words from `SideEventWords` (the one hand-written part; `ValidateAchievements` ties them together both ways) |
+| derived secret deeds | `SecretCatalog.AsAchievement`, one per secret in `SecretCatalog.Defined`. Hidden, `CompletesInRun`, measured by `SaveData.FoundSecretIds` |
+| the unlocks | `UnlockCatalog`: every spell is `Starter` or `Achievement`. A side event's unlock is `Achievement`-sourced from its event deed and keeps the site on **`UnlockDefinition.SiteId`**. `UnlockSource.Discovery` is still in the enum and nothing uses it; `ValidateUnlockCatalog` refuses it. `PurchasableSpells` is empty (the shop's shelf draws nothing until A3 removes it) |
+| in-run completion | `AchievementManager.CompleteNow(saveManager, id)` (complete, grant, save, named entries) over `Complete(save, id)` (records the deed **and the fact it measures** - the event won, the secret found - so the two can never disagree; pays its Arcane Energy only the first time; grants what is not owned). `DiscoveryRewards.GrantSite` is a call to it now, with an in-memory overload the validators use |
+| reconciling | `AchievementManager.Reconcile(save)`: every recorded deed's current spell, boon or wizard, if not owned. Never currency. Runs in the schema 19 step and at the end of every `ApplyRunAchievements` |
+| the gate | `StageGate.PreviousBossAndWizards` (it replaced `CampaignComplete`) on the Emberdeep. `GlobalStatsManager.GateWizardIds(gate)` / `CountsTowardGate(wizard, gate)` / `IsGateMet(save, gate)` / `RemainingGateWizardCount`. `StageCatalog.GateChapter` (the first), `GateChapters` (all), `IsBossGated` |
+| the save | `SaveData.CurrentSchemaVersion` 19, `MigrateToAchievementUnlocks`; `SaveData.GlimpsedSecretIds` (`HasGlimpsedSecret`, `RecordSecretGlimpsed`); `LifetimeStats.EventsWon` (`HasWonEvent`, `RecordEventWon`) |
+| listing | `AchievementDefinitions.IsListed(deed, save)` and `ListedFor(save)` hold 4.2's rules; `IsSealed(deed, save)` is the sealed-row test; `ForStage(stageId)` groups a chapter |
+
+### 11.2 Where it departs from this doc, and why
+
+1. **The nine vaults are written in `SecretCatalog` now, as planned entries** (`IsBuilt = false`),
+   with their deeds, words and spells - not left for A4. Every vault spell has to point at a deed
+   that exists, or `ValidateUnlockCatalog` fails; and the doc's own wording ("a secret that pays a
+   spell names it in `SecretDefinition.SpellUnlockId`", `SecretCatalog.AsAchievement`) puts that in
+   the secret catalog. The edit is additive: `SecretDefinition` gained `SeenLine`, `IsVault`,
+   `IsBuilt`, `SpellUnlockId` and `SpellName`; `SecretVerb` gained `Gather` and `Lure`;
+   `SecretMetaReward` gained `Spell`; `SecretCatalog.Defined` is every secret written down and
+   `SecretCatalog.All` only the built ones (what the Secrets list and the world map count, so no
+   screen names a vault that is not in the world). **A4 moves each vault into its chapter's partial
+   file; each chapter agent flips `IsBuilt` when its vault is placed.**
+2. **Until a vault is built, its spell cannot be earned on a new save.** That is nine spells (the
+   eight shop spells and Frost Shard). Every copy anyone bought stays; but A1 alone should not ship
+   to players before the vaults do. The Spell Index already says where each is hidden (decision 7:
+   the unlock's `LockedHint` is the deed's sealed line, "Hidden somewhere in the Sunken Cave").
+3. **A secret's deed carries the vault's spell and nothing else.** A keepsake's found level or Arcane
+   lump stays `SecretDirector.Found`'s to pay, on the first find, never the deed's - so a deed
+   reconciled or completed twice can never pay it twice.
+4. **`SecretDirector.Found` does not call `CompleteNow` yet** - it is A4's file. Until it does, a
+   found secret's deed is recorded at the run's end by `ApplyRunAchievements` (its measure reads
+   `FoundSecretIds`), and a vault's spell would be granted then, not at once. **Decision 9 ("at once")
+   needs A4's one call**: `AchievementManager.CompleteNow(saveManager, AchievementDefinitions.SecretDeedId(id))`.
+   The level-up pool already reads the save live (`Player.GetLevelUpOptions`), so nothing else is
+   needed for the spell to be offered from the next level-up. A deed completed in the run that only
+   reaches the run's end (as these do) is recorded silently there unless it grants something - its
+   own beat already announced it.
+5. **The Cursed Dungeon's event deed is "The Open Cell", not "Tituba Freed".** A rescued wizard's
+   name is his reward and stays hidden while he is locked (`.ai/side-events.md`, "Secret wizards"),
+   and the deed is listed from the day the Dungeon opens. Its reward line still says "Frees Tituba",
+   as the Coursing's says "Frees Laelaps": **A2 should show a locked secret wizard's reward without
+   his name** (the deed's `CharacterUnlockId` and `GlobalStatsManager.IsCharacterUnlocked` say when).
+6. **The old Unlocks list hides some rows until A2.** `AchievementDefinitions.Listed` (no save) is
+   `ListedFor(null)`, which reveals nothing secret: no Hidden deed, and no deed that frees a secret
+   wizard - The Open Cell, Out of the Ice and **the Coursing**, which the old list did show (naming
+   Laelaps on a fresh save). A2's page calls `ListedFor(save)` and draws `IsSealed` rows.
+7. **The gate is written per chapter and counts Tituba today.** "Every wizard whose rescue comes
+   before *this* chapter": the Cursed Dungeon is still fifth in `CampaignOrder`, so the Emberdeep
+   counts all seven wizards now. When schema 20 moves the Dungeon past the gate she drops out of the
+   Emberdeep's count by herself and into the Throne's, with no edit to the gate.
+8. **Met gates are written into the opened list** (`GlobalStatsManager.RecordMetGates`, at every
+   run's end and in the schema 19 step), so a wizard added before a gate later can never close it to
+   a save that had it open - the cost schemas 10, 12, 14, 15 and 16 each paid for a new spell or
+   wizard. A gate met at a run's end is shown on the results screen as a new chapter.
+9. **The old migration steps read frozen lists.** Steps 8, 10, 12, 14, 15 and 16 read
+   `UnlockCatalog.AllSpellIds`, `AllWizardIds` and `Source == Discovery` live. With the discoveries
+   turned into deeds, step 8 would have handed Tituba and Vainamoinen to every pre-campaign save, and
+   step 10 would have stopped crediting the discoveries; and every future spell would have changed
+   what they did. They read the schema-18 lists frozen in `SaveData` now, so a new spell or wizard
+   needs no migration at all.
+10. **Step 2 also records done, quietly, every event and secret deed whose fact the save holds**, so
+    the first run after the update does not announce as new an event won long ago. A save that owns
+    Wishing Coin or Gilded Mote from schema 9's payback has those events' deeds done: it owns what
+    they pay.
+11. **Kinds of the existing deeds**: the Coursing is a Road deed of the Broken Circle (it names the
+    chapter and frees a wizard secret until it opens); Relic Hunter, Attuned and the Grimoire are
+    Collection; the rest of the hand-written non-boss deeds are Feats. John Dee's Mortlake deed is a
+    Feat with no chapter, so every gate counts him.
+12. **The reveal rule is generalised**: a wizard a gate counts must be revealed by a chapter before
+    that gate (`ValidateSecret`), as `.ai/endgame-castle.md` 1.6 asks.
+13. **Outside the file list, forced by the gate**: `WorldMap` (the finale card read the old enum, and
+    its "Still held" line counted spells; it counts the gate's wizards now), `_UiShot --campaign-complete`
+    (it must beat the gate's boss as well), and `_BalanceHarness` (a "new spells offered" report line,
+    to show a `--fresh-save` pool is the starters).
+
+### 11.3 What the element check found
+
+The second pass of `ValidateElementReachability` (6.3, item 5: starters, the shop's boons, Feats and
+chapter deeds before the gate, no secrets) passes for all twelve, as measured on the branch:
+
+| element | on the road (spells + boons) | everything |
+|---|---|---|
+| Light | 7 + 4 = 11 | 13 + 4 |
+| **Wind** | **5 + 1 = 6** | 9 + 1 |
+| Ice | 5 + 3 = 8 | 11 + 3 |
+| every other | 10 or more | |
+
+**Light is comfortable; Wind is the one at the floor.** Two of its spells are vaults (Sleet Runes,
+Hunter's Draw), which leaves Cyclone Slash, Gale Blade and Shadegrease. Any change that takes one more
+Wind carrier off the road trips the check.
+
+### 11.4 Verified, and not
+
+- `dotnet build`; the validator run (0 errors, the one standing test_wizard warning); every check
+  above was shown to fire by breaking what it guards (a reward line, a wizard's chapter past the
+  gate, the per-chapter rule, `Reconcile`, schema 8's frozen list).
+- `ValidateGateReachability` walks a new save in memory through every chapter before the gate - each
+  boss beaten as a run's end records it, each side event won, each built secret found, each Feat done
+  - and it enters the Emberdeep; without the Long Coil, or without any one wizard the gate counts, it
+  does not.
+- `ValidateAchievementMigration`: the doc's seven samples, a Long Coil-only save, a pre-campaign save
+  and a schema-9 save that had everything, each migrated twice.
+- **Not verified by play**: nothing here was seen on a screen - the old Unlocks list with the new
+  rows, the world map's finale card, a won event's line. A2's photographs cover the page.
