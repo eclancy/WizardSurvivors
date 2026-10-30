@@ -278,18 +278,23 @@ public sealed partial class LevelGenerator
 		// which is a playable field and nothing more. Walkable blobs only, plus the existing pit: a new
 		// blocking terrain has to agree in four shared places (.ai/terrain.md section 2).
 
-		// THE LAST BRIDGE (stage_11, C1): a Band (LevelGenerator.Band.cs). Stand-in: the Ruins' stone with
-		// laid patches, and the deck's gaps as the existing `pit` (3.8). C1 replaces the floor with the deck
-		// (terrain_bridge.py) and the drop with the `abyss` water.
+		// THE LAST BRIDGE (stage_11, C1): a Band (LevelGenerator.Band.cs) - a diagonal deck with the drop,
+		// generated as water in the `abyss` style, either side. The deck is `deck` (terrain_bridge.py), laid
+		// setts with no direction in them, used as the ground the way the Forest stands on `grass`; the
+		// graystone is only the fallback a missing deck would paint. A few spills of scree where the setts
+		// have broken up. `pit` is listed only so its tiles are built at stage start: weight 0, first, so
+		// PickBlob never draws it - the deck's two gaps are placed by the band itself (BridgeBand.Gaps,
+		// 3.8), never scattered.
 		[StageEnvironmentKind.Bridge] = new Palette
 		{
+			GroundTerrain = "deck",
 			GroundMaterial = "graystone",
 			Blobs = new[]
 			{
-				new BlobSpec("cobble", 2.0f, 2.0f, 3.4f),
-				new BlobSpec("pit", 0.5f, 1.4f, 2.2f),
+				new BlobSpec("pit", 0f, 1.4f, 2.2f),
+				new BlobSpec("rocky_pit", 1.0f, 1.4f, 2.4f),
 			},
-			Density = 0.004f,
+			Density = 0.0018f,
 			// The garrison's braziers and chain-posts. Not bones: the bridge's dead are names on the
 			// parapet, never bodies (3.9).
 			PropThemes = new[] { "torture" },

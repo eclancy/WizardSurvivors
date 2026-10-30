@@ -153,9 +153,15 @@ public static class GroundDetail
 		// THE CASTLE (.ai/endgame-castle.md): STAND-INS, each its own piece's block to replace (C1 the
 		// bridge's detail_bridge.py - cracks, scorch, dropped bolts, pitch stains; C3 the Court's; C4 the
 		// Throne's), a blank line apart. Laid stone, so only what lies on laid stone: no growing thing.
+		// The Last Bridge (C1, tools/art/detail_bridge.py): a deck a garrison has fought over. Cracks in
+		// the setts and loose stones everywhere; scorch where the pitch was fired and pitch where it spilled,
+		// in drifts; the crossbowmen's spent bolts, in sprays. The scree patches are where the setts have
+		// broken up, so the rubble is thickest there. Nothing grows on it, and none of it is bones.
 		[StageEnvironmentKind.Bridge] = new[]
 		{
-			G("cracks", 0.012f, 1), G("rubble", 0.004f), G("pebbles", 0.003f, 1),
+			G("cracks", 0.011f, 1), G("pebbles", 0.003f, 1), G("rubble", 0.003f),
+			G("scorch", 0.005f, 6), G("pitch", 0.0035f, 5), G("bolts", 0.0045f, 4),
+			G("rubble", 0.02f, 1, "rocky_pit"), G("pebbles", 0.012f, 1, "rocky_pit"),
 		},
 
 		[StageEnvironmentKind.Court] = new[]

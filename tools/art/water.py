@@ -106,7 +106,33 @@ STYLES = {
         ripple=t("stone", "base"), glint_tone=t("arcane", "base"), scum_tone=t("stone", "shade"),
         shallows=t("stone", "shade"),
     ),
+    # THE ABYSS (the Last Bridge, .ai/endgame-castle.md 3.2): not water you could stand at the edge of,
+    # but the drop off the side of the bridge - the dark sea a long way below. So the body is the darkest
+    # thing on screen, `occ`, the absence of a floor, as the old maze void was; what says "far below" is
+    # mist lying over it in a half-tone of stone's deep stop (the generic patches, and the drifting
+    # ripple marks, which here are mist moving, not wavelets), and the sea under the mist in a few long
+    # broken streaks of arcane's deep stop - dark blue, never a highlight. There is no bank: the deck
+    # ends at a kerb, so the lip on the deck is stone's shade and deep (a contact shadow, not wet earth),
+    # the first pixel over the edge is `occ`, and the dark band under it is the side of the bridge going
+    # down, in stone's deep stop - wide on the shores facing the viewer (the bottom-right drop, where
+    # the bridge's flank shows), narrow under the far parapet. The "sunward shallows" slot is mist lit
+    # by nothing: stone's deep stop again, so the top-left drop never grows a lighter band.
+    "abyss": dict(
+        body=bl.OCC, alt=t("stone", "deep"), streak=t("arcane", "deep"),
+        glint=t("stone", "shade"), scum=None,
+        lip_outer=t("stone", "shade"), lip_inner=t("stone", "deep"),
+        waterline=bl.OCC, edge=t("stone", "deep"),
+        ripple=t("stone", "deep"), glint_tone=t("stone", "shade"), scum_tone=t("stone", "deep"),
+        shallows=t("stone", "deep"),
+        # Mist: more of the half-tone than open water gets (up to half the pixels, not three in eight),
+        # and longer streaks - the sea seen through it is a swell a long way down, not ripples close by.
+        cover=0.5, streak_run=(10, 26), streak_groups=6,
+    ),
 }
+
+# Each style's surface seed. They were 11 + 17 * (its place in the sorted styles) when there were four;
+# written out so a style added later (the abyss) cannot shift the others' seeds and redraw their water.
+SEEDS = {"forest": 11, "frozen": 28, "pool": 45, "swamp": 62, "abyss": 83}
 
 
 class Rand(object):
@@ -145,20 +171,24 @@ def surface(style, seed):
     flat = sorted(v for row in vals for v in row)
     lo, hi = flat[int(len(flat) * 0.55)], flat[int(len(flat) * 0.97)]
     dither = raster.BAYER8
+    # How much of the second tone a patch may carry at most, and the streaks' length and count: the
+    # open-water numbers unless the style says otherwise (only the abyss does).
+    most = s.get("cover", 0.375)
+    run_lo, run_hi = s.get("streak_run", (5, 16))
     for y in range(SURFACE):
         for x in range(SURFACE):
-            cover = min(0.375, max(0.0, (vals[y][x] - lo) / (hi - lo)) * 0.375)
+            cover = min(most, max(0.0, (vals[y][x] - lo) / (hi - lo)) * most)
             if cover * 64.0 > dither[y % 8][x % 8]:
                 c.set(x, y, s["alt"])
     # Reflection streaks: short horizontal lines in loose rows, as a reflection breaks up on a
     # surface that is not quite still. Grouped, and few groups: a field of single dashes is the
     # knitted chevron again.
-    for g in range(8):
+    for g in range(s.get("streak_groups", 8)):
         gx, gy = r.i(0, SURFACE - 1), r.i(0, SURFACE - 1)
         for k in range(r.i(3, 5)):
             x0 = gx + r.i(-10, 10)
             y0 = gy + k * r.i(2, 4)
-            run = r.i(5, 16)
+            run = r.i(run_lo, run_hi)
             gap = r.i(2, run - 3) if run > 8 and r.f() < 0.6 else -1
             for j in range(run):
                 if j == gap or j == gap + 1:
@@ -222,8 +252,8 @@ def main():
         os.makedirs(OUT_DIR)
     ok = True
     out = []
-    for i, style in enumerate(sorted(STYLES)):
-        out.append(("%s_surface" % style, surface(style, 11 + i * 17)))
+    for style in sorted(STYLES):
+        out.append(("%s_surface" % style, surface(style, SEEDS[style])))
         out.append(("%s_tones" % style, tones(style)))
     out.append(("ripple", ripple()))
     for name, c in out:
