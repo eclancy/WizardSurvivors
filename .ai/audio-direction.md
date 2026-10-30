@@ -19,7 +19,8 @@ Three hard constraints, in the order they bind:
 
 - This machine has **Python 2.7 with PIL and nothing else** — no numpy, no ffmpeg, no
   ImageMagick, no audio encoder, no virtualenv. `tools/art/` already works under exactly that
-  constraint, and `tools/audio/` follows it.
+  constraint, and `tools/audio/` follows it. (Since 2026-10-30 the agents' container has only
+  Python 3.13, so `tools/audio/` runs under both and writes the same bytes under either - section 3.)
 - There is **no audio model in the loop**. Nothing in this pipeline can render a description
   into a recording. What it can do is oscillators, envelopes, filters and saturation, which
   is the sfxr/Bfxr vocabulary and a natural fit for a pixel-art roguelite.
@@ -73,6 +74,17 @@ something has introduced time- or address-dependent randomness and that is a bug
 
 `tools/audio/_preview_<category>.wav` are audition reels — every sound in a category with
 250 ms gaps. They are working files: nothing loads them and they are not shipped.
+
+**Python 2.7 and 3 (2026-10-30).** The generators were written for 2.7 and the agents' container
+now has only 3.13, so `synth.py` carries the whole bridge: it lends `xrange` to every module
+(they all import it first), writes and reads WAV bytes through `tobytes`/`frombytes`, and rounds
+halves away from zero (`round_half_away`) as 2.7's `round()` did - Python 3 rounds them to even,
+which moved every `n_samples` landing on an exact half by one sample and rendered `bearing_found`
+19,000 samples different. With that, all 81 effects and the heath's three stems re-rendered under
+3.13 byte-identical to the committed files. Two rules keep it so: draw randomness only with
+`random()`, `uniform()`, `expovariate()` and `gauss()` - never `randrange`, `randint`, `choice` or
+`shuffle`, which draw differently under the two - and never call the builtin `round()` on anything
+that reaches a sample count or a sample.
 
 ## 4. The element palette
 
@@ -141,8 +153,8 @@ at unity and balance is changed by editing one number and re-running, not by hun
 
 | Band | Peak target | Typical members |
 |---|---|---|
-| Once a run | −3 to −5 dBFS | `boss_death`, `player_death`, `stage_clear`, `meta_unlock`, `spell_evolve`, `level_up` |
-| Once a minute | −6 to −9 dBFS | `chest_open`, `player_hurt`, `elite_spawn`, `spell_explosion`, `card_select` |
+| Once a run | −3 to −5 dBFS | `boss_death`, `player_death`, `stage_clear`, `meta_unlock`, `spell_evolve`, `level_up`, `secret_shatter` |
+| Once a minute | −6 to −9 dBFS | `chest_open`, `player_hurt`, `elite_spawn`, `spell_explosion`, `card_select`, `secret_found`, `secret_seen` (played at the site, so 5-6 dB under that when heard) |
 | Once a second | −11 to −15 dBFS | casts (−11), `enemy_death_*`, `enemy_shoot`, most of `ui_*` |
 | Many times a second | −15 to −23 dBFS | `impact_*` (−15), `enemy_hurt_*` (−19), `spell_orbit` (−22), `pickup_xp` (−23) |
 | Subliminal | −26 dBFS | `ui_hover` — it plays on every mouse movement across a button |
@@ -319,7 +331,7 @@ sounds are Critical, because the mechanism only works while Critical is rare.
 |---|---|---|---|---|
 | `Swarm` | `enemy_hurt_*`, all `impact_*`, `pickup_xp`, `spell_orbit` | **drops itself** - never steals | attenuated | no |
 | `Normal` | casts, enemy deaths, UI, pickups, chest | steals a Swarm voice, else drops | attenuated | no |
-| `Critical` | the ten rare, run-defining sounds | steals Swarm then Normal; never stolen | **ignored** | yes |
+| `Critical` | the eleven rare, run-defining sounds (the Geode Heart's `secret_shatter` joined the ten on 2026-10-30) | steals Swarm then Normal; never stolen | **ignored** | yes |
 
 **`player_hurt` is not Critical**, despite being loud and important. While the player is being
 swarmed it fires several times a second, and a duck that retriggers before it releases turns
@@ -484,7 +496,10 @@ come every 12-15 s at the same density, so they are a pattern, not an arc.
 
 One rule ties it together: **every chapter is a mode of the same seven notes** (A natural
 minor's), so every stinger in `sfx.py` fits every chapter, and the mode is what carries the mood.
-Only the Emberdeep steps outside, with the boss loop's G sharp and B flat, because it is the end.
+Only the Emberdeep steps outside, with the boss loop's G sharp and B flat, because it is the end -
+and, since 2026-10-30, the two castle chapters inside his walls (the Court takes the G sharp, the
+Throne both), because the end has moved there: those two notes are **his**, and the music takes them
+up as the player comes into his house. The Last Bridge, still outside the walls, keeps the seven.
 `music.py` enforces this now rather than trusting it: `check_scale` refuses to render a note
 outside a piece's declared scale, or under E2 (82 Hz), the floor of the frequency budget.
 
@@ -507,9 +522,23 @@ Broken Circle (D Dorian, 5/4 at 138), each scored in its own `tools/audio/music_
 | 9 | The Sketchbook (Wizard Dude) | C major, 3/4, 168 | 24 bars, 25.7 s | soft strings, pizzicato oom-pah-pah | harp eighths, a soft frame drum, brush, a quiet toy tick | music box; a soft flute in B with the music box counting the beats above it | G to C, V - I |
 | 10 | The Fallow Fields (the Hayward) | G Mixolydian, 9/8 slip jig, dotted quarter 116 | 16 bars, 24.8 s | G-D drone, held strings, the fiddle's figure in spiccato through the three groups | frame drum in threes, plucked bass on the roots, a harp rocking through the chord | flute; a solo fiddle answers in B, a second an octave under | Dm to G, v - I |
 | 11 | The Broken Circle (the Ninth Stone) | D Dorian, 5/4 counted 3+2, 138 | 12 bars, 26.1 s | D-A drone, held strings, a low male choir, the horn call as ostinato; a high choir joins in B | taiko on the strong beats, frame drums filling the groups, plucked bass, harp walking the chord | two horns in fifths; a wordless solo voice in B | C to Dm, bVII - i |
+| 12 | The Last Bridge (the Constable) | A Aeolian, a 2/4 march at 120 | 24 bars, 24.0 s | held low strings, the march figure (dotted eighth, sixteenth, two eighths) in spiccato every bar, and the wind: long gusts of noise between 110 and 650 Hz | a side drum on the march rhythm with rolls, a bass drum, the bass plucked on the beats and pizzicato on the off-beats | two horns in octaves; two fifes over a horn an octave under them in B | G to Am, bVI - bVII - i |
+| 13 | The Court (the Seneschal) | A minor with its G sharp, a 3/4 minuet at 112 | 16 bars, 25.7 s | a viol consort held, the harpsichord's continuo broken in eighths | a theorbo's bass, the strings' pah-pah on two and three, a tambour on the minuet step's hemiola (the dancers' feet) | a recorder; a treble viol in B with the recorder a ghost an octave over it | E to Am, V - i |
+| 14 | The Throne (him) | A minor with B flat and G sharp, 4/4 at 104 in half time | 12 bars, 27.7 s | full choir, held strings, a low brass pedal, a slow tread in the low strings; the lament bass (A G F E) down to E2 | taiko in half time, snare on three, the boss loop's square bass on a 3-3-2, a sixteenth-note motor in the low strings | low brass in octaves; a chant over brass in B | E to Am, harmonic V - i |
 
 Rows 10 and 11 (`tools/audio/music_fields.py`, `music_heath.py`) were rendered without anyone
-listening; both loops are shorter than `.ai/campaign.md` asked so they keep to the Size rule.
+listening; both loops are shorter than `.ai/campaign.md` asked so they keep to the Size rule. Rows
+12 to 14 (`music_bridge.py`, `music_court.py`, `music_throne.py`, the castle of
+`.ai/endgame-castle.md`) were too, on 2026-10-30, and are not yet in `MusicCatalog` (the castle's
+plumbing agent adds them).
+
+**The Throne plays differently from every other chapter**, and its score is built for it. It has no
+boss loop: the whole chapter is the fight (the Muster, the wardens in pairs, then him), so its set
+plays from the first second and never hands over to `boss_loop.wav`. And its pulse drops out in his
+second phase ("the hall goes dark"), which is a fader, not a file: every bit of the piece's drive
+lives in the pulse, so the bed and the lead are complete without it, and phase 2 is
+`MusicPlayer.SetLayerTargets(pulse: 0, lead: 1)` held against `Node2DGame`'s layer rule until
+phase 3 brings it back. `music.py --journey` writes `throne_journey.wav` to hear exactly that.
 
 Three things in that table are constraints, not taste:
 
@@ -527,10 +556,20 @@ Three things in that table are constraints, not taste:
   nothing in it mocks the drawings, and nothing pretends to be what they drew. It was planned as
   a lullaby and the brief asked for energy, so it is a toy waltz - quick, warm, played straight. A
   music box is a toy that is taken seriously by whoever owns it; that is the register.
-- **The Emberdeep is the only chapter allowed outside the seven notes**, and the one that would
-  earn its own boss loop first. It runs at 150, faster than the shared boss loop's 138, which is
-  deliberate: the finale's descent is the most driven thing in the game, and the fight that ends
-  it is a different kind of weight, not more speed.
+- **The Emberdeep is the only chapter on the road allowed outside the seven notes**, and the one
+  that would earn its own boss loop first. It runs at 150, faster than the shared boss loop's 138,
+  which is deliberate: the finale's descent is the most driven thing in the game, and the fight
+  that ends it is a different kind of weight, not more speed. Past it, the Court and the Throne
+  take up the same two notes. **The Throne is the heaviest piece and the slowest beat** (104, in
+  half time), and still held to the chapters' RMS: its weight is register (the lament reaches E2,
+  the floor), density and breadth, never level.
+- **The castle's instruments are checked like the rest.** The bridge's wind is the wind element
+  turned over - all bass, 110-650 Hz, where `cast_wind` is highpassed at 520 Hz - and has no attack
+  at all, so it is neither wind nor earth; its side drum is a band at 1.1 kHz lowpassed at 2.3 kHz
+  (at 1.3 and 2.8 it put 3% of the pulse in the 2-5 kHz band). The Court's harpsichord is
+  Karplus-Strong with an octave string, harmonic, lowpassed under 3 kHz; its viol two harmonic
+  oscillators through a bowed body with almost no vibrato. The Throne uses only voices the set
+  already had.
 
 ### The score notation
 

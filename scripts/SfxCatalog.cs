@@ -106,6 +106,17 @@ public static class SfxCatalog
 	public const string HintIceSong = "hint_ice_song";
 	public const string HintCaravanBell = "hint_caravan_bell";
 
+	// --- secrets (.ai/stage-secrets.md 7.7, .ai/achievements-and-secrets.md 4.9 and 8.4.1) ------
+	// Generated and allowlisted, not yet played: the secret agents wire them as they build the sites.
+	// The warm glint as sound - breathed, never struck - so a secret never sounds like a reward bell.
+	// SecretSeen: the first time a secret's near tell is on screen (the seen mark), played AT the site.
+	public const string SecretSeen = "secret_seen";
+	// SecretFound: SecretDirector.Found, in place of EventReward - which goes back to meaning a side
+	// event's chest. MetaUnlock stays for a find that changes the save.
+	public const string SecretFound = "secret_found";
+	// SecretShatter: the Sunken Cave's Geode Heart breaking, once a run at most. Critical below.
+	public const string SecretShatter = "secret_shatter";
+
 	private static readonly string[] NonElementNames =
 	{
 		SpellExplosion, SpellBeamStart, SpellBeamLoop, SpellBeamEnd,
@@ -120,6 +131,7 @@ public static class SfxCatalog
 		UiHover, UiClick, UiBack, UiDenied, UiOpen, UiClose, UiPause,
 		StageClear, GameOver, MetaUnlock, WaveWarning,
 		HintGroveWhisper, HintCellCry, HintLanternFlare, HintIceSong, HintCaravanBell,
+		SecretSeen, SecretFound, SecretShatter,
 	};
 
 	// The generator lowercases the enum name, so Element.Darkness is cast_darkness.wav.
@@ -129,8 +141,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 54 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 81 in total, which is
+	// Every sound the game expects to exist: the 57 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 84 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{
@@ -170,14 +182,17 @@ public static class SfxCatalog
 		Critical,
 	}
 
-	// Critical is deliberately tiny - ten of sixty-nine. player_hurt is loud and important and is
+	// Critical is deliberately tiny - eleven of eighty-four. player_hurt is loud and important and is
 	// NOT here: while the player is being swarmed it fires several times a second, and a duck
 	// that retriggers before it releases turns the mix into a pump and removes hit feedback at
-	// the exact moment the player is dying.
+	// the exact moment the player is dying. The Geode Heart's shatter is: once a run at most, a
+	// spell vault opening, and it lands in the thick of the fight the crystal asked for, where a
+	// Normal sound can lose its voice to the swarm.
 	private static readonly string[] CriticalNames =
 	{
 		BossRoar, BossDeath, PlayerDeath, EliteSpawn,
 		LevelUp, SpellEvolve, StageClear, MetaUnlock, GameOver, WaveWarning,
+		SecretShatter,
 	};
 
 	// Everything that can fire many times a second: the hurt variants, every impact, the XP orb,

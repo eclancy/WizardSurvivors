@@ -989,6 +989,198 @@ def hint_caravan_bell():
 
 
 # ---------------------------------------------------------------------------
+# secrets - the light he missed (.ai/stage-secrets.md 7.7, .ai/achievements-and-secrets.md 4.9)
+# ---------------------------------------------------------------------------
+#
+# A secret's near tell is a warm glint that BREATHES (stage-secrets section 2): a 2 x 2 point of
+# warm light fading in and out on a slow period, the only animated pixel on a still object. These
+# are that glint in sound, and the one rule they keep is the art's: breathed, never struck. Every
+# reward in the game is a struck bell (level_up, chest_open, stage_clear, card_select, the heal),
+# so a secret is a cloud of soft sine grains with no attack in it - each grain a Hann swell, the
+# whole cloud swelling and going like the glint. Warm, not bright: the grains sit in A minor's
+# pentatonic from A4 to E6, never on G5 (the light element's bell), and everything is lowpassed
+# well under 4 kHz. Nothing here starts with palette.transient, because nothing here is a spell.
+
+# The glint's notes: A minor pentatonic without its G, so no grain is ever the light element's G5.
+_GLINT_NOTES = [0, 3, 5, 7, 12, 15, 17, 19, 24, 27, 31]      # semitones from A4: A4 ... E6
+
+
+def _grain(freq, dur, seed):
+    """One grain of the glint: a sine with a whisper of its octave, under a Hann window - it
+    swells and goes, it is never struck. The phase is seeded so two grains never start alike."""
+    n = S.n_samples(dur)
+    rng = __import__("random").Random(seed)
+    tone = S.mix(S.osc("sine", freq, dur, phase=rng.random()),
+                 S.gain(S.osc("sine", freq * 2.0, dur, phase=rng.random()), 0.1))
+    win = [0.5 - 0.5 * math.cos(2.0 * math.pi * i / max(1, n - 1)) for i in xrange(n)]
+    return S.env_mul(tone, win)
+
+
+def _glint_cloud(dur, count, shape, seed, notes=None, grain=(0.07, 0.16), first=None):
+    """A cloud of grains whose density and level follow `shape`, a curve over the cloud's length:
+    drawn by rejection from a seeded RNG, so the cloud is the same on every build. `first` puts
+    one grain of that note at the very start, for a cloud that must answer at once."""
+    rng = __import__("random").Random(seed)
+    notes = notes or _GLINT_NOTES
+    env = S.resample(shape, 512)
+    items = []
+    if first is not None:
+        items.append((_grain(_hz(first), grain[0], seed * 31 - 1), 0.0, max(0.5, env[0])))
+    tries = 0
+    while len(items) < count and tries < count * 200:
+        tries += 1
+        t = rng.random() * dur
+        weight = env[min(511, int(t / dur * 511))]
+        if rng.random() > weight:
+            continue
+        g = rng.uniform(grain[0], grain[1])
+        # Not rng.randrange or rng.choice: those draw differently under Python 3 and 2.7, and the
+        # build must write the same bytes under either. random() and uniform() do not.
+        f = _hz(notes[min(len(notes) - 1, int(rng.random() * len(notes)))])
+        items.append((_grain(f, g, seed * 31 + len(items)), t, (0.55 + 0.45 * rng.random()) * weight))
+    return S.pad(S.layer(items), dur)
+
+
+def secret_seen():
+    """A secret glimpsed (SecretDirector, the first time its near tell is on screen - the seen mark,
+    achievements-and-secrets 4.3 and 4.9). The soft shimmer stage-secrets 7.7 asked for, and
+    nothing else: no toast, no text, because those would be a pointer.
+
+    One breath of the glint: a cloud of sine grains that thickens over 0.7 s and thins over the
+    next second, under the faintest air of the same shape. It is not a tremolo (that is arcane's
+    17 Hz), not detuned triangles (arcane again), not a run of glints (Starfall falls in 60 ms),
+    and not a swell into a held tone (event_reward). Rare - once per secret per save as the seen
+    mark is built - but soft on purpose: it is a nudge, and the tell itself is already on screen,
+    so it is meant to be played AT the site (SfxPlayer.AtPosition), which takes another 5-6 dB
+    off at the 450 px the seen mark is taken from and pans it toward the thing he has noticed."""
+    dur = 1.75
+    n = S.n_samples(dur)
+    breath = S.ramp(n * 2 // 5, 0.05, 1.0, 1.4) + S.decay(n - n * 2 // 5, 1.6, 1.0, 0.0)
+    cloud = _glint_cloud(dur, 26, breath, 601)
+    air = S.bandpass(S.osc("noise", 0, dur, seed=607), 1250.0, 1.6)
+    air = S.env_mul(S.lowpass(air, 2400.0), breath)
+    out = S.mix(cloud, S.gain(air, 0.07))
+    out = S.highpass(S.lowpass(out, 3400.0, 0.707), 260.0, 0.707)
+    return S.dc_block(S.reverb(S.pad(out, 2.05), size=0.7, damp=0.5, mix=0.32))
+
+
+def secret_found():
+    """A secret found (SecretDirector.Found): the toast. The glint he saw, now his.
+
+    Two gestures: the cloud GATHERS - 0.4 s of grains thickening toward the bloom, the first one on
+    the frame he finds it, the light coming in to him - and then BLOOMS, a warm chord (F major
+    seventh with its third on top, F3 F4 C5 E5 A5) rolled up in 18 ms steps, each voice a sine with
+    a soft triangle under a lowpass that opens as it sounds, and three grains settling over it.
+    Warm, and on purpose no brighter: spread up to E6 the bloom measured 0.112 from player_heal and
+    0.121 from card_select - two struck bells - and a Fenced Bloom heals as it is found, so this
+    and player_heal play together. The low F is kept soft: at full weight the centroid sat at
+    570 Hz, down in the band the music owns. Not a bell (every other reward is one), not a
+    swelling stack (meta_unlock, which keeps meaning "the save changed"), not a needle settling
+    (bearing_found).
+    A secret is found a few times a run - every flower pen blooms - so it sits beside event_reward
+    in the once-a-minute band, which it replaces for secrets so that event_reward goes back to
+    meaning a side event's chest."""
+    dur = 1.6
+    gather_dur = 0.4
+    gn = S.n_samples(gather_dur)
+    rise = S.ramp(gn, 0.45, 1.0, 1.4)
+    gather = _glint_cloud(gather_dur, 12, rise, 613, notes=[3, 7, 12, 15, 19, 24], grain=(0.05, 0.1),
+                          first=12)
+
+    bloom_dur = dur - gather_dur + 0.1
+    voices = []
+    # F3 F4 C5 E5 A5 - F major seventh, the low F soft under it.
+    for k, (semi, level) in enumerate(((-16, 0.45), (-4, 0.9), (3, 0.85), (7, 0.75), (12, 0.65))):
+        f = _hz(semi)
+        v = S.mix(S.osc("sine", f, bloom_dur, phase=0.13 * k),
+                  S.gain(S.osc("tri", f, bloom_dur, phase=0.29 * k), 0.22))
+        v = S.lowpass(v, S.sweep(bloom_dur, 700.0, 2600.0, 0.6), 0.8)
+        v = S.env_mul(v, S.ad(bloom_dur, 0.03, 2.4))
+        voices.append((v, 0.018 * k, level))
+    bloom = S.layer(voices)
+    settle = _glint_cloud(0.7, 3, [0.0, 1.0, 0.7, 0.2], 617, notes=[24, 19, 15], grain=(0.09, 0.14))
+
+    out = S.layer([
+        (gather, 0.0, 0.8),
+        (bloom, gather_dur - 0.03, 0.85),
+        (settle, gather_dur + 0.12, 0.45),
+    ])
+    out = S.lowpass(S.pad(out, dur), 3600.0, 0.707)
+    return S.dc_block(S.reverb(out, size=0.72, damp=0.5, mix=0.3))
+
+
+def secret_shatter():
+    """The Geode Heart breaking (achievements-and-secrets 8.4.1): a crystal three men tall in a
+    Sunken Cave cavern, 2,000 damage landed at its foot, and it shatters outward in a ring that
+    freezes everything within 300 px. The game's loudest secret sound, once a run at most, so it
+    sits in the once-a-run row with spell_evolve and meta_unlock.
+
+    Four parts, in the order the eye gets them: two strain ticks a breath apart (the hairline
+    cracks giving), the CRACK - a short band of noise over a low split, a sine falling 190 to 92 Hz
+    and never under 80, because the sub band is the explosion's and the boss's - then the ring of
+    shards going out, forty small crystal tinkles that start dense and thin out, falling in pitch as
+    they fly farther, and a cold outward rush (a band falling 2.2 kHz to 500 Hz: frost spreads, the
+    ice element's hiss rises). All of it in the cavern, a long room. The shards are two inharmonic
+    partials at 1 : 2.43, not the ice element's 1 : 2.76 : 5.40 stack, and the whole is a cascade
+    over a second and a half, where player_shield_break - the other glass breaking in the set - is
+    one stack struck once in 0.65 s; a vault breaking must never sound like his shield going.
+    The warm light rising out of the shards is NOT here: SecretDirector.Found plays its own sound a
+    moment later (meta_unlock the first time, Frost Shard granted), and two stings in one second
+    should not both carry the reward."""
+    rng = __import__("random").Random(701)
+    dur = 2.3
+
+    # The strain: two hairline ticks, the second closer to the crack than the first.
+    strain = []
+    for k, (t, f) in enumerate(((0.0, 1500.0), (0.085, 1900.0))):
+        tn = S.n_samples(0.02)
+        tick = S.bandpass(S.osc("noise", 0, 0.02, seed=703 + k), f, 3.0)
+        strain.append((S.env_mul(S.lowpass(tick, 3200.0), S.decay(tn, 6.0)), t, 2.0 + 0.6 * k))
+    crack_at = 0.15
+
+    cn = S.n_samples(0.05)
+    snap = S.bandpass(S.osc("noise", 0, 0.05, seed=709), 1700.0, 0.9)
+    snap = S.env_mul(S.lowpass(snap, 4200.0), S.decay(cn, 5.0))
+    split_dur = 0.55
+    sn = S.n_samples(split_dur)
+    split = S.osc("sine", S.sweep(split_dur, 190.0, 92.0, 0.4), split_dur)
+    split = S.mix(split, S.gain(S.osc("tri", S.sweep(split_dur, 380.0, 184.0, 0.4), split_dur), 0.25))
+    split = S.env_mul(split, S.expdecay(sn, 5.5))
+
+    # The ring of shards: dense at the crack, thinning, each a little lower than the last.
+    shards = []
+    for k in xrange(40):
+        t = crack_at + 0.01 + min(1.5, rng.expovariate(1.0 / 0.32))
+        fall = max(0.0, 1.0 - (t - crack_at) / 1.6)
+        f = rng.uniform(1100.0, 1500.0) * (1.0 + 0.9 * fall)
+        sd = rng.uniform(0.05, 0.16)
+        tinkle = S.partials(f, [1.0, 2.43], sd, amps=[1.0, 0.3], decays=[7.0, 11.0])
+        tinkle = S.env_mul(tinkle, S.ad(sd, 0.001, 1.0))
+        shards.append((tinkle, t, (0.35 + 0.4 * rng.random()) * (0.35 + 0.65 * fall)))
+    ring = S.lowpass(S.layer(shards), 4000.0, 0.707)
+
+    rush_dur = 0.7
+    rn = S.n_samples(rush_dur)
+    rush = S.bandpass(S.osc("noise", 0, rush_dur, seed=719), S.sweep(rush_dur, 2200.0, 500.0, 0.7), 1.8)
+    rush = S.env_mul(S.lowpass(rush, 3000.0), S.ad(rush_dur, 0.06, 2.0))
+
+    out = S.layer(strain + [
+        (snap, crack_at, 1.0),
+        (split, crack_at, 0.9),
+        (ring, 0.0, 0.75),
+        (rush, crack_at + 0.03, 0.4),
+    ])
+    # Driven for weight, as spell_explosion and boss_death are, and lowpassed after the drive,
+    # because a drive left last is a hiss (audio-direction 6). Its RMS over the whole 2.3 s reads
+    # 5 dB under meta_unlock's at the same peak; over the crash itself (0.15-0.7 s) it is level with
+    # it. The tail is what a crash is, and the drive cannot buy much there: at 3.2 the crest only
+    # moved from 19.2 to 18.1 dB, so it stays at 2.2.
+    out = S.lowpass(S.drive(S.pad(out, dur), 2.2), 4500.0, 0.707)
+    out = S.highpass(out, 85.0, 0.707)
+    return S.dc_block(S.reverb(out, size=0.9, damp=0.42, mix=0.36))
+
+
+# ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
 # (filename stem, category, peak target in dBFS, builder, loops)
@@ -1080,4 +1272,12 @@ REGISTRY += [
     ("hint_lantern_flare",  "hint",   -9.0,  hint_lantern_flare,  False),
     ("hint_ice_song",       "hint",   -9.0,  hint_ice_song,       False),
     ("hint_caravan_bell",   "hint",   -10.0, hint_caravan_bell,   False),
+
+    # Secrets. The seen shimmer is once per secret per save and meant to be played AT the site, so
+    # it loses 5-6 dB to distance before it is heard; the found sting is a few a run, beside
+    # event_reward; the Geode Heart shatters once a run at most - the loudest secret sound, in the
+    # once-a-run row (achievements-and-secrets 8.4.1 says a sound that rare may sit above a hit).
+    ("secret_seen",         "secret", -9.0,  secret_seen,         False),
+    ("secret_found",        "secret", -8.0,  secret_found,        False),
+    ("secret_shatter",      "secret", -4.0,  secret_shatter,      False),
 ]
