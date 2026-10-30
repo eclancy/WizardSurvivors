@@ -317,6 +317,14 @@ public static class GlobalStatsManager
 	/// which the results screen shows as opened. Run after every run's achievements and in the schema 19
 	/// step (which writes the ones a save had already met, so none of those is announced as new).
 	/// </summary>
+	/// <remarks>
+	/// Only a PLAYABLE gate is recorded. A gate chapter not built yet has no built chapter before it to be
+	/// gated on - the Throne's previous playable chapter is the Emberdeep until the bridge and the Court
+	/// exist - so "met" would mean the Warden of the Deep and the wizards, and writing that down would hand
+	/// the Throne to a save the day it flips, past a bridge and a court it never crossed
+	/// (.ai/endgame-castle.md 1.9). Nobody can have had an unbuilt chapter open, so skipping it closes
+	/// nothing; it is recorded by the same rule once it is playable and its real previous boss is known.
+	/// </remarks>
 	public static List<StageDefinition> RecordMetGates(SaveData data)
 	{
 		var opened = new List<StageDefinition>();
@@ -324,7 +332,7 @@ public static class GlobalStatsManager
 			return opened;
 		foreach (StageDefinition gate in StageCatalog.GateChapters)
 		{
-			if (!IsStageUnlocked(data, gate.Id) && IsGateMet(data, gate) && UnlockStage(data, gate.Id))
+			if (gate.IsPlayable && !IsStageUnlocked(data, gate.Id) && IsGateMet(data, gate) && UnlockStage(data, gate.Id))
 				opened.Add(gate);
 		}
 		return opened;
