@@ -121,6 +121,19 @@ public partial class _UiShot : Node
 	// photograph ChestPointer's off-screen bubble. Repeatable.
 	private readonly System.Collections.Generic.List<Vector2> chestDrops = new();
 	private bool chestsDropped;
+	// --gleaning-bell=DX,DY: a Gleaning Bell set down at that offset from the player once the run
+	// settles, with --glean-scatter=N XP orbs strewn round him out to 5000 px (most of them near), and
+	// the player held still and whole, with no level-ups, so the bell is photographed on the ground.
+	// --glean-ring=K rings it K frames before the shutter, to photograph the orbs streaming in.
+	// --gleaning-probe: headless, PASS/FAIL, exit code = failures (GleaningProbe below).
+	private Vector2? gleanBellOffset;
+	private int gleanScatter;
+	private int gleanRingLead = -1;
+	private bool gleanPlaced;
+	private bool gleanRung;
+	private GleaningBell gleanBell;
+	private bool gleaningProbe;
+	private bool gleaningProbeStarted;
 	private bool chestOpened;
 	// --menu-queue-probe: drives Node2DGame's run menus two at a time (two chests in one step, a
 	// level-up and a chest, two level-ups) and prints PASS or FAIL for each, then quits with the
@@ -749,6 +762,44 @@ public partial class _UiShot : Node
 	}
 
 	// --hold, after the teleport: no input, back on the target, full health.
+	// --gleaning-bell / --gleaning-probe: he stands still and cannot die, so the bell stays where it
+	// was put until it is rung, and the camera holds on the field the orbs cross.
+	private void HoldForGleaning()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is Player p)
+		{
+			p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+			p.CurrentHP = p.MaxHP;
+		}
+	}
+
+	// XP orbs strewn round a body, seeded: the nearest at inner, the farthest at outer, most of them
+	// near (the cube of a uniform draw), so a photograph has some on screen and some far off it. Mostly
+	// small, with medium and large among them so all three tiers are seen arriving.
+	private static int ScatterOrbs(Node2D around, int count, float inner, float outer, ulong seed)
+	{
+		var scene = GD.Load<PackedScene>("res://scenes/XPOrb.tscn");
+		var rng = new RandomNumberGenerator { Seed = seed };
+		Node parent = around.GetParent();
+		int made = 0;
+		for (int i = 0; i < count; i++)
+		{
+			if (scene?.Instantiate() is not XPOrb orb)
+				continue;
+			float angle = rng.RandfRange(0f, Mathf.Tau);
+			float r = rng.Randf();
+			float distance = Mathf.Lerp(inner, outer, r * r * r);
+			float tier = rng.Randf();
+			orb.Value = tier < 0.03f ? 50 : tier < 0.13f ? 10 : 2;
+			orb.Position = around.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+			parent.AddChild(orb);
+			made++;
+		}
+		return made;
+	}
+
 	private void HoldPosition()
 	{
 		foreach (string a in MoveActions)
@@ -1020,6 +1071,18 @@ public partial class _UiShot : Node
 			}
 			else if (arg.StartsWith("--chest-offer="))
 				chestOffer = arg.Substring("--chest-offer=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
+			else if (arg.StartsWith("--gleaning-bell="))
+			{
+				string[] xy = arg.Substring("--gleaning-bell=".Length).Split(',');
+				gleanBellOffset = new Vector2(float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+			}
+			else if (arg.StartsWith("--glean-scatter="))
+				gleanScatter = int.Parse(arg.Substring("--glean-scatter=".Length));
+			else if (arg.StartsWith("--glean-ring="))
+				gleanRingLead = int.Parse(arg.Substring("--glean-ring=".Length));
+			else if (arg == "--gleaning-probe")
+				gleaningProbe = true;
 			else if (arg.StartsWith("--drop-chest="))
 			{
 				string[] xy = arg.Substring(13).Split(',');
@@ -2327,6 +2390,8 @@ public partial class _UiShot : Node
 			}
 			else if (hold && teleported)
 				HoldPosition();
+			else if (gleanBellOffset != null || gleaningProbe)
+				HoldForGleaning();
 			else if (shove)
 				DriveShove();
 			else if (ghost)
@@ -2640,6 +2705,30 @@ public partial class _UiShot : Node
 				typeof(Node2DGame).GetMethod("ToggleEscapeMenu",
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
 					?.Invoke(pausable, null);
+			}
+			if (gleanBellOffset is Vector2 bellOffset && !gleanPlaced && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Player>(GetTree().Root) is Player gleaner)
+			{
+				gleanPlaced = true;
+				// No level-ups: a haul at level one is several, and the shutter would find a card screen.
+				gleaner.XPToNextLevel = int.MaxValue;
+				int strewn = ScatterOrbs(gleaner, gleanScatter, 160f, 5000f, 11);
+				gleanBell = new GleaningBell { Position = gleaner.GlobalPosition + bellOffset };
+				gleaner.GetParent().AddChild(gleanBell);
+				GD.Print($"_UiShot: a Gleaning Bell at {bellOffset} from the player, {strewn} orb(s) strewn");
+			}
+			if (gleanBell != null && !gleanRung && gleanRingLead >= 0 && frames >= WarmupFrames - gleanRingLead
+				&& IsInstanceValid(gleanBell) && FindNodeOfType<Player>(GetTree().Root) is Player ringer)
+			{
+				gleanRung = true;
+				gleanBell.Ring(ringer);
+			}
+			if (gleaningProbe && !gleaningProbeStarted && frames >= WarmupFrames / 4
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame gleanGame
+				&& FindNodeOfType<Player>(GetTree().Root) is Player gleanHero)
+			{
+				gleaningProbeStarted = true;
+				GetTree().Root.AddChild(new GleaningProbe { Game = gleanGame, Hero = gleanHero });
 			}
 			if (chestDrops.Count > 0 && !chestsDropped && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Player>(GetTree().Root) is Player dropper)
@@ -3887,6 +3976,211 @@ public partial class _UiShot : Node
 					GetTree().Quit(failures);
 					break;
 			}
+		}
+	}
+
+	// --gleaning-probe: the Gleaning Bell end to end, against a real run. Orbs are strewn out to 5200 px
+	// and a flask is set down out of the magnet's reach; a bell is THROWN from a body beside him, as a
+	// carrier's is; then he is stood on it. Checks, each PASS or FAIL: it cannot be taken in the air, it
+	// lands clear of him, it does not move the orbs before it is rung, touching it rings it, every orb
+	// on the map answers, they are all in within four seconds of unpaused play, no orb is left anywhere
+	// further than 1500 px, the flask has not moved, no two level-up screens were ever up at once, and
+	// the run is running again at the end. Level-ups are taken by _UiShot's own dismissal, one a frame.
+	private partial class GleaningProbe : Node
+	{
+		public Node2DGame Game;
+		public Player Hero;
+		private readonly System.Collections.Generic.List<XPOrb> strewn = new();
+		private HealthPickup flask;
+		private Vector2 flaskAt;
+		private GleaningBell bell;
+		private float clock;
+		private float rungAt = -1f;
+		private float touchedAt = -1f;
+		private float doneAt = -1f;
+		private float wallSinceRing;
+		private XPOrb farthestOrb;
+		private float farthestStart;
+		private float farthestIn = -1f;
+		private int levelAtRing;
+		private int xpAtRing;
+		private int mostScreens;
+		private int failures;
+		private int stage;
+
+		public override void _Ready()
+		{
+			ProcessMode = ProcessModeEnum.Always;
+		}
+
+		private void Expect(string what, bool ok, string detail)
+		{
+			if (!ok)
+				failures++;
+			GD.Print($"GLEANPROBE {(ok ? "PASS" : "FAIL")} {what}: {detail}");
+		}
+
+		private int ScreensUp()
+		{
+			int up = 0;
+			foreach (Node child in Game.GetChildren())
+				if (child is LevelUpMenu menu && menu.Visible && !menu.IsQueuedForDeletion())
+					up++;
+			return up;
+		}
+
+		public override void _Process(double delta)
+		{
+			if (stage == 99)
+				return;
+			if (!IsInstanceValid(Game) || !IsInstanceValid(Hero))
+			{
+				GD.Print("GLEANPROBE FAIL the run went away");
+				GetTree().Quit(1);
+				stage = 99;
+				return;
+			}
+			mostScreens = System.Math.Max(mostScreens, ScreensUp());
+			// Every frame since the ring, screens included. The play-only clock reads short: it skips every
+			// frame that begins paused, and the orbs move in some of those. This one is what agrees with
+			// XPOrb.Glean's acceleration (5193 px in 2.36 s, measured).
+			if (rungAt >= 0f && doneAt < 0f)
+				wallSinceRing += (float)delta;
+			if (GetTree().Paused)
+				return;
+			clock += (float)delta;
+
+			switch (stage)
+			{
+				case 0:
+				{
+					int made = ScatterOrbs(Hero, 300, 150f, 5200f, 23);
+					var flaskScene = GD.Load<PackedScene>("res://scenes/HealthPickup.tscn");
+					flask = flaskScene.Instantiate<HealthPickup>();
+					flaskAt = Hero.GlobalPosition + new Vector2(0f, 320f);
+					flask.Position = flaskAt;
+					Hero.GetParent().AddChild(flask);
+					foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
+						if (node is XPOrb orb && orb.GlobalPosition.DistanceTo(Hero.GlobalPosition) >= 149f)
+							strewn.Add(orb);
+					Game.PlaceGleaningBell(Hero.GlobalPosition + new Vector2(40f, 0f));
+					GD.Print($"GLEANPROBE strewn {made} orb(s), {strewn.Count} of them 150 px or more out; a flask at 320 px; a bell thrown");
+					stage = 1;
+					break;
+				}
+				case 1:
+					if (clock < 0.2f)
+						break;
+					bell = GleaningBell.Live.Count > 0 ? GleaningBell.Live[0] : null;
+					Expect("thrown, it is in the air and cannot be taken", bell != null && bell.Tossing && !bell.Monitoring,
+						bell == null ? "no bell" : $"tossing {bell.Tossing}, monitoring {bell.Monitoring}");
+					stage = 2;
+					break;
+				case 2:
+				{
+					if (clock < 1.0f)
+						break;
+					bool landed = bell != null && IsInstanceValid(bell) && !bell.Tossing && bell.Monitoring;
+					float away = landed ? bell.GlobalPosition.DistanceTo(Hero.GlobalPosition) : 0f;
+					Expect("it lands clear of him", landed && away >= DropTable.GleaningBellMinPlayerDistance - 1f, $"landed {landed}, {away:0} px from him");
+					int early = 0;
+					foreach (XPOrb orb in strewn)
+						if (IsInstanceValid(orb) && orb.Gleaned)
+							early++;
+					Expect("lying there, it calls nothing", early == 0, $"{early} orb(s) already flying");
+					if (!landed)
+					{
+						Finish();
+						return;
+					}
+					levelAtRing = Hero.CurrentLevel;
+					xpAtRing = Hero.RunXpGathered;
+					Hero.GlobalPosition = bell.GlobalPosition;
+					touchedAt = clock;
+					stage = 3;
+					break;
+				}
+				case 3:
+				{
+					if (IsInstanceValid(bell) && !bell.IsQueuedForDeletion())
+					{
+						if (clock - touchedAt > 0.5f)
+						{
+							Expect("touching it rings it", false, "still lying there 0.5 s after he stood on it");
+							Finish();
+						}
+						break;
+					}
+					rungAt = clock;
+					int answered = 0, alive = 0;
+					foreach (XPOrb orb in strewn)
+					{
+						if (!IsInstanceValid(orb) || orb.IsQueuedForDeletion())
+							continue;
+						alive++;
+						if (orb.Gleaned)
+							answered++;
+						float d = orb.GlobalPosition.DistanceTo(Hero.GlobalPosition);
+						if (d > farthestStart)
+						{
+							farthestStart = d;
+							farthestOrb = orb;
+						}
+					}
+					Expect("touching it rings it", true, $"{(rungAt - touchedAt) * 1000f:0} ms after he stood on it");
+					Expect("every orb on the map answers", answered == alive && alive > 0, $"{answered} of {alive} flying in");
+					stage = 4;
+					break;
+				}
+				case 4:
+				{
+					if (farthestIn < 0f && (farthestOrb == null || !IsInstanceValid(farthestOrb) || farthestOrb.IsQueuedForDeletion()))
+						farthestIn = clock - rungAt;
+					int left = 0;
+					foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
+						if (node is XPOrb orb && !orb.IsQueuedForDeletion() && orb.Gleaned)
+							left++;
+					if (left > 0 && clock - rungAt < 6f)
+						break;
+					doneAt = clock;
+					Expect("they are all in within four seconds of play", left == 0 && doneAt - rungAt <= 4f,
+						$"{left} still flying, the last in {doneAt - rungAt:0.00} s of play ({wallSinceRing:0.00} s with the level-up screens, "
+						+ $"{Engine.GetFramesPerSecond():0} fps, time scale {Engine.TimeScale:0.00}); the farthest, {farthestStart:0} px out, gone in {farthestIn:0.00} s");
+					stage = 5;
+					break;
+				}
+				case 5:
+				{
+					if (clock - doneAt < 0.5f)
+						break;
+					int far = 0;
+					float farthest = 0f;
+					foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
+					{
+						if (node is not XPOrb orb || orb.IsQueuedForDeletion())
+							continue;
+						float d = orb.GlobalPosition.DistanceTo(Hero.GlobalPosition);
+						farthest = Mathf.Max(farthest, d);
+						if (d > 1500f)
+							far++;
+					}
+					Expect("nothing is left far off", far == 0, $"{far} orb(s) beyond 1500 px; the farthest of any at {farthest:0} px");
+					bool still = IsInstanceValid(flask) && flask.GlobalPosition.DistanceTo(flaskAt) < 1f;
+					Expect("the flask stayed where it lay (XP only)", still, IsInstanceValid(flask) ? $"moved {flask.GlobalPosition.DistanceTo(flaskAt):0} px" : "taken");
+					Expect("never two level-up screens at once", mostScreens <= 1,
+						$"at most {mostScreens} up; level {levelAtRing} -> {Hero.CurrentLevel}, +{Hero.RunXpGathered - xpAtRing} XP banked since the ring");
+					Expect("the run is running again", !GetTree().Paused, $"paused {GetTree().Paused}");
+					Finish();
+					break;
+				}
+			}
+		}
+
+		private void Finish()
+		{
+			GD.Print($"GLEANPROBE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+			GetTree().Quit(failures);
+			stage = 99;
 		}
 	}
 

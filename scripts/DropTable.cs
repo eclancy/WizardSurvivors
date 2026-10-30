@@ -109,4 +109,39 @@ public static class DropTable
 
 	/// <summary>Relics a chest offers before any bonus. The Relic Key and John Dee add one each.</summary>
 	public const int BaseChestOffers = 3;
+
+	// --- the Gleaning Bell: every XP orb on the map, called home (GleaningBell.cs) -------------------
+	//
+	// Eric: "there should be an item or spell or boon or collectible item that collects all missed XP.
+	// (i dont want it to be required, so people take it every run)". So it is not a choice at all: it
+	// is a rare find, carried by the same bodies that carry chests, and nothing raises its chance - no
+	// relic, no boon, not Luck - so there is nothing to build around and nothing to pick every run.
+	// .ai/passives-and-items.md section 8i has the measured counts.
+
+	/// <summary>
+	/// The chance the first carrier killed (an elite, a Warden, the Sketchbook's ghost) drops a bell.
+	/// Every carrier killed without one adds <see cref="GleaningBellChanceStep"/>, and a bell resets it:
+	/// a rising chance rather than a flat one, so a run sees one or two and almost never none. At a flat
+	/// 7.5% the twenty-odd carriers of a run would drop none about one run in five and three or more
+	/// about one in five; this way the first comes at about the ninth carrier (minute seven or eight)
+	/// and the second, when there is one, late in the run, when what lies uncollected is worth most.
+	/// </summary>
+	public const float GleaningBellBaseChance = 0.02f;
+
+	/// <summary>What each carrier that paid no bell adds to the next one's chance.</summary>
+	public const float GleaningBellChanceStep = 0.015f;
+
+	/// <summary>
+	/// Run seconds that must pass after a bell drops before another may. A second bell straight after
+	/// the first would call in a field the first just emptied. Real seconds, not the pace clock: how long
+	/// the field takes to fill again is kills, and kills are capped in real seconds (.ai/run-pacing.md 3.3).
+	/// </summary>
+	public const float GleaningBellMinSecondsApart = 90f;
+
+	/// <summary>Seconds the bell spends thrown out of its carrier before it lands and can be taken.</summary>
+	public const float GleaningBellTossSeconds = 0.45f;
+
+	/// <summary>How far from its carrier a bell lands; and never closer than this to the player.</summary>
+	public const float GleaningBellTossDistance = 56f;
+	public const float GleaningBellMinPlayerDistance = 80f;
 }

@@ -49,6 +49,7 @@ import sprite_treant
 import sprite_warden
 import pixel as P
 import roster
+import sprite_bell
 import sprite_pickups
 import sprite_player
 import sprite_testwizard
@@ -364,6 +365,10 @@ def build_pickups():
         out.append((tname, png, len(frames)))
     spriteframes.write(os.path.join(ROOT, "scenes", "resources", "XPOrbFrames.tres"),
                        anims, "assets/bonelight/pickups", cell=sprite_pickups.CELL)
+    # The Gleaning Bell: one strip and no SpriteFrames - GleaningBell.cs is code-only and steps a
+    # Sprite2D's Hframes itself, as the wayfinder does.
+    sprite_bell.write(OUT_PICKUPS)
+    out.append(("bell", sprite_bell.PNG, sprite_bell.FRAMES))
     return out
 
 
@@ -489,7 +494,7 @@ if __name__ == "__main__":
     print("")
 
     pickup_paths = build_pickups()
-    print("xp orbs:")
+    print("xp orbs and the gleaning bell:")
     for tname, png, n in pickup_paths:
         print("   %-8s %d frames  assets/bonelight/pickups/%s" % (tname, n, png))
     print("   scenes/resources/XPOrbFrames.tres")

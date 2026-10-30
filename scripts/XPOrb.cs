@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using WizardSurvivors.scripts;
 
 public partial class XPOrb : Area2D
 {
@@ -68,8 +69,19 @@ public partial class XPOrb : Area2D
 			if (dist < dynamicAttractDistance) attracted = true;
 			if (attracted)
 			{
-				var dir = (player.GlobalPosition - GlobalPosition).Normalized();
-				GlobalPosition += dir * AttractSpeed * (float)delta;
+				float speed = AttractSpeed;
+				if (gleanSpeed > 0f)
+				{
+					gleanSpeed = Mathf.Min(GleanMaxSpeed, gleanSpeed + GleanAcceleration * (float)delta);
+					speed = gleanSpeed;
+				}
+				float step = speed * (float)delta;
+				// Never past him: at a gleaned orb's speed one frame's step can be longer than what is
+				// left, and an orb that overshoots swings back and forth across him instead of landing.
+				if (dist <= step)
+					GlobalPosition = player.GlobalPosition;
+				else
+					GlobalPosition += (player.GlobalPosition - GlobalPosition) / dist * step;
 			}
 		}
 		FrameProfiler.End(FrameProfiler.Section.XpOrbs, perfStart);
@@ -91,6 +103,34 @@ public partial class XPOrb : Area2D
 	/// Mirror (John Dee's Apotheosis) pulls every orb inside its well's reach to him when it closes.
 	/// </summary>
 	public void PullToPlayer() => attracted = true;
+
+	// THE GLEANING BELL's pull (GleaningBell.cs). PullToPlayer flies an orb in at the magnet's 200 px a
+	// second, which is right for the few inside a well's reach and hopeless for the whole map: an orb
+	// four screens off would take twenty seconds and the far bank (Node2DGame.SweepFarXpOrbs) longer.
+	// A gleaned orb starts at that speed and gains GleanAcceleration every second, so the near ones
+	// land first and the far ones stream in behind them - 1000 px in about a second, the far bank at
+	// 4200 in about two - which is the moment: everything he walked past, coming home in order.
+	// Nothing is allocated and nothing runs that did not already; it is one float per orb.
+	[Export] public float GleanAcceleration { get; set; } = 1800f;
+	[Export] public float GleanMaxSpeed { get; set; } = 3200f;
+	private float gleanSpeed;
+
+	/// <summary>True while this orb is flying in to the Gleaning Bell's call.</summary>
+	public bool Gleaned => gleanSpeed > 0f;
+
+	/// <summary>
+	/// Fly to the player from anywhere on the map, gathering speed the whole way (the Gleaning Bell).
+	/// The orb is lifted into the air for the flight, over every body and tree, so the stream reads
+	/// as one thing crossing the field rather than as orbs sorted in among the crowd.
+	/// </summary>
+	public void Glean()
+	{
+		attracted = true;
+		if (gleanSpeed <= 0f)
+			gleanSpeed = Mathf.Max(1f, AttractSpeed);
+		ZIndex = DrawLayers.Air;
+		ZAsRelative = false;
+	}
 
 	/// <summary>Which of the three tiers this orb's value puts it in. Bigger and a different
 	/// hue, because size alone does not survive a crowded screen and hue alone does not survive
