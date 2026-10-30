@@ -12,10 +12,16 @@ namespace WizardSurvivors.scripts;
 //
 // It draws itself, like Cinderbreath and for the same reason - the shape that is drawn is computed
 // from the same radius that is tested, so the tell cannot lie about its reach. What it draws is the
-// pool, not a mark round it (2026-10-23, no area markers on the player's spells): the bog water to
-// within a few per cent of the radius, a deeper middle, and a bubble working up through it. The
-// stroked rim it used to carry was the marker, and went. Mirefoot's pools no longer draw here at all
+// pool, not a mark round it (2026-10-23, no area markers on the player's spells). The stroked rim it
+// used to carry was the marker, and went. Mirefoot's pools no longer draw here at all
 // (DrawsItself = false): a trail of them is one bog drawn by MireSurface, under the actors.
+//
+// PIXEL ART (2026-10-29). What still draws itself - Pyroclasm's magma pool and the Lingering Rift - was
+// two translucent polygons and an antialiased bubble, fading in alpha. It is now one quad through
+// scenes/shaders/lingering_pool.gdshader: every 2 px cell of the world shaded once and opaque, mostly a
+// crust of occlusion with FillColor's tone molten between its plates, their edges glowing in EdgeColor's,
+// and a bubble, its bank wandering only inward of Radius, dissolving from the edge in at the end. Only the
+// two colours' RGB is read: the callers pass their element ramp's edge and hot.
 public partial class LingeringZone : Node2D
 {
 	[Export] public float Radius { get; set; } = 46f;
@@ -55,14 +61,12 @@ public partial class LingeringZone : Node2D
 	private float age = 0f;
 	private float tickTimer = 0f;
 
-	// The outline is randomised once, at birth, and then never recomputed. Two reasons: a pool
+	// The bank is randomised once, at birth (a seed), and then never recomputed. Two reasons: a pool
 	// whose edge crawls every frame reads as a liquid simulation nobody asked for, and a trail of
 	// eight identical circles reads as a stamp tool. Fixed-but-different is what puddles look like.
-	private const int EdgePoints = 14;
-	private readonly Vector2[] outline = new Vector2[EdgePoints];
-	private readonly Vector2[] deep = new Vector2[EdgePoints];
-	private Vector2 bubbleAt;
-	private float bubblePhase;
+	private static Shader poolShader;
+	private static readonly StringName ParamAge = "age";
+	private ShaderMaterial poolMaterial;
 
 	public override void _Ready()
 	{
@@ -77,16 +81,15 @@ public partial class LingeringZone : Node2D
 
 		var rng = new RandomNumberGenerator();
 		rng.Randomize();
-		for (int i = 0; i < EdgePoints; i++)
-		{
-			float angle = Mathf.Tau * i / EdgePoints;
-			// Held to a few per cent either side of Radius: with no rim, the water's edge is the reach.
-			float wobble = rng.RandfRange(0.93f, 1.03f);
-			outline[i] = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * Radius * wobble;
-			deep[i] = outline[i] * rng.RandfRange(0.50f, 0.62f);
-		}
-		bubbleAt = new Vector2(rng.RandfRange(-0.4f, 0.4f), rng.RandfRange(-0.4f, 0.4f)) * Radius;
-		bubblePhase = rng.Randf();
+		poolShader ??= GD.Load<Shader>("res://scenes/shaders/lingering_pool.gdshader");
+		poolMaterial = new ShaderMaterial { Shader = poolShader };
+		poolMaterial.SetShaderParameter("radius", Radius);
+		poolMaterial.SetShaderParameter("life", MathF.Max(0.01f, Duration));
+		poolMaterial.SetShaderParameter("seed", rng.Randf() * 97f);
+		poolMaterial.SetShaderParameter("body", new Color(FillColor, 1f));
+		poolMaterial.SetShaderParameter("glow", new Color(EdgeColor, 1f));
+		poolMaterial.SetShaderParameter(ParamAge, 0f);
+		Material = poolMaterial;
 	}
 
 	public override void _Process(double delta)
@@ -102,7 +105,10 @@ public partial class LingeringZone : Node2D
 		}
 
 		if (DrawsItself)
+		{
+			poolMaterial?.SetShaderParameter(ParamAge, age);
 			QueueRedraw();
+		}
 
 		if (age >= Duration)
 			QueueFree();
@@ -139,21 +145,12 @@ public partial class LingeringZone : Node2D
 		}
 	}
 
+	// One quad over the pool; lingering_pool.gdshader draws the pool inside it, out of Radius.
 	public override void _Draw()
 	{
 		if (!DrawsItself)
 			return;
-		// Fades over the last third rather than the whole life, so for most of its duration it looks
-		// like a hazard rather than like something already gone.
-		float remaining = 1f - Mathf.Clamp(age / MathF.Max(0.01f, Duration), 0f, 1f);
-		float fade = remaining < 0.34f ? remaining / 0.34f : 1f;
-
-		DrawColoredPolygon(outline, FillColor with { A = FillColor.A * fade });
-		// The deeper middle, darker in the same water.
-		DrawColoredPolygon(deep, new Color(FillColor.R * 0.55f, FillColor.G * 0.6f, FillColor.B * 0.6f, FillColor.A * fade));
-		// One bubble swelling and bursting on a second-and-a-bit cycle, in the old rim's lighter tone.
-		float b = (age * 0.85f + bubblePhase) % 1f;
-		if (b < 0.8f)
-			DrawCircle(bubbleAt, 1.5f + 2f * (b / 0.8f), EdgeColor with { A = EdgeColor.A * fade });
+		float r = Radius + 2f;
+		DrawRect(new Rect2(-r, -r, r * 2f, r * 2f), Colors.White);
 	}
 }

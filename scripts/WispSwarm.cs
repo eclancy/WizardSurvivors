@@ -15,6 +15,10 @@ namespace WizardSurvivors.scripts;
 // Drawn in the air over every body (DrawLayers.Air) - a lit mote with a halo and a short tail, in the
 // Grass ramp, flickering - on the 2 px art grid. One node per arena (For); a fixed ring of wisps; the
 // nearest-enemy query is the enemy grid's with a struct visitor; nothing allocated per frame.
+//
+// The pixel-art pass (2026-10-29): a wisp going out used to fade with alpha, a translucent mote over
+// whatever was under it. It draws through SpellInk's dither now, so the same alpha is the share of its
+// pixels drawn - it thins out, opaque, a pixel at a time - and its dark seam goes with it.
 public partial class WispSwarm : Node2D
 {
 	/// <summary>Seconds between one wisp of a pool and its next (spread over the trail's pools).</summary>
@@ -69,6 +73,7 @@ public partial class WispSwarm : Node2D
 		Name = "WispSwarm";
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		Material = SpellInk.DitherByCell;
 	}
 
 	public override void _ExitTree()
@@ -159,7 +164,7 @@ public partial class WispSwarm : Node2D
 			Vector2 back = wisps[i].Velocity.LengthSquared() > 1f ? -wisps[i].Velocity.Normalized() : Vector2.Down;
 			DrawRect(WhipLimb.Cell(p + back * g * 3f, g), new Color(Tail, fade));
 			DrawRect(WhipLimb.Cell(p + back * g * 5f, g), new Color(Mid, fade * 0.8f));
-			DrawRect(WhipLimb.Cell(p, g * 4f), Occ);
+			DrawRect(WhipLimb.Cell(p, g * 4f), new Color(Occ, fade));
 			if (lit)
 			{
 				DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2f), g), new Color(Mid, fade));

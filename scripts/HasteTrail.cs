@@ -1,4 +1,5 @@
 using Godot;
+using WizardSurvivors.scripts;
 
 // What the speed potion looks like while it lasts (BuffItem, Player.ApplyTemporaryBuff).
 //
@@ -6,7 +7,7 @@ using Godot;
 //  - For the first second, AFTERIMAGES: the player's own past poses left behind him, tinted Wind,
 //    each fainter than the one in front. This is the "you are fast now" beat.
 //  - For the rest of the buff, a faint STREAK AT HIS FEET while he moves - three short wind lines
-//    trailing behind his boots, fading out over the buff's last second, so the player can tell the
+//    trailing behind his boots, shortening over the buff's last second, so the player can tell the
 //    potion is still running without a HUD icon and can see it run out.
 //
 // A child of the player at ZIndex -1: under him and under the swarm, on the ground, which is where
@@ -17,15 +18,38 @@ using Godot;
 // same way) rather than stacking a second trail.
 //
 // Two nodes of this class, one per layer, because the layers need different materials: the ghosts
-// go through a one-line shader that draws the sprite as a flat Wind-coloured silhouette (a tinted
-// copy of the sprite kept the purple robe and read as a second wizard, not as speed), and the
-// streaks are drawn additively so a thin line still shows on a dark forest floor.
+// go through a small shader that draws the sprite as a flat Wind-coloured silhouette (a tinted copy of
+// the sprite kept the purple robe and read as a second wizard, not as speed), and the streaks are
+// plain stamped cells.
+//
+// PIXEL ART (2026-10-29, "Update all spells to the same quality we expect now"). The ghosts were drawn
+// at fractional alpha, so six overlapping ones made a soft translucent smear, and the streaks were
+// additive antialiased lines that faded in alpha. Now a ghost is opaque Wind mid where it is drawn at
+// all, and it is thinned by an ordered Bayer dither on the sprite's own art pixels - the older the ghost,
+// the fewer of its pixels - so it stays as crisp as the sprite it was taken from; and the streaks are
+// opaque Wind cells on the world's 2 px grid that shorten as the potion runs out instead of fading.
 public partial class HasteTrail : Node2D
 {
+	// presence (the draw's modulate alpha, 0..1) is how many of the silhouette's art pixels are drawn:
+	// a 4x4 Bayer threshold on the texel, so the dither is the sprite's own grid.
 	private const string SilhouetteShader = @"shader_type canvas_item;
 uniform vec4 tint : source_color;
+varying float presence;
+float bayer4(vec2 c) {
+	int x = int(mod(c.x, 4.0));
+	int y = int(mod(c.y, 4.0));
+	float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+	return (m[x + y * 4] + 0.5) / 16.0;
+}
+void vertex() {
+	presence = COLOR.a;
+}
 void fragment() {
-	COLOR = vec4(tint.rgb, COLOR.a);
+	vec4 texel = texture(TEXTURE, UV);
+	vec2 art_pixel = floor(UV / TEXTURE_PIXEL_SIZE);
+	if (texel.a < 0.5 || presence <= bayer4(art_pixel))
+		discard;
+	COLOR = vec4(tint.rgb, 1.0);
 }";
 
 	private bool streakLayer;
@@ -73,11 +97,7 @@ void fragment() {
 		ZIndex = -1;
 		body = player?.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		feet = player?.GetNodeOrNull<Node2D>("Feet/CollisionShape2D");
-		if (streakLayer)
-		{
-			Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
-		}
-		else
+		if (!streakLayer)
 		{
 			var silhouette = new ShaderMaterial { Shader = new Shader { Code = SilhouetteShader } };
 			silhouette.SetShaderParameter("tint", GhostTint);
@@ -158,10 +178,10 @@ void fragment() {
 			Vector2 scale = body.Scale * new Vector2(ghostFlip[index] ? -1f : 1f, 1f);
 			Vector2 origin = ToLocal(ghostAt[index]) + body.Position;
 			Vector2 topLeft = (body.Centered ? -size / 2f : Vector2.Zero) + body.Offset;
-			float alpha = strength * 0.5f * (1f - (float)k / Ghosts);
+			float presence = strength * 0.6f * (1f - (float)k / Ghosts);
 			DrawSetTransform(origin, 0f, scale);
-			// The shader replaces the colour with the tint; only the alpha is read from here.
-			DrawTexture(frame, topLeft, new Color(1f, 1f, 1f, alpha));
+			// The shader replaces the colour with the tint; the alpha is how much of it is drawn.
+			DrawTexture(frame, topLeft, new Color(1f, 1f, 1f, presence));
 		}
 		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 	}
@@ -172,24 +192,30 @@ void fragment() {
 		float speed = velocity.Length();
 		if (speed < 20f)
 			return;
-		// Fade over the buff's last second, so it can be seen running out.
+		// Shortening over the buff's last second, so it can be seen running out - and shorter at a walk.
 		float remaining = Mathf.Clamp(player.TemporaryBuffSecondsRemaining, 0f, 1f);
-		float alpha = 0.7f * remaining * Mathf.Clamp(speed / 160f, 0f, 1f);
-		if (alpha <= 0.01f)
+		float strength = remaining * Mathf.Clamp(speed / 160f, 0f, 1f);
+		if (strength <= 0.05f)
 			return;
 
 		Vector2 dir = velocity / speed;
 		Vector2 side = new Vector2(-dir.Y, dir.X);
 		Vector2 foot = feet != null ? ToLocal(feet.GlobalPosition) + new Vector2(0f, 6f) : new Vector2(0f, 30f);
+		float g = PixelCells.Grid;
 		for (int i = 0; i < Streaks; i++)
 		{
-			// Each line slides back along the trail and restarts, so the streak flows rather than sits.
+			// The outer two go first as it runs out.
+			if (i != 1 && strength < 0.4f)
+				continue;
+			// Each line slides back along the trail and restarts, so the streak flows rather than sits; it
+			// is shorter the further back it has slid.
 			float phase = Mathf.PosMod(clock * 3.2f + i * 0.37f, 1f);
 			float lateral = (i - 1) * 6f;
 			Vector2 start = foot - dir * (4f + 10f * phase) + side * lateral;
-			Vector2 end = start - dir * (15f + 8f * (1f - phase));
-			float a = alpha * (1f - phase);
-			DrawLine(start, end, new Color(i == 1 ? StreakColour : StreakEdge, a), i == 1 ? 2.5f : 2f);
+			float length = (15f + 8f * (1f - phase)) * strength * (1f - phase * 0.6f);
+			Color colour = i == 1 ? StreakColour : StreakEdge;
+			for (float d = 0f; d <= length; d += g)
+				DrawRect(PixelCells.Snap(this, start - dir * d, g), d > length * 0.6f ? StreakEdge : colour);
 		}
 	}
 }

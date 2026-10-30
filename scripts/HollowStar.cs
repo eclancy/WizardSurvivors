@@ -143,24 +143,42 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	// The collapse's and the throw's broad phase (EnemyRegistry.CollectNear). One collapse at a time.
 	private static readonly List<Enemy> near = new(64);
 
-	// Preallocated: _Draw runs every frame for the whole life of the well (see BlackTentacles).
-	private const int ArmCount = 3;
-	private const int ArmPoints = 14;
-	private readonly Vector2[][] armPoints = new Vector2[ArmCount][];
+	// THE LOOK (2026-10-29, the pixel-art pass: "does not look up to our typical visual fidelity"). The
+	// well - its hole, lip, arms, Eclipse's corona and Black Sun's prominences - is one quad drawn by
+	// scenes/shaders/hollow_star_well.gdshader on a child behind this node (`well`), fed the radii below
+	// every frame. This node draws, on the world's grid and through SpellInk's dither, only what is made of
+	// cells: the motes dragged in along the arms, Black Sun's count of collapses and the collapse's debris.
+	// Twin Stars' tether and Nova Seed's shards are SpellStrokes on children of their own. Every colour is
+	// opaque, from the ramp the well burns in, and every fade is a dither. Nothing is allocated per frame.
 	private const int TetherPoints = 16;
 	private readonly Vector2[] tether = new Vector2[TetherPoints];
 
 	private const int MoteCount = 14;
 	private uint debrisSeed;
-	// What the collapse throws out: Darkness, or the element path's ramp (Eclipse's Light).
-	private ElementColors.Ramp debrisRamp = ElementColors.GetRamp(Element.Darkness);
+	// What the well burns in: Darkness, or the element path's ramp (Eclipse's Light). The hole stays black.
+	private ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Darkness);
+	private bool eclipse;
 
-	private static readonly Color CoreColor = new Color(0.03f, 0.02f, 0.05f, 0.92f);
-	// Darkness tones; an element path repaints them in its own ramp (the core stays black).
-	private Color armColor = new Color(0.42f, 0.20f, 0.62f, 0.75f);
-	private Color rimColor = new Color(0.72f, 0.52f, 0.95f, 0.85f);
-	// The corona round the core, drawn only on an element path. Transparent otherwise.
-	private Color coronaColor = new Color(0f, 0f, 0f, 0f);
+	private static Shader wellShader;
+	private const string WellShaderPath = "res://scenes/shaders/hollow_star_well.gdshader";
+	private static readonly StringName ParamPullRadius = "pull_radius";
+	private static readonly StringName ParamArmInner = "arm_inner";
+	private static readonly StringName ParamArmOuter = "arm_outer";
+	private static readonly StringName ParamCore = "core";
+	private static readonly StringName ParamSpin = "spin";
+	private static readonly StringName ParamClock = "clock";
+	private static readonly StringName ParamCorona = "corona";
+	private static readonly StringName ParamBlackSun = "black_sun";
+	private static readonly StringName ParamMirror = "mirror";
+	private Node2D well;
+	private ShaderMaterial wellMaterial;
+	private float clock;
+	// Twin Stars' tether, and Nova Seed's shards: strokes on the world's grid.
+	private Node2D tetherLayer;
+	private SpellStrokes tetherStrokes;
+	private SpellStrokes shardStrokes;
+	private static readonly Color Violet = new Color(0.078f, 0.063f, 0.122f);   // violet deep #14101F
+	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f);      // #05070C
 
 	public override void _Ready()
 	{
@@ -169,39 +187,76 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		// the craters use since 2026-10-28 (over the terrain and the walkable decals).
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Ground;
-		for (int a = 0; a < ArmCount; a++)
-			armPoints[a] = new Vector2[ArmPoints];
 		debrisSeed = (uint)(GetInstanceId() % 100003);
 		if (SpellData?.GetBranchElement() is Element branch)
 		{
-			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
-			debrisRamp = ramp;
-			armColor = new Color(ramp.Edge, 0.8f);
-			rimColor = new Color(ramp.Hot, 0.95f);
-			coronaColor = new Color(ramp.Core, 0.55f);
+			ramp = ElementColors.GetRamp(branch);
+			eclipse = true;
 		}
 
+		bool twin = false;
 		if (SpellData != null)
 		{
 			crush = SpellData.HasEvolution(CrushId);
 			blackSun = SpellData.HasEvolution(BlackSunId);
 			novaSeed = Generation == 0 && SpellData.HasEvolution(NovaSeedId);
+			twin = SpellData.HasEvolution(TwinStarsId);
 		}
 		collapsesLeft = blackSun ? BlackSunCollapses : 1;
 		pullDuration = PullSeconds;
+
+		// The motes and the debris: cells on the world's grid, faded by dither.
+		Material = SpellInk.DitherByCell;
+		wellShader ??= GD.Load<Shader>(WellShaderPath);
+		if (wellShader == null)
+			GD.PushError($"HollowStar: {WellShaderPath} failed to load.");
+		wellMaterial = new ShaderMaterial { Shader = wellShader };
+		wellMaterial.SetShaderParameter("ramp_core", ramp.Core);
+		wellMaterial.SetShaderParameter("ramp_hot", ramp.Hot);
+		wellMaterial.SetShaderParameter("ramp_mid", ramp.Mid);
+		wellMaterial.SetShaderParameter("ramp_edge", ramp.Edge);
+		wellMaterial.SetShaderParameter(ParamBlackSun, blackSun);
+		wellMaterial.SetShaderParameter(ParamMirror, IsSpiritMirror);
+		well = new Node2D { Name = "Well", ShowBehindParent = true, Material = wellMaterial };
+		AddChild(well);
+		well.Draw += DrawWell;
+		UpdateWell();
+
+		if (twin)
+		{
+			tetherStrokes = new SpellStrokes(TetherPoints + 6);
+			tetherStrokes.SetTones(ramp, Violet, Occ);
+			tetherLayer = new Node2D { Name = "Tether", Material = tetherStrokes.Material };
+			AddChild(tetherLayer);
+			tetherLayer.Draw += DrawTether;
+		}
 		if (novaSeed)
 		{
-			air = new Node2D { Name = "Shards", ZAsRelative = false, ZIndex = DrawLayers.Air };
+			shardStrokes = new SpellStrokes(NovaShards * 2);
+			shardStrokes.SetTones(ramp, Violet, Occ);
+			air = new Node2D { Name = "Shards", ZAsRelative = false, ZIndex = DrawLayers.Air, Material = shardStrokes.Material };
 			AddChild(air);
 			air.Draw += DrawShards;
 		}
+	}
+
+	public override void _ExitTree()
+	{
+		if (well != null && IsInstanceValid(well))
+			well.Draw -= DrawWell;
+		if (tetherLayer != null && IsInstanceValid(tetherLayer))
+			tetherLayer.Draw -= DrawTether;
+		if (air != null && IsInstanceValid(air))
+			air.Draw -= DrawShards;
 	}
 
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
 		phaseSeconds += dt;
+		clock += dt;
 		QueueRedraw();
+		tetherLayer?.QueueRedraw();
 
 		switch (phase)
 		{
@@ -244,6 +299,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				}
 				break;
 		}
+		UpdateWell();
 	}
 
 	private void Enter(Phase next)
@@ -455,45 +511,41 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	// exactly PullRadius as the well opens, and while it pulls, motes are dragged in along them from
 	// that same rim - so how far it pulls is shown by what it pulls. The collapse is debris thrown out
 	// to exactly CollapseRadius (ImpactDebris), which is the only thing that says how far it hit.
-	public override void _Draw()
+	//
+	// The well's radii for this frame, into its shader: how far the arms have grown, how wide the core
+	// is, and whether the corona and the prominences are lit. The same numbers the old draw calls used.
+	private void UpdateWell()
 	{
+		if (wellMaterial == null)
+			return;
+		float inner = CollapseRadius * 0.3f;
+		float outer = inner;
+		float core = 0f;
+		float corona = 0f;
+		bool flares = false;
 		switch (phase)
 		{
 			case Phase.Opening:
 			{
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, OpenSeconds), 0f, 1f);
-				DrawArms(t);
-				DrawTether(t);
-				DrawCircle(Vector2.Zero, CollapseRadius * 0.3f * t, CoreColor);
+				outer = Mathf.Lerp(inner, PullRadius - 1f, t);
+				core = inner * t;
 				break;
 			}
-
 			case Phase.Pulling:
 			{
-				DrawArms(1f);
-				DrawTether(1f);
-				DrawMotes();
+				outer = PullRadius - 1f;
 				// The core swells as the pull runs, so the moment of collapse can be anticipated - and,
 				// under Crush, with every body the knot holds: a full knot is a third as wide again.
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, pullDuration), 0f, 1f);
-				float core = Mathf.Lerp(CollapseRadius * 0.3f, CollapseRadius * 0.45f, t) * CrushSwell(knot);
-				// Eclipse's corona: a flickering ring of light hugging the black disc, inside the
-				// collapse radius - it is the well's own rim, not a mark of its reach.
-				if (coronaColor.A > 0f)
-				{
-					float flicker = 1f + 0.06f * MathF.Sin(spin * 3.1f);
-					DrawArc(Vector2.Zero, core * 1.22f * flicker, 0f, Mathf.Tau, 32, coronaColor, 3.0f);
-				}
-				if (blackSun)
-					DrawProminences(core);
-				DrawCircle(Vector2.Zero, core, CoreColor);
-				DrawArc(Vector2.Zero, core, 0f, Mathf.Tau, 24, rimColor, 1.5f);
-				if (blackSun)
-					DrawCollapsesLeft(core);
+				core = Mathf.Lerp(CollapseRadius * 0.3f, CollapseRadius * 0.45f, t) * CrushSwell(knot);
+				// Eclipse's corona: light hugging the black disc, inside the collapse radius - the well's
+				// own rim, not a mark of its reach.
+				corona = eclipse ? 1f + 0.06f * MathF.Sin(spin * 3.1f) : 0f;
+				flares = blackSun;
 				break;
 			}
-
-			case Phase.Collapsing:
+			default:
 			{
 				// The core snaps shut, and what it gathered is thrown out to the collapse radius. A Black
 				// Sun with collapses still to come does not go out: its core shrinks back and holds.
@@ -501,19 +553,56 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				float swell = CollapseRadius * 0.45f * CrushSwell(crushed);
 				if (collapsesLeft > 0)
 				{
-					float core = Mathf.Lerp(CollapseRadius * 0.3f, swell, shut);
-					DrawProminences(core);
-					DrawCircle(Vector2.Zero, core, CoreColor);
-					DrawArc(Vector2.Zero, core, 0f, Mathf.Tau, 24, rimColor, 1.5f);
-					DrawCollapsesLeft(core);
+					core = Mathf.Lerp(CollapseRadius * 0.3f, swell, shut);
+					flares = true;
 				}
-				else if (shut > 0f)
+				else
 				{
-					DrawCircle(Vector2.Zero, swell * shut, CoreColor);
+					core = swell * shut;
 				}
+				break;
+			}
+		}
+		wellCore = core;
+		wellMaterial.SetShaderParameter(ParamPullRadius, PullRadius);
+		wellMaterial.SetShaderParameter(ParamArmInner, inner);
+		wellMaterial.SetShaderParameter(ParamArmOuter, outer);
+		wellMaterial.SetShaderParameter(ParamCore, core);
+		wellMaterial.SetShaderParameter(ParamSpin, spin);
+		wellMaterial.SetShaderParameter(ParamClock, clock);
+		wellMaterial.SetShaderParameter(ParamCorona, corona);
+		wellMaterial.SetShaderParameter(ParamBlackSun, flares);
+	}
+
+	// The core as UpdateWell last set it: where Black Sun's count of collapses circles.
+	private float wellCore;
+
+	// One quad over the whole reach; the shader decides every cell and draws nothing past PullRadius.
+	private void DrawWell()
+	{
+		float half = PullRadius + 4f;
+		well.DrawRect(new Rect2(-half, -half, half * 2f, half * 2f), Colors.White);
+	}
+
+	public override void _Draw()
+	{
+		// Cells on the world's grid: the well stands wherever the pack was.
+		SpellInk.AlignToWorldGrid(this);
+		switch (phase)
+		{
+			case Phase.Pulling:
+				DrawMotes();
+				if (blackSun)
+					DrawCollapsesLeft(wellCore);
+				break;
+
+			case Phase.Collapsing:
+			{
+				if (collapsesLeft > 0)
+					DrawCollapsesLeft(wellCore);
 				// Crush throws out more of what it crushed: two more pieces a body.
 				int pieces = Math.Min(48, ImpactDebris.CountFor(CollapseRadius) + 2 * Math.Min(crushed, CrushMostBodies));
-				ImpactDebris.Draw(this, Vector2.Zero, CollapseRadius, phaseSeconds, debrisSeed + (uint)collapsesLeft * 31u, debrisRamp,
+				ImpactDebris.Draw(this, Vector2.Zero, CollapseRadius, phaseSeconds, debrisSeed + (uint)collapsesLeft * 31u, ramp,
 					pieces, Colors.White);
 				break;
 			}
@@ -524,51 +613,37 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	private float CrushSwell(int bodies) => crush ? 1f + 0.35f * Math.Min(bodies, CrushMostBodies) / CrushMostBodies : 1f;
 
 	// Dust and light dragged in from the rim of the pull along a spiral, faster as it nears the core:
-	// fourteen squares on the art grid, laid out from the clock so nothing is stored or allocated.
+	// fourteen squares on the art grid, laid out from the clock so nothing is stored or allocated. They
+	// come in as the ramp's mid with a dark seam under them, and heat to its hot as they near the core.
 	private void DrawMotes()
 	{
 		float inner = CollapseRadius * 0.3f;
 		for (int i = 0; i < MoteCount; i++)
 		{
 			float p = (i * 0.6180339f + phaseSeconds * 0.9f) % 1f;
-			float r = Mathf.Lerp(PullRadius - WhipLimb.Grid, inner, p * p);
+			float r = Mathf.Lerp(PullRadius - WhipLimb.Grid * 2f, inner, p * p);
 			float a = i * (Mathf.Tau / MoteCount) + spin * 0.5f + p * 2.4f;
-			float size = p < 0.5f ? WhipLimb.Grid * 2f : WhipLimb.Grid;
-			Color c = p < 0.6f ? armColor : rimColor;
-			DrawRect(WhipLimb.Cell(new Vector2(MathF.Cos(a), MathF.Sin(a)) * r, size), c with { A = MathF.Min(1f, c.A + 0.2f) });
-		}
-	}
-
-	// Three arms spiralling in from the reach to the core, turning with the pull. `grown` 0..1 is how
-	// far out they have reached: they open from the core, and at 1 their outer ends are on PullRadius,
-	// held inside it by half their width.
-	private void DrawArms(float grown)
-	{
-		float inner = CollapseRadius * 0.3f;
-		float outer = Mathf.Lerp(inner, PullRadius - 1.25f, grown);
-		for (int a = 0; a < ArmCount; a++)
-		{
-			Vector2[] points = armPoints[a];
-			float baseAngle = spin + a * Mathf.Tau / ArmCount;
-			for (int i = 0; i < ArmPoints; i++)
-			{
-				float t = i / (float)(ArmPoints - 1);
-				float radius = Mathf.Lerp(outer, inner, t);
-				float angle = baseAngle + t * 3.2f;
-				points[i] = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius;
-			}
-			DrawPolyline(points, armColor, 2.5f);
+			Vector2 at = new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+			bool big = p < 0.5f;
+			if (big)
+				DrawRect(WhipLimb.Cell(at + new Vector2(WhipLimb.Grid, WhipLimb.Grid), WhipLimb.Grid * 2f), Occ);
+			DrawRect(WhipLimb.Cell(at, big ? WhipLimb.Grid * 2f : WhipLimb.Grid), p < 0.6f ? ramp.Mid : ramp.Hot);
+			if (big)
+				DrawRect(WhipLimb.Cell(at - new Vector2(WhipLimb.Grid * 0.5f, WhipLimb.Grid * 0.5f), WhipLimb.Grid), ramp.Hot);
 		}
 	}
 
 	// Twin Stars: a filament of the dark strung between the two cores, sagging and twisting, with motes
 	// running along it from either end to the middle - where the knots are being dragged to. Drawn by
-	// one of the pair. `grown` 0..1 strings it out from this core as the wells open.
-	private void DrawTether(float grown)
+	// one of the pair, as strokes: an occlusion body two art pixels wide round a one-pixel core of the
+	// ramp's mid. It strings out from this core as the wells open.
+	private void DrawTether()
 	{
-		if (!HasPartner || !LeadsPair)
+		if (tetherStrokes == null || !HasPartner || !LeadsPair)
 			return;
-		Vector2 to = ToLocal(Partner.GlobalPosition) * grown;
+		float grown = phase == Phase.Opening ? Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, OpenSeconds), 0f, 1f) : 1f;
+		Vector2 from = GlobalPosition;
+		Vector2 to = (Partner.GlobalPosition - from) * grown;
 		float length = to.Length();
 		if (length < 4f)
 			return;
@@ -578,36 +653,25 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 			float s = i / (float)(TetherPoints - 1);
 			float sway = MathF.Sin(s * Mathf.Pi) * (6f + 4f * MathF.Sin(spin * 0.7f))
 				+ 2.5f * MathF.Sin(s * 9f - spin * 2f) * MathF.Sin(s * Mathf.Pi);
-			tether[i] = to * s + side * sway;
+			tether[i] = from + to * s + side * sway;
 		}
-		DrawPolyline(tether, CoreColor, 5.0f);
-		DrawPolyline(tether, armColor, 2.5f);
+		tetherStrokes.Begin();
+		for (int i = 0; i < TetherPoints - 1; i++)
+		{
+			tetherStrokes.Add(new SpellStrokes.Stroke
+			{
+				A = tether[i], B = tether[i + 1], HalfA = 2.5f, HalfB = 2.5f, Spine = 2, Body = 5,
+			});
+		}
 		for (int i = 0; i < 6; i++)
 		{
 			float p = (i * 0.37f + phaseSeconds * 0.8f) % 1f;
 			// Half the motes start at each end and meet in the middle.
 			float s = i % 2 == 0 ? p * 0.5f : 1f - p * 0.5f;
 			int at = Mathf.Clamp((int)(s * (TetherPoints - 1)), 0, TetherPoints - 1);
-			DrawRect(WhipLimb.Cell(tether[at], WhipLimb.Grid * 2f), rimColor);
+			tetherStrokes.Add(new SpellStrokes.Stroke { A = tether[at], B = tether[at], HalfA = 2f, HalfB = 2f, Spine = 1, Body = 1 });
 		}
-	}
-
-	// Black Sun: dark flares licking off the rim of a star that does not go out, turning slowly.
-	private void DrawProminences(float core)
-	{
-		const int flares = 7;
-		for (int i = 0; i < flares; i++)
-		{
-			float a = i * Mathf.Tau / flares + spin * 0.25f;
-			float lick = 0.25f + 0.2f * MathF.Sin(spin * 1.7f + i * 2.3f);
-			var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-			var across = new Vector2(-dir.Y, dir.X);
-			Vector2 foot = dir * core * 0.92f;
-			Vector2 tip = dir * core * (1f + lick) + across * core * 0.12f * MathF.Sin(spin + i);
-			DrawLine(foot + across * core * 0.12f, tip, armColor, 3f);
-			DrawLine(foot - across * core * 0.12f, tip, armColor, 3f);
-			DrawRect(WhipLimb.Cell(tip, WhipLimb.Grid), rimColor);
-		}
+		tetherStrokes.Draw(tetherLayer, Colors.White);
 	}
 
 	// Black Sun: one bright mote circles the core for every collapse it has left - three, then two, then one.
@@ -616,32 +680,38 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		for (int i = 0; i < collapsesLeft; i++)
 		{
 			float a = spin * 0.9f + i * Mathf.Tau / BlackSunCollapses;
-			DrawRect(WhipLimb.Cell(new Vector2(MathF.Cos(a), MathF.Sin(a)) * (core + 7f), WhipLimb.Grid * 2f), rimColor with { A = 1f });
+			Vector2 at = new Vector2(MathF.Cos(a), MathF.Sin(a)) * (core + 7f);
+			DrawRect(WhipLimb.Cell(at, WhipLimb.Grid * 2f), ramp.Hot);
+			DrawRect(WhipLimb.Cell(at - new Vector2(WhipLimb.Grid * 0.5f, WhipLimb.Grid * 0.5f), WhipLimb.Grid), ramp.Core);
 		}
 	}
 
 	// Nova Seed: shards of the star flung from the collapse on a low arc to where each will open a well -
-	// a dark sliver with a lit edge and a short trail, landing as it shrinks.
+	// a dark sliver with a hot spine and a short trail cooling behind it, a white point at its head.
 	private void DrawShards()
 	{
-		if (shardAge < 0f || shardsLanded || air == null)
+		if (shardStrokes == null || shardAge < 0f || shardsLanded || air == null)
 			return;
 		float u = Mathf.Clamp(shardAge / NovaShardSeconds, 0f, 1f);
 		float eased = 1f - (1f - u) * (1f - u);
+		shardStrokes.Begin();
 		for (int i = 0; i < shardCount; i++)
 		{
-			Vector2 to = ToLocal(shardTo[i]);
+			Vector2 to = shardTo[i] - GlobalPosition;
 			float length = to.Length();
 			if (length < 1f)
 				continue;
 			Vector2 dir = to / length;
 			// Thrown up and coming down: a hop as high as a fifth of the throw, in the screen's up.
 			float hop = MathF.Sin(u * Mathf.Pi) * MathF.Min(40f, length * 0.2f);
-			Vector2 at = to * eased + new Vector2(0f, -hop);
+			Vector2 at = GlobalPosition + to * eased + new Vector2(0f, -hop);
 			Vector2 back = at - dir * 9f + new Vector2(0f, hop * 0.15f);
-			air.DrawLine(back, at, CoreColor, 4f);
-			air.DrawLine(back, at, rimColor, 1.5f);
-			air.DrawRect(WhipLimb.Cell(at, WhipLimb.Grid * 2f), rimColor with { A = 1f });
+			shardStrokes.Add(new SpellStrokes.Stroke
+			{
+				A = at, B = back, HalfA = 2f, HalfB = 1f, Spine = 1, Body = 5, Cool = true,
+			});
+			shardStrokes.Add(new SpellStrokes.Stroke { A = at, B = at, HalfA = 2f, HalfB = 2f, Spine = 0, Body = 1, SpineHalf = 1f });
 		}
+		shardStrokes.Draw(air, Colors.White);
 	}
 }

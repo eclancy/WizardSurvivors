@@ -32,6 +32,7 @@ import trees
 import water
 import world_props
 import spell_fx
+import glacial_ice
 import spore_mushrooms
 import crater_fire
 import gravewell
@@ -430,6 +431,9 @@ if __name__ == "__main__":
     print("")
     print("spell effects:")
     spell_fx.main()
+    print("")
+    print("glacial spike (three sizes of ice):")
+    glacial_ice.main()
     print("")
     print("toxic spore mushrooms:")
     spore_mushrooms.main()

@@ -21,6 +21,11 @@ namespace WizardSurvivors.scripts;
 /// node stops processing when nothing is live. In the air (DrawLayers.Air), over the bodies it crackles on.
 /// The burst's hits pass the spell as their source, but never add a spark of their own: a spark is laid
 /// only by a dart, so one overload cannot set off the next.
+///
+/// Pixel art on the world's 2-unit grid since 2026-10-29 (PixelInk; .ai/art-replacement-manifest.md
+/// section 9): every spark and bolt is stamped cell by cell in the Lightning ramp - a gold edge under a
+/// white-hot seam, which holds on the Sketchbook's paper as well as on a dark floor - and fades by
+/// dissolving, where they were antialiased DrawLines under a translucent outline, fading by alpha.
 /// </remarks>
 public partial class StaticCharges : Node2D
 {
@@ -63,7 +68,6 @@ public partial class StaticCharges : Node2D
 	private readonly List<Enemy> scratch = new(64);
 
 	private static readonly ElementColors.Ramp Lightning = ElementColors.GetRamp(Element.Lightning);
-	private static readonly Color Outline = new(0.04f, 0.04f, 0.08f, 0.75f);
 
 	private static StaticCharges current;
 
@@ -83,6 +87,9 @@ public partial class StaticCharges : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		// At the world's origin, unturned and unscaled, so its units are the world's and so is its grid.
+		TopLevel = true;
+		GlobalPosition = Vector2.Zero;
 		SetProcess(false);
 	}
 
@@ -188,7 +195,7 @@ public partial class StaticCharges : Node2D
 			if (!c.Live || !IsInstanceValid(c.Target))
 				continue;
 			Vector2 centre = ToLocal(c.Target.GlobalPosition) + new Vector2(0f, -SparkLift);
-			float fading = c.Age > MagicMissile.SparkSeconds - 0.5f ? 0.5f + 0.5f * MathF.Sin(clock * 40f) : 1f;
+			float fading = c.Age > MagicMissile.SparkSeconds - 0.5f ? (MathF.Sin(clock * 40f) > 0f ? 1f : 0.45f) : 1f;
 			for (int k = 0; k < c.Sparks; k++)
 			{
 				float a = clock * 5f + Mathf.Tau * k / MagicMissile.OverchargeSparks + i;
@@ -207,7 +214,7 @@ public partial class StaticCharges : Node2D
 			float t = b.Age / BurstSeconds;
 			float life = 1f - t;
 			Vector2 centre = ToLocal(b.At);
-			DrawCircle(centre, b.Radius * 0.28f * (1f - t * 0.6f), Lightning.Core with { A = MathF.Max(0f, 1f - t * 2.2f) });
+			PixelInk.Disc(this, centre, b.Radius * 0.28f * (1f - t * 0.6f), Lightning.Core, 1f - t * 2.2f);
 			uint seed = b.Seed;
 			for (int k = 0; k < BurstArcs; k++)
 			{
@@ -223,25 +230,26 @@ public partial class StaticCharges : Node2D
 					// Each segment re-rolls a little every few frames, so a standing bolt still crackles.
 					jag += MathF.Sin(clock * 50f + k * 3f + s) * 2f;
 					Vector2 next = centre + dir * along + side * jag;
-					DrawLine(prev, next, Outline with { A = Outline.A * life }, 4f);
-					DrawLine(prev, next, (s <= 2 ? Lightning.Core : Lightning.Mid) with { A = life }, 2f);
+					PixelInk.Line(this, prev, next, Lightning.Edge, 3, life * 1.6f);
+					PixelInk.Line(this, prev, next, s <= 2 ? Lightning.Core : Lightning.Hot, 1, life * 1.8f);
 					prev = next;
 				}
 			}
 		}
 	}
 
-	private void DrawSpark(Vector2 p, float angle, float alpha)
+	// A spark: a little zigzag four or five art pixels long, a gold edge under a white-hot seam.
+	private void DrawSpark(Vector2 p, float angle, float coverage)
 	{
-		Vector2 d = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * 4f;
-		Vector2 s = d.Orthogonal() * 0.6f;
+		Vector2 d = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * 5f;
+		Vector2 s = d.Orthogonal() * 0.7f;
 		Vector2 a = p - d, m1 = p - d * 0.2f + s, m2 = p + d * 0.2f - s, z = p + d;
-		DrawLine(a, m1, Outline with { A = Outline.A * alpha }, 3.5f);
-		DrawLine(m1, m2, Outline with { A = Outline.A * alpha }, 3.5f);
-		DrawLine(m2, z, Outline with { A = Outline.A * alpha }, 3.5f);
-		DrawLine(a, m1, Lightning.Hot with { A = alpha }, 1.6f);
-		DrawLine(m1, m2, Lightning.Core with { A = alpha }, 1.6f);
-		DrawLine(m2, z, Lightning.Hot with { A = alpha }, 1.6f);
+		PixelInk.Line(this, a, m1, Lightning.Edge, 2, coverage);
+		PixelInk.Line(this, m1, m2, Lightning.Edge, 2, coverage);
+		PixelInk.Line(this, m2, z, Lightning.Edge, 2, coverage);
+		PixelInk.Line(this, a, m1, Lightning.Hot, 1, coverage);
+		PixelInk.Line(this, m1, m2, Lightning.Core, 1, coverage);
+		PixelInk.Line(this, m2, z, Lightning.Hot, 1, coverage);
 	}
 
 	private static float Unit(ref uint seed)

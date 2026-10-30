@@ -42,8 +42,10 @@ namespace WizardSurvivors.scripts;
 // smears; a sheet rasterised at the heading keeps its pixels - SleetRunes' reason) on the elite cell, and
 // the three colossal Ascension forms on the boss cell, twice the size. The node picks the cell nearest
 // the heading and draws it at x2. Nothing is instanced per swing: weapons, trails, motes, cracks and
-// hallowed ground are slots in fixed arrays, drawn by two canvas items (the air above the actors, the
-// ground under them).
+// hallowed ground are slots in fixed arrays, drawn by four canvas items - the afterimages and the air
+// above the actors, the quake and the shadows under them - every one opaque pixel art on the world's
+// 2 px grid (spirit_weapon_air.gdshader turns their alpha into dithered coverage; spirit_quake.gdshader
+// draws the cracks and the holy ground, 2026-10-29).
 //
 // NO MARKERS (art-direction.md section 3): a blow's reach is shown by ImpactDebris thrown out to exactly
 // it (the cleave, the slam), and a slam's cracks run out to the radius it hit and stop there.
@@ -187,7 +189,7 @@ public partial class SpiritualWeapon : Node2D
 		public Vector2 At;
 		public float Radius, Age, Life;
 		public uint Seed;
-		public bool Live;
+		public bool Live, Echo;
 	}
 
 	private struct Zone
@@ -225,6 +227,14 @@ public partial class SpiritualWeapon : Node2D
 	private readonly RandomNumberGenerator rng = new();
 	private Node2D air;
 	private Node2D ground;
+	private Node2D ghosts;
+	private Node2D quake;
+	private ShaderMaterial quakeMaterial;
+	private const string AirShaderPath = "res://scenes/shaders/spirit_weapon_air.gdshader";
+	private const string QuakeShaderPath = "res://scenes/shaders/spirit_quake.gdshader";
+	private static readonly StringName ParamTint = "tint";
+	// A slam's and a zone's radius ride in a colour channel as radius / QuakeRadiusScale (spirit_quake).
+	private const float QuakeRadiusScale = 512f;
 	private Texture2D baseSheet;
 	private Texture2D colossalSheet;
 	private Texture2D sheet;
@@ -281,11 +291,29 @@ public partial class SpiritualWeapon : Node2D
 		GlobalPosition = Vector2.Zero;
 		// The weapons are in the air, over the bodies (as Familiar's effects are) and under the HUD; their
 		// shadows, the cracks and the hallowed ground are on the floor, under the bodies.
-		ground = new Node2D { Name = "SpiritWeaponGround", ZAsRelative = false, ZIndex = -1 };
-		air = new Node2D { Name = "SpiritWeaponAir", ZAsRelative = false, ZIndex = 6 };
+		//
+		// PIXEL ART (2026-10-29, "Update all spells to the same quality we expect now"). Four canvases, each
+		// drawing opaque cells on the world's 2 px grid. The quake and the holy ground are a shader of their
+		// own (spirit_quake.gdshader), one quad a slam; the shadows, the afterimages, the weapons, the slash
+		// and the motes keep their sheet cells and rects but go through spirit_weapon_air.gdshader, which turns
+		// every alpha they are drawn with into dithered coverage - a weapon dissolves in, an afterimage is a
+		// stipple of its shape, the slash breaks up as it cools - where they used to be translucent.
+		var dither = new ShaderMaterial { Shader = GD.Load<Shader>(AirShaderPath) };
+		var ghostDither = new ShaderMaterial { Shader = dither.Shader };
+		ghostDither.SetShaderParameter("silhouette", true);
+		quakeMaterial = new ShaderMaterial { Shader = GD.Load<Shader>(QuakeShaderPath) };
+		quake = new Node2D { Name = "SpiritWeaponQuake", ZAsRelative = false, ZIndex = -1, Material = quakeMaterial };
+		ground = new Node2D { Name = "SpiritWeaponGround", ZAsRelative = false, ZIndex = -1, Material = dither };
+		ghosts = new Node2D { Name = "SpiritWeaponGhosts", ZAsRelative = false, ZIndex = 6, Material = ghostDither };
+		air = new Node2D { Name = "SpiritWeaponAir", ZAsRelative = false, ZIndex = 6, Material = dither };
+		// In this order, so the shadows lie over the cracks and the weapon over its afterimages.
+		AddChild(quake);
 		AddChild(ground);
+		AddChild(ghosts);
 		AddChild(air);
+		quake.Draw += DrawQuake;
 		ground.Draw += DrawGround;
+		ghosts.Draw += DrawGhosts;
 		air.Draw += DrawAir;
 	}
 
@@ -339,6 +367,8 @@ public partial class SpiritualWeapon : Node2D
 		flurry = spell.HasEvolution(ThousandCutsId);
 		alongBlade = spell.HasEvolution(GreatswordId);
 		colossal = spell.HasEvolution(GreatswordId) || spell.HasEvolution(GreataxeId) || spell.HasEvolution(TitansMaulId);
+		if (tint != visualTint || armed == false)
+			quakeMaterial?.SetShaderParameter(ParamTint, visualTint);
 		tint = visualTint;
 
 		string look = $"{form}:{colossal}";
@@ -452,7 +482,9 @@ public partial class SpiritualWeapon : Node2D
 			siphoned = 0;
 		}
 		air?.QueueRedraw();
+		ghosts?.QueueRedraw();
 		ground?.QueueRedraw();
+		quake?.QueueRedraw();
 	}
 
 	private void Tick(Weapon w, int index, int count, float dt)
@@ -1115,7 +1147,7 @@ public partial class SpiritualWeapon : Node2D
 
 	private void AddSlam(Vector2 at, float radius, bool echo)
 	{
-		slams[nextSlam] = new Slam { At = at, Radius = radius, Life = echo ? 0.45f : 0.7f, Seed = rng.Randi(), Live = true };
+		slams[nextSlam] = new Slam { At = at, Radius = radius, Life = echo ? 0.45f : 0.7f, Seed = rng.Randi(), Live = true, Echo = echo };
 		nextSlam = (nextSlam + 1) % MaxSlams;
 	}
 
@@ -1165,22 +1197,23 @@ public partial class SpiritualWeapon : Node2D
 		}
 	}
 
+	// A colour of the ramp under the spell's tint, with an alpha the canvas's shader reads as coverage.
 	private Color Tinted(Color c, float alpha) => new Color(c.R * tint.R, c.G * tint.G, c.B * tint.B, alpha);
 
 	private static Vector2 Snap(Vector2 p) => new Vector2(MathF.Round(p.X * 0.5f) * 2f, MathF.Round(p.Y * 0.5f) * 2f);
 
-	// The floor: each weapon's shadow, a slam's cracks, hallowed ground.
+	// The floor: each weapon's shadow. A half-tone of occlusion (the canvas dithers it), shrinking and
+	// thinning the higher the weapon is: that is what says it is in the air.
 	private void DrawGround()
 	{
 		Color occ = new Color(0.02f, 0.027f, 0.047f, 1f);
 		foreach (Weapon w in weapons)
 		{
-			// The shadow shrinks and fades the higher the weapon is: that is what says it is in the air.
 			Vector2 centre = w.Pivot + Dir(w.Angle) * GripToCentre;
 			float height = MathF.Max(0f, w.Ground - centre.Y);
 			float k = Mathf.Clamp(1f - height / 220f, 0.35f, 1f);
 			float rx = (colossal ? 34f : 18f) * k;
-			Color c = new Color(occ, 0.30f * k * w.Alpha);
+			Color c = new Color(occ, 0.6f * k * w.Alpha);
 			Vector2 at = Snap(new Vector2(centre.X, w.Ground));
 			for (int row = -2; row <= 2; row += 2)
 			{
@@ -1189,60 +1222,58 @@ public partial class SpiritualWeapon : Node2D
 				ground.DrawRect(new Rect2(at.X - half, at.Y + row - 1f, half * 2f, 2f), c);
 			}
 		}
+	}
 
-		// A slam's cracks: jagged lines out from where it landed, to exactly the radius it hit, glowing and
-		// then going dark. Deterministic from the slam's seed, so a crack does not crawl from frame to frame.
+	// The quake under a slam (and Aftershock's echo) and the hallowed ground, through spirit_quake.gdshader:
+	// one quad each, the slam's numbers in the vertex colour, out to exactly the radius it hit. Cracks
+	// running out to it, a heave of broken ground racing to it, holy light scattered over the zone.
+	private void DrawQuake()
+	{
+		Texture2D quad = ScorchGround.QuadTexture;
 		for (int i = 0; i < MaxSlams; i++)
 		{
 			ref Slam s = ref slams[i];
 			if (!s.Live)
 				continue;
-			float t = s.Age / s.Life;
-			float grow = MathF.Min(1f, s.Age / 0.08f);
-			float alpha = t < 0.5f ? 1f : (1f - t) / 0.5f;
-			uint seed = s.Seed;
-			int arms = 7;
-			for (int a = 0; a < arms; a++)
-			{
-				float ang = (a + Hash01(ref seed) * 0.6f) * Mathf.Tau / arms;
-				Vector2 p = s.At;
-				int steps = 4;
-				for (int k2 = 1; k2 <= steps; k2++)
-				{
-					float rr = s.Radius * grow * k2 / steps;
-					float wob = (Hash01(ref seed) - 0.5f) * 0.5f;
-					Vector2 q = s.At + new Vector2(MathF.Cos(ang + wob), MathF.Sin(ang + wob) * 0.62f) * rr;
-					ground.DrawLine(Snap(p), Snap(q), new Color(occ, 0.75f * alpha), 4f);
-					ground.DrawLine(Snap(p), Snap(q), Tinted(t < 0.35f ? arcane.Hot : arcane.Edge, alpha), 2f);
-					p = q;
-				}
-			}
+			float r = MathF.Min(s.Radius, QuakeRadiusScale - 1f);
+			var extent = new Vector2(r, r * CraterGround.Squash);
+			var parameters = new Color(Mathf.Clamp(s.Age / s.Life, 0f, 1f), r / QuakeRadiusScale, (s.Seed % 997u) / 997f,
+				s.Echo ? 0.5f : 0.25f);
+			quake.DrawTextureRect(quad, new Rect2(Snap(s.At) - extent, extent * 2f), false, parameters);
 		}
-
-		// Hallowed ground: a ring of light runes on the floor, inside the radius it weakens, fading as it ends.
 		for (int i = 0; i < MaxZones; i++)
 		{
 			ref Zone z = ref zones[i];
 			if (!z.Live)
 				continue;
-			float f = z.Left / MathF.Max(0.01f, z.Life);
-			float alpha = MathF.Min(1f, f * 3f) * 0.85f;
-			uint seed = z.Seed;
-			int runes = 10;
-			for (int r = 0; r < runes; r++)
-			{
-				float ang = r * Mathf.Tau / runes + Hash01(ref seed) * 0.3f;
-				float rr = z.Radius * (0.55f + 0.35f * Hash01(ref seed));
-				Vector2 p = z.At + new Vector2(MathF.Cos(ang) * rr, MathF.Sin(ang) * rr * 0.62f);
-				Color c = Tinted(r % 2 == 0 ? light.Hot : light.Edge, alpha);
-				ground.DrawRect(WhipLimb.Cell(p, 4f), c);
-				ground.DrawRect(WhipLimb.Cell(p + new Vector2(4f, 0f), 2f), c);
-				ground.DrawRect(WhipLimb.Cell(p + new Vector2(0f, -4f), 2f), c);
-			}
+			float r = MathF.Min(z.Radius, QuakeRadiusScale - 1f);
+			var extent = new Vector2(r, r * CraterGround.Squash);
+			var parameters = new Color(Mathf.Clamp(z.Left / MathF.Max(0.01f, z.Life), 0f, 1f), r / QuakeRadiusScale,
+				(z.Seed % 997u) / 997f, 1f);
+			quake.DrawTextureRect(quad, new Rect2(Snap(z.At) - extent, extent * 2f), false, parameters);
 		}
 	}
 
-	// The air: the weapons, their afterimages and slashes, and the motes.
+	// The afterimages through a strike: the last two headings, as stipples of the weapon's own shape in
+	// Arcane's mid and hot (the canvas fills the shape with the colour and dithers it by the alpha).
+	private void DrawGhosts()
+	{
+		if (sheet == null)
+			return;
+		float cellWorld = sheetCell * 2f;
+		foreach (Weapon w in weapons)
+		{
+			if (w.Phase != Phase.Strike)
+				continue;
+			int row = sheetRows > 1 && w.Side < 0f ? 1 : 0;
+			if (!float.IsNaN(w.Ghost2))
+				DrawWeapon(ghosts, w, w.Ghost2, row, cellWorld, Tinted(arcane.Mid, 0.3f * w.Alpha));
+			if (!float.IsNaN(w.Ghost1))
+				DrawWeapon(ghosts, w, w.Ghost1, row, cellWorld, Tinted(arcane.Hot, 0.5f * w.Alpha));
+		}
+	}
+
+	// The air: the slashes, the weapons, and the motes.
 	private void DrawAir()
 	{
 		float cellWorld = sheetCell * 2f;
@@ -1251,16 +1282,9 @@ public partial class SpiritualWeapon : Node2D
 			if (sheet == null)
 				break;
 			int row = sheetRows > 1 && w.Side < 0f ? 1 : 0;
-			// Afterimages through a strike: the last two headings, faint.
-			if (w.Phase == Phase.Strike)
-			{
-				if (!float.IsNaN(w.Ghost2))
-					DrawWeapon(w, w.Ghost2, row, cellWorld, Tinted(arcane.Mid, 0.22f * w.Alpha));
-				if (!float.IsNaN(w.Ghost1))
-					DrawWeapon(w, w.Ghost1, row, cellWorld, Tinted(arcane.Hot, 0.38f * w.Alpha));
-			}
 			DrawSlash(w);
-			DrawWeapon(w, w.Angle, row, cellWorld, new Color(tint.R, tint.G, tint.B, w.Alpha));
+			// A weapon coming or going dissolves through the dither rather than fading.
+			DrawWeapon(air, w, w.Angle, row, cellWorld, new Color(tint.R, tint.G, tint.B, w.Alpha));
 		}
 
 		for (int i = 0; i < MaxMotes; i++)
@@ -1273,9 +1297,10 @@ public partial class SpiritualWeapon : Node2D
 		}
 	}
 
-	// The slash: the arc the head swept, from where it came over the top to where it is - thick and white
-	// at the head, thinning and cooling down the ramp behind it - and, once the blow has landed, the whole
-	// arc fading in a sixth of a second. Under the weapon, so the weapon leads it.
+	// The slash: the arc the head swept, from where it came over the top to where it is - wide and white at
+	// the head, narrowing and cooling down the ramp behind it - stamped as square cells on the grid along the
+	// head's own path, sampled; and, once the blow has landed, the whole arc breaking up in a sixth of a
+	// second. Under the weapon, so the weapon leads it.
 	private void DrawSlash(Weapon w)
 	{
 		if (w.SlashProgress <= 0f || w.SlashAge >= SlashLife)
@@ -1284,19 +1309,24 @@ public partial class SpiritualWeapon : Node2D
 		float span = form == Form.Sword ? 0.75f : 0.9f;
 		float from = MathF.Max(0f, w.SlashProgress - span);
 		float width = (form == Form.Sword ? 6f : 10f) * (colossal ? 2f : 1f);
-		Vector2 prev = Snap(SlashHead(w, from));
+		Vector2 prev = SlashHead(w, from);
 		for (int k = 1; k <= SlashSamples; k++)
 		{
 			float f = k / (float)SlashSamples;
-			Vector2 at = Snap(SlashHead(w, Mathf.Lerp(from, w.SlashProgress, f)));
-			Color c = f > 0.8f ? arcane.Core : f > 0.5f ? arcane.Hot : f > 0.25f ? arcane.Mid : arcane.Edge;
-			float alpha = fade * (0.35f + 0.65f * f);
-			air.DrawLine(prev, at, Tinted(c, alpha), MathF.Max(2f, MathF.Round(width * (0.3f + 0.7f * f) * 0.5f) * 2f));
+			Vector2 at = SlashHead(w, Mathf.Lerp(from, w.SlashProgress, f));
+			Color c = Tinted(f > 0.8f ? arcane.Core : f > 0.5f ? arcane.Hot : f > 0.25f ? arcane.Mid : arcane.Edge,
+				fade * (0.35f + 0.65f * f));
+			float size = WhipLimb.SnapSize(width * (0.3f + 0.7f * f));
+			// A square every half its size along the chord, so the stroke is solid and its edge a staircase
+			// of whole art pixels at any angle.
+			int n = Math.Max(1, Mathf.CeilToInt(prev.DistanceTo(at) / MathF.Max(WhipLimb.Grid, size * 0.5f)));
+			for (int j = 1; j <= n; j++)
+				air.DrawRect(WhipLimb.Cell(prev.Lerp(at, j / (float)n), size), c);
 			prev = at;
 		}
 	}
 
-	private void DrawWeapon(Weapon w, float angle, int row, float cellWorld, Color modulate)
+	private void DrawWeapon(Node2D canvas, Weapon w, float angle, int row, float cellWorld, Color modulate)
 	{
 		int cell = ((int)MathF.Round(angle / Mathf.Tau * Headings) % Headings + Headings) % Headings;
 		// The drawing's heading is the CELL's, so its centre is placed along the cell's heading, not the
@@ -1305,15 +1335,6 @@ public partial class SpiritualWeapon : Node2D
 		Vector2 centre = Snap(w.Pivot + Dir(drawn) * GripToCentre);
 		var dest = new Rect2(centre - new Vector2(cellWorld, cellWorld) * 0.5f, new Vector2(cellWorld, cellWorld));
 		var src = new Rect2(cell * sheetCell, row * sheetCell, sheetCell, sheetCell);
-		air.DrawTextureRectRegion(sheet, dest, src, modulate);
-	}
-
-	// A small deterministic hash for the cracks and runes: the same slam draws the same cracks every frame.
-	private static float Hash01(ref uint state)
-	{
-		state ^= state << 13;
-		state ^= state >> 17;
-		state ^= state << 5;
-		return (state & 0xFFFFFF) / (float)0x1000000;
+		canvas.DrawTextureRectRegion(sheet, dest, src, modulate);
 	}
 }

@@ -9,6 +9,14 @@
 // or azure tone (.ai/art-direction.md section 3) with Bayer dithering as the only gradient, as in
 // water_surface.gdshader and tentacle_rift.gdshader.
 //
+// FOAM, NOT DISCS (2026-10-29). The spray, the titanic spume and the titanic wake were on the grid but
+// read as vector drawing at a tidal wave's size: every droplet and every heap of spume a flat round disc
+// of one tone up to 32 px across, and the wake ruled lines of one tone dragged the length of the screen,
+// like rain. Now a droplet or a heap is a clump (foam_tone): its edge knocked in and out cell by cell, a
+// white heart lit toward the top of the screen inside a ring of hot and a broken rim of mid, and the
+// spume is capped smaller; the wake is short wavering flecks of foam that break up and dither away
+// behind the crest, hot where they are fresh and mid where they are not.
+//
 // SIZE: `half_width` is the swath the bolt cuts, in the node's own units (RiptideWave.SwathHalfWidth);
 // nothing is drawn wider than it across the heading, and only the trailing spray and wake reach
 // behind the body. The titanic form (Titan Cataclysm, and so Spring Tide) is heavier and darker in
@@ -68,6 +76,33 @@ float hash12(vec2 p) {
 	return fract((p3.x + p3.y) * p3.z);
 }
 
+// A clump of foam round `at`, `size` across in the wave's units: 0 where there is none, else the tone
+// of this cell - 1 the white cap on the side toward the top of the screen, 2 its heart, 3 its body,
+// 4 the mid of its rim. Its edge is knocked in and out cell by cell and its rim is broken, so no two
+// are round and none is a disc of one tone.
+float foam_tone(vec2 p, vec2 at, float size, vec2 cell, vec2 up) {
+	vec2 q = (p - at) / max(size, 0.0001);
+	float u = length(q) + (hash12(cell * 1.7 + vec2(3.0, 11.0)) - 0.5) * 0.45;
+	if (u > 1.0)
+		return 0.0;
+	if (dot(q, up) > 0.3 && u < 0.85)
+		return 1.0;
+	if (u < 0.4)
+		return 2.0;
+	if (u < 0.78)
+		return 3.0;
+	return hash12(cell + vec2(29.0, 5.0)) > 0.35 ? 4.0 : 0.0;
+}
+
+// A foam tone's colour: the cap white, the heart white or hot, the body hot, the rim mid.
+vec3 foam_colour(float tone, bool bright, vec3 c_core, vec3 c_hot, vec3 c_mid) {
+	if (tone < 1.5)
+		return c_core;
+	if (tone < 2.5)
+		return bright ? c_core : c_hot;
+	return tone < 3.5 ? c_hot : c_mid;
+}
+
 // The leading edge of the crest at s (-1..1 across): bulging forward in the middle, the horns swept
 // back, with a ripple travelling along it as the lip rolls over and a lumpy edge of foam.
 float front_at(float s, float r, float phase) {
@@ -119,11 +154,13 @@ void fragment() {
 			float rise = r * (0.16 + 0.17 * (0.5 + 0.5 * sin(phase * 0.8 + float(k) * 1.7))) * swell;
 			vec2 foot = vec2(front_at(s, r, phase) - r * 0.08, s * r);
 			vec2 top = foot + up_local * rise;
-			float size = clamp(r * 0.13 * (0.7 + 0.3 * swell), GRID * 1.2 * px, 16.0 * px);
+			float size = clamp(r * 0.13 * (0.7 + 0.3 * swell), GRID * 1.2 * px, 11.0 * px);
 			if (abs(top.y) > r)
 				continue;
-			if (length(p - top) < size) { col = hash12(cell) > 0.3 ? c_core : c_hot; hit = true; break; }
-			if (length(p - mix(foot, top, 0.5)) < size * 0.85) { col = c_hot; hit = true; break; }
+			float heap = foam_tone(p, top, size, cell, up_local);
+			if (heap > 0.0) { col = foam_colour(heap, true, c_core, c_hot, c_mid); hit = true; break; }
+			float stem = foam_tone(p, mix(foot, top, 0.5), size * 0.85, cell + vec2(17.0, 0.0), up_local);
+			if (stem > 0.0) { col = foam_colour(stem + 1.0, false, c_core, c_hot, c_mid); hit = true; break; }
 		}
 	}
 
@@ -185,16 +222,24 @@ void fragment() {
 				float reach = (0.7 + 0.55 * hash12(vec2(fk, 11.0))) * (titanic ? 1.5 : 1.0);
 				vec2 d = vec2(front_at(ds, r, phase) - r * 0.2 - c * r * reach, clamp(ds * r * (1.0 + 0.06 * c), -r, r));
 				if (titanic) d += up_local * sin(c * 3.14159) * r * 0.35;
-				float size = clamp(r * 0.11 * (1.0 - 0.6 * c), GRID * 0.75 * px, 10.0 * px);
-				if (length(p - d) < size && c < 0.85) { col = mod(fk, 3.0) < 1.0 ? c_core : c_hot; hit = true; break; }
+				float size = clamp(r * 0.11 * (1.0 - 0.6 * c), GRID * 0.75 * px, 7.0 * px);
+				float drop = c < 0.85 ? foam_tone(p, d, size, cell + vec2(fk * 13.0, 0.0), up_local) : 0.0;
+				if (drop > 0.0) { col = foam_colour(drop, mod(fk, 3.0) < 1.0, c_core, c_hot, c_mid); hit = true; break; }
 			}
 			if (!hit && titanic && abs(s) < 0.85 && x < slope) {
-				// One wake lane per ~45 world px of crest, each a streak 4 px thick.
+				// One wake lane per ~45 world px of crest: short flecks of foam a pixel thick, wavering
+				// across their lane, broken up, and dithering away the further they are behind the crest.
 				float lanes = clamp(floor(r / px / 45.0), 3.0, 12.0) * 0.5;
 				float lane = floor((s + 1.0) * lanes);
-				float dash = fract(-x / (r * 0.45) + time * 2.4 + lane * 0.37);
+				float wob = 0.14 * sin(x / (r * 0.22) + lane * 2.3 + phase * 0.5);
+				float dash = fract(-x / (70.0 * px) + time * 2.4 + lane * 0.37);
 				float thick = min(0.12, 2.0 * px / (r / lanes));
-				if (dash < 0.35 && x > slope - r * 1.4 && abs(fract((s + 1.0) * lanes) - 0.5) < thick) { col = c_hot; hit = true; }
+				float behind = clamp((slope - x) / (r * 1.4), 0.0, 1.0);
+				if (dash < 0.3 && x > slope - r * 1.4 && abs(fract((s + 1.0) * lanes + wob) - 0.5) < thick
+						&& hash12(cell + floor(time * 9.0)) > 0.3 && bayer4(cell) > behind * 0.9) {
+					col = behind < 0.35 ? c_hot : c_mid;
+					hit = true;
+				}
 			}
 		}
 	}

@@ -8,9 +8,17 @@ namespace WizardSurvivors.scripts;
 // Dedicated Chain Lightning behavior: a lightning strike that can fork into multiple delayed arcs.
 //
 // An element path (Storm Surge, the level 4 branch into Water - ElementPaths) is painted here on
-// every hop: the arc in the element's hot tone with a wet glow left along it. The hops after the
+// every hop: the arc in the element's own ramp with a wet glow left along it. The hops after the
 // first are spawned from the scene and never pass through Player.ApplyLegendaryVisual, so a tint
 // laid on the first arc alone would have changed colour halfway down the chain.
+//
+// THE ARC IS PIXEL ART (the pixel-art pass, 2026-10-29; .ai/art-replacement-manifest.md section 9). It
+// was a Line2D - antialiased in Shadow Bolt's scene - so at any angle but the four square ones a
+// smooth rotated quad, and the glow it left a translucent antialiased Line2D tweened out on the arena.
+// Both are stamped cell by cell on the world's 2-unit grid now (PixelInk): the arc an element-edge
+// under-stroke with a seam of its hot light (white-hot on Return Stroke's way home), the glow its edge
+// sinking into the floor and dissolving through the Bayer matrix (Afterglow, below). Same points, same
+// timing: an arc still lasts ArcDuration, and every hop's bends are rolled as they were.
 public partial class ChainLightning : Area2D, IPaintsElementPath
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -40,7 +48,6 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	[Export] public bool SpawnResidualAuraTrail { get; set; } = false;
 	[Export] public float ResidualAuraDuration { get; set; } = 0.55f;
 	[Export] public float ResidualAuraWidthScale { get; set; } = 1.65f;
-	[Export] public Color ResidualAuraColor { get; set; } = new Color(0.22f, 0.05f, 0.30f, 0.34f);
 
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
@@ -131,7 +138,9 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	// A curse the cast threw beside its first (Threefold Curse), which throws no more of its own.
 	private bool volleyChild;
 
-	private Line2D boltLine;
+	private ArcStroke arcStroke;
+	// The ramp the arc and its glow are drawn in: Lightning, Shadow Bolt's Darkness, or an element path's.
+	private ElementColors.Ramp arcRamp = LightningRamp;
 	private Node2D originNode;
 	private Node2D activeSource;
 	private Node2D activeTarget;
@@ -151,14 +160,10 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		ZIndex = DrawLayers.Air;
 		Monitoring = false;
 		Monitorable = false;
-		boltLine = GetNodeOrNull<Line2D>("BoltLine");
-		if (boltLine == null)
-		{
-			boltLine = new Line2D { Name = "BoltLine", Width = BaseLineWidth, DefaultColor = new Color(1.0f, 0.95f, 0.45f, 0.95f) };
-			AddChild(boltLine);
-		}
-		boltLine.Visible = false;
-		boltLine.TextureMode = Line2D.LineTextureMode.Tile;
+		arcStroke = new ArcStroke { Name = "Arc", Visible = false };
+		AddChild(arcStroke);
+		if (SpellData?.Id == "shadow_bolt")
+			arcRamp = ElementColors.GetRamp(Element.Darkness);
 		chainRng.Randomize();
 		if (SpellData?.GetBranchElement() is Element path)
 			PaintElementPath(path);
@@ -168,13 +173,11 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 
 	private void PaintElementPath(Element path)
 	{
-		ElementColors.Ramp ramp = ElementColors.GetRamp(path);
-		boltLine.DefaultColor = new Color(ramp.Hot, 0.95f);
-		// The glow the Shadow Bolt scene leaves along its arc, in the element's hot tone: rain-slick
-		// light hanging on the air for half a second after each hop, so the net it casts can be read
-		// after the 0.09 s arc itself has gone.
+		arcRamp = ElementColors.GetRamp(path);
+		// The glow the Shadow Bolt scene leaves along its arc, in the element's ramp: rain-slick light
+		// hanging on the floor for half a second after each hop, so the net it casts can be read after the
+		// 0.09 s arc itself has gone.
 		SpawnResidualAuraTrail = true;
-		ResidualAuraColor = new Color(ramp.Hot, 0.6f);
 		ResidualAuraDuration = 0.5f;
 	}
 
@@ -272,7 +275,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		{
 			if (stateTimer <= 0f)
 			{
-				boltLine.Visible = false;
+				arcStroke.Visible = false;
 				showingArc = false;
 				if (remainingArcDepth <= 0)
 				{
@@ -309,7 +312,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		returning = true;
 		returnIndex = path.Count - 1;
 		stateTimer = 0f;
-		boltLine.DefaultColor = new Color(LightningRamp.Core, 0.95f);
+		arcStroke.Homeward = true;
 		return true;
 	}
 
@@ -634,10 +637,14 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 
 	private void RenderBolt(Vector2 from, Vector2 to)
 	{
-		if (boltLine == null)
+		if (arcStroke == null)
 			return;
 
-		boltLine.Width = Math.Max(2f, BaseLineWidth * AreaMultiplier);
+		// The width the line had, the node's scale (an evolution's) included, in art pixels: the seam is
+		// one pixel for a hop of the base width, two from about one and a half times it.
+		float width = Math.Max(2f, BaseLineWidth * AreaMultiplier) * MathF.Abs(Scale.X);
+		arcStroke.Seam = Math.Max(1, (int)MathF.Round(width / 5f));
+		arcStroke.Ramp = arcRamp;
 		Vector2 direction = to - from;
 		float length = direction.Length();
 		Vector2 normal = length > 0.0001f
@@ -645,79 +652,174 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 			: Vector2.Up;
 
 		// Jag the bolt with a random number of bends (3-5) and stronger perpendicular offsets each
-		// cast so no two strikes trace the same path.
+		// cast so no two strikes trace the same path. World points: the stroke is drawn at the world's
+		// origin, on the world's grid.
 		int bends = (int)(GD.Randi() % 3) + 3;
 		float maxWobble = Math.Min(40f, length * 0.28f);
-		var points = new List<Vector2> { from };
+		Vector2[] points = arcStroke.Points;
+		points[0] = from;
 		for (int i = 1; i <= bends; i++)
 		{
 			float t = i / (float)(bends + 1);
 			Vector2 basePoint = from.Lerp(to, t);
 			float offset = (float)GD.RandRange(-maxWobble, maxWobble);
-			points.Add(basePoint + normal * offset);
+			points[i] = basePoint + normal * offset;
 		}
-		points.Add(to);
-
-		// The bends are worked out in world space, and the line is told them in its own. They were
-		// handed over as they were, which is only right while the node sits at the origin unscaled:
-		// Thunderhead's x1.5 (Player.ApplyLegendaryVisual) scaled every point away from the world
-		// origin, so the first hop was drawn somewhere else entirely. The scale still thickens the line.
-		Vector2[] worldPoints = points.ToArray();
-		var localPoints = new Vector2[worldPoints.Length];
-		for (int i = 0; i < worldPoints.Length; i++)
-			localPoints[i] = boltLine.ToLocal(worldPoints[i]);
-		boltLine.Points = localPoints;
-		boltLine.Visible = true;
-		if (SpawnResidualAuraTrail)
-			SpawnAuraTrail(from, to, boltLine.Width, worldPoints);
+		points[bends + 1] = to;
+		arcStroke.Count = bends + 2;
+		arcStroke.Visible = true;
+		arcStroke.QueueRedraw();
+		if (SpawnResidualAuraTrail && length >= 4f && ResidualAuraDuration > 0.01f)
+			Afterglow.For(GetParent())?.Lay(points, arcStroke.Count, ResidualAuraDuration,
+				Math.Max(2, (int)MathF.Round(width * ResidualAuraWidthScale / PixelInk.Grid)), arcRamp);
 	}
 
-	private void SpawnAuraTrail(Vector2 from, Vector2 to, float lineWidth, Vector2[] worldPoints)
+	/// <summary>
+	/// The arc of one hop, stamped on the world's grid: the ramp's edge as an under-stroke two art pixels
+	/// wider than the seam, and the seam of hot light down it - white-hot on Return Stroke's way home.
+	/// Top-level at the origin, so its points are world points whatever the chain node's own transform.
+	/// </summary>
+	private sealed partial class ArcStroke : Node2D
 	{
-		if (ResidualAuraDuration <= 0.01f)
-			return;
+		public const int MaxPoints = 8;
+		public readonly Vector2[] Points = new Vector2[MaxPoints];
+		public int Count;
+		public int Seam = 1;
+		public bool Homeward;
+		public ElementColors.Ramp Ramp = LightningRamp;
 
-		Node parent = GetParent();
-		if (parent == null || !IsInstanceValid(parent))
-			return;
-
-		if (worldPoints == null || worldPoints.Length < 2)
-			return;
-
-		Vector2 direction = to - from;
-		float length = direction.Length();
-		if (length < 4f)
-			return;
-
-		var auraLine = new Line2D
+		public override void _Ready()
 		{
-			Name = "ShadowAuraTrail",
-			TopLevel = true,
-			TextureMode = Line2D.LineTextureMode.Tile,
-			Antialiased = true,
-			Points = worldPoints,
-			Width = Math.Max(2f, lineWidth * ResidualAuraWidthScale),
-			DefaultColor = ResidualAuraColor,
-			ZIndex = -1
-		};
-		parent.AddChild(auraLine);
+			TopLevel = true;
+			GlobalPosition = Vector2.Zero;
+			ZAsRelative = false;
+			ZIndex = DrawLayers.Air;
+		}
 
-		// Eased in, so the trail holds most of its strength for the first part of its life and goes
-		// late: it is what the eye reads the arc by once the arc itself (ArcDuration, a few frames)
-		// has gone. It faded from its first frame, and Shadow Bolt's was at a quarter strength besides
-		// - Eric, 2026-10-28: "shadow bolt renders and unrenders too quickly, show it for longer so the
-		// player can see it properly." The hop timing is ArcDuration's and is not touched.
-		Tween trailTween = auraLine.CreateTween();
-		trailTween.SetParallel(true);
-		trailTween.SetEase(Tween.EaseType.In).SetTrans(Tween.TransitionType.Quad);
-		trailTween.TweenProperty(auraLine, "width", Math.Max(1f, lineWidth * 0.42f), ResidualAuraDuration);
-		Color endColor = ResidualAuraColor;
-		endColor.A = 0f;
-		trailTween.TweenProperty(auraLine, "default_color", endColor, ResidualAuraDuration);
-		trailTween.Finished += () =>
+		public override void _Draw()
 		{
-			if (IsInstanceValid(auraLine))
-				auraLine.QueueFree();
-		};
+			if (Count < 2)
+				return;
+			for (int i = 1; i < Count; i++)
+				PixelInk.Line(this, Points[i - 1], Points[i], Ramp.Edge, Seam + 2);
+			Color seam = Homeward ? Ramp.Core : Ramp.Hot;
+			for (int i = 1; i < Count; i++)
+				PixelInk.Line(this, Points[i - 1], Points[i], seam, Seam);
+			if (Seam >= 2 && !Homeward)
+			{
+				for (int i = 1; i < Count; i++)
+					PixelInk.Line(this, Points[i - 1], Points[i], Ramp.Core, 1);
+			}
+		}
+	}
+
+	/// <summary>
+	/// The glow an arc leaves on the floor (Shadow Bolt's scene, and any element path): the arc's own
+	/// points in its ramp's edge, as wide as the line's glow was, thinning and dissolving through the
+	/// Bayer matrix - holding most of its strength for the first part of its life and going late, so the
+	/// net can be read after the arc itself has gone (Eric, 2026-10-28: "shadow bolt renders and
+	/// unrenders too quickly"). A translucent antialiased Line2D and a Tween a hop until 2026-10-29; one
+	/// node per arena now, a fixed ring of trails, nothing allocated per hop or per frame.
+	/// </summary>
+	private sealed partial class Afterglow : Node2D
+	{
+		private const int MaxTrails = 64;
+		private const int MaxPoints = ArcStroke.MaxPoints;
+
+		private struct Trail
+		{
+			public int Count;
+			public int Cells;
+			public float Age;
+			public float Life;
+			public ElementColors.Ramp Ramp;
+			public bool Live;
+		}
+
+		private readonly Trail[] trails = new Trail[MaxTrails];
+		private readonly Vector2[] points = new Vector2[MaxTrails * MaxPoints];
+		private int next;
+
+		private static Afterglow current;
+
+		public static Afterglow For(Node arena)
+		{
+			if (current != null && IsInstanceValid(current) && current.IsInsideTree() && current.GetParent() == arena)
+				return current;
+			if (arena == null || !IsInstanceValid(arena))
+				return null;
+			current = new Afterglow { Name = "ArcAfterglow" };
+			arena.AddChild(current);
+			return current;
+		}
+
+		public override void _Ready()
+		{
+			TopLevel = true;
+			GlobalPosition = Vector2.Zero;
+			// On the floor, under the bodies the arc ran between.
+			ZAsRelative = false;
+			ZIndex = DrawLayers.Ground;
+			SetProcess(false);
+		}
+
+		public override void _ExitTree()
+		{
+			if (current == this)
+				current = null;
+		}
+
+		public void Lay(Vector2[] source, int count, float life, int cells, in ElementColors.Ramp ramp)
+		{
+			count = Math.Min(count, MaxPoints);
+			for (int i = 0; i < count; i++)
+				points[next * MaxPoints + i] = source[i];
+			trails[next] = new Trail { Count = count, Cells = cells, Age = 0f, Life = life, Ramp = ramp, Live = true };
+			next = (next + 1) % MaxTrails;
+			SetProcess(true);
+		}
+
+		public override void _Process(double delta)
+		{
+			float dt = (float)delta;
+			bool any = false;
+			for (int i = 0; i < MaxTrails; i++)
+			{
+				ref Trail t = ref trails[i];
+				if (!t.Live)
+					continue;
+				t.Age += dt;
+				if (t.Age >= t.Life)
+				{
+					t.Live = false;
+					continue;
+				}
+				any = true;
+			}
+			QueueRedraw();
+			if (!any)
+				SetProcess(false);
+		}
+
+		public override void _Draw()
+		{
+			for (int i = 0; i < MaxTrails; i++)
+			{
+				ref Trail t = ref trails[i];
+				if (!t.Live)
+					continue;
+				float u = t.Age / t.Life;
+				float coverage = 1f - u * u;
+				int cells = Math.Max(1, (int)MathF.Round(t.Cells * (1f - u * 0.6f)));
+				int at = i * MaxPoints;
+				for (int k = 1; k < t.Count; k++)
+					PixelInk.Line(this, points[at + k - 1], points[at + k], t.Ramp.Edge, cells, coverage);
+				if (u < 0.5f)
+				{
+					for (int k = 1; k < t.Count; k++)
+						PixelInk.Line(this, points[at + k - 1], points[at + k], t.Ramp.Mid, 1, coverage);
+				}
+			}
+		}
 	}
 }

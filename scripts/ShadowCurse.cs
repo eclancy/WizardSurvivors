@@ -18,6 +18,12 @@ namespace WizardSurvivors.scripts;
 /// ON THE GROUND (.ai/godot-engine.md, "Draw layers"): the paths and the palls lie at
 /// <see cref="DrawLayers.Ground"/>; a sigil is a mark round a body's feet, so it is drawn by a child at
 /// <see cref="DrawLayers.GroundTell"/>, under every body and over the ground's own pools.
+///
+/// PIXEL ART ON THE WORLD'S GRID (the pixel-art pass, 2026-10-29; .ai/art-replacement-manifest.md
+/// section 9). Seven kinds of antialiased, translucent draw call until then. Each path and pall is now
+/// one quad from a fixed pool, painted by scenes/shaders/shadow_curse.gdshader out of the reach it
+/// curses (a pall a circle, as its curse is, where it was drawn squashed); a sigil and a breaking sigil's
+/// front are stamped cell by cell (PixelInk), fading by dissolving.
 /// </remarks>
 public partial class ShadowCurse : Node2D
 {
@@ -96,10 +102,21 @@ public partial class ShadowCurse : Node2D
 	private float clock;
 	private bool breaking;
 	private Node2D marks;
+	private readonly CurseQuad[] pathQuads = new CurseQuad[MaxPaths];
+	private readonly CurseQuad[] pallQuads = new CurseQuad[MaxPalls];
+
+	private static Shader curseShader;
+	private static readonly StringName ParamMode = "mode";
+	private static readonly StringName ParamLength = "path_length";
+	private static readonly StringName ParamReach = "reach";
+	private static readonly StringName ParamStrength = "strength";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSeed = "seed";
 
 	private static readonly ElementColors.Ramp Dark = ElementColors.GetRamp(Element.Darkness);
 	private static readonly ElementColors.Ramp Rot = ElementColors.GetRamp(Element.Poison);
-	private static readonly Color Night = new(0.05f, 0.02f, 0.08f);
+	// Robe violet's deep (.ai/art-direction.md section 3): the dark a sigil sits in.
+	private static readonly Color Night = new(0.078f, 0.063f, 0.122f);
 
 	private static ShadowCurse current;
 
@@ -119,6 +136,14 @@ public partial class ShadowCurse : Node2D
 	{
 		ZIndex = DrawLayers.Ground;
 		ZAsRelative = false;
+		// At the world's origin, unturned and unscaled, so its units are the world's and so is its grid.
+		TopLevel = true;
+		GlobalPosition = Vector2.Zero;
+		curseShader ??= GD.Load<Shader>("res://scenes/shaders/shadow_curse.gdshader");
+		for (int i = 0; i < MaxPaths; i++)
+			pathQuads[i] = MakeQuad($"Path{i}", 0);
+		for (int i = 0; i < MaxPalls; i++)
+			pallQuads[i] = MakeQuad($"Pall{i}", 1);
 		marks = new Node2D { Name = "Sigils", ZIndex = DrawLayers.GroundTell, ZAsRelative = false };
 		AddChild(marks);
 		marks.Draw += DrawSigils;
@@ -133,6 +158,15 @@ public partial class ShadowCurse : Node2D
 			marks.Draw -= DrawSigils;
 		if (current == this)
 			current = null;
+	}
+
+	private CurseQuad MakeQuad(string name, int mode)
+	{
+		var material = new ShaderMaterial { Shader = curseShader };
+		material.SetShaderParameter(ParamMode, mode);
+		var quad = new CurseQuad { Name = name, Material = material, Visible = false, Pall = mode == 1 };
+		AddChild(quad);
+		return quad;
 	}
 
 	/// <summary>Black Sigil: marks <paramref name="target"/> until the next hit it takes breaks the mark.</summary>
@@ -165,6 +199,7 @@ public partial class ShadowCurse : Node2D
 	public void LayPath(Vector2 a, Vector2 b, float seconds, Curse curse)
 	{
 		paths[nextPath] = new Path { A = a, B = b, Age = 0f, Life = seconds, Seed = ++seedClock * 2654435761u, Curse = curse, Live = true };
+		Show(pathQuads[nextPath], a, (b - a).Angle(), a.DistanceTo(b), PathHalfWidth, paths[nextPath].Seed);
 		nextPath = (nextPath + 1) % MaxPaths;
 		Wake();
 	}
@@ -173,11 +208,44 @@ public partial class ShadowCurse : Node2D
 	public void DropPall(Vector2 at, float radius, float seconds, Curse curse)
 	{
 		palls[nextPall] = new Pall { At = at, Radius = radius, Age = 0f, Life = seconds, Seed = ++seedClock * 2654435761u, Curse = curse, Live = true };
+		Show(pallQuads[nextPall], at, 0f, 0f, radius, palls[nextPall].Seed);
 		nextPall = (nextPall + 1) % MaxPalls;
 		Wake();
 	}
 
 	private void Wake() => SetProcess(true);
+
+	// A pooled quad laid on its path or pall: the shader measures every cell in its frame.
+	private static void Show(CurseQuad quad, Vector2 at, float angle, float length, float reach, uint seed)
+	{
+		if (quad == null)
+			return;
+		quad.GlobalPosition = at;
+		quad.GlobalRotation = angle;
+		quad.Length = length;
+		quad.Reach = reach;
+		var material = (ShaderMaterial)quad.Material;
+		material.SetShaderParameter(ParamLength, length);
+		material.SetShaderParameter(ParamReach, reach);
+		material.SetShaderParameter(ParamSeed, (seed % 997u) * 0.731f);
+		material.SetShaderParameter(ParamStrength, 0f);
+		quad.Visible = true;
+		quad.QueueRedraw();
+	}
+
+	private void Tend(CurseQuad quad, bool live, float strength)
+	{
+		if (quad == null)
+			return;
+		if (!live)
+		{
+			quad.Visible = false;
+			return;
+		}
+		var material = (ShaderMaterial)quad.Material;
+		material.SetShaderParameter(ParamStrength, strength);
+		material.SetShaderParameter(ParamTime, clock);
+	}
 
 	// A hit from any OTHER spell breaks the sigil on what it struck. Shadow Bolt's own hits never do -
 	// its next cast, its paths and palls, the bursts themselves - so one break never sets off the next
@@ -264,6 +332,7 @@ public partial class ShadowCurse : Node2D
 			paths[i].Age += dt;
 			if (paths[i].Age >= paths[i].Life) paths[i].Live = false;
 			else live++;
+			Tend(pathQuads[i], paths[i].Live, Fade(paths[i].Age, paths[i].Life, 0.15f, 0.6f));
 		}
 		for (int i = 0; i < MaxPalls; i++)
 		{
@@ -271,6 +340,7 @@ public partial class ShadowCurse : Node2D
 			palls[i].Age += dt;
 			if (palls[i].Age >= palls[i].Life) palls[i].Live = false;
 			else live++;
+			Tend(pallQuads[i], palls[i].Live, Fade(palls[i].Age, palls[i].Life, 0.25f, 0.7f));
 		}
 		for (int i = 0; i < MaxSigils; i++)
 		{
@@ -345,63 +415,25 @@ public partial class ShadowCurse : Node2D
 		return p.DistanceSquaredTo(a + ab * t);
 	}
 
-	// On the ground: each path a smear of rot as wide as it reaches, darkest down its spine, with
-	// bubbles working up through it; each pall a pool of night as wide as it curses, its edge drifting.
+	// The paths and palls are their quads' (shadow_curse.gdshader). Drawn here: a broken sigil's front -
+	// the shadow it lets out, thrown to the reach it curses as a ring of the Darkness's light that
+	// thins and dissolves as it goes, a one-shot animation over the debris ImpactDebris throws.
 	public override void _Draw()
 	{
-		for (int i = 0; i < MaxPaths; i++)
-		{
-			Path path = paths[i];
-			if (!path.Live) continue;
-			float a = Fade(path.Age, path.Life, 0.15f, 0.6f);
-			Vector2 from = ToLocal(path.A), to = ToLocal(path.B);
-			DrawLine(from, to, new Color(Night, 0.42f * a), PathHalfWidth * 2f, true);
-			DrawLine(from, to, new Color(Rot.Edge, 0.5f * a), PathHalfWidth * 0.9f, true);
-			DrawLine(from, to, new Color(Rot.Mid, 0.55f * a), 2f, true);
-			float length = from.DistanceTo(to);
-			int bubbles = Math.Clamp((int)(length / 26f), 1, 12);
-			for (int k = 0; k < bubbles; k++)
-			{
-				float h = Hash(path.Seed, k);
-				float beat = (clock * 1.3f + h) % 1f;
-				Vector2 at = from.Lerp(to, (k + 0.5f) / bubbles) + (to - from).Orthogonal().Normalized() * (Hash(path.Seed, k + 31) - 0.5f) * PathHalfWidth;
-				DrawCircle(at, 1.5f + 2.5f * beat, new Color(Rot.Hot, 0.7f * a * (1f - beat)));
-			}
-		}
-		for (int i = 0; i < MaxPalls; i++)
-		{
-			Pall pall = palls[i];
-			if (!pall.Live) continue;
-			float a = Fade(pall.Age, pall.Life, 0.25f, 0.7f);
-			Vector2 at = ToLocal(pall.At);
-			DrawSetTransform(at, 0f, new Vector2(1f, CraterGround.Squash));
-			DrawCircle(Vector2.Zero, pall.Radius, new Color(Night, 0.3f * a));
-			DrawCircle(Vector2.Zero, pall.Radius * 0.72f, new Color(Night, 0.3f * a));
-			DrawCircle(Vector2.Zero, pall.Radius * 0.4f, new Color(Dark.Edge, 0.35f * a));
-			// The edge drifts: lobes of shadow turning slowly round the rim, never past it.
-			for (int k = 0; k < 7; k++)
-			{
-				float ang = k * Mathf.Tau / 7f + clock * (0.35f + 0.1f * (k % 3)) + Hash(pall.Seed, k) * 2f;
-				Vector2 lobe = Vector2.FromAngle(ang) * pall.Radius * 0.7f;
-				DrawCircle(lobe, pall.Radius * 0.28f, new Color(Dark.Edge, 0.22f * a));
-			}
-			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-		}
 		for (int i = 0; i < MaxSigils; i++)
 		{
 			Break b = breaks[i];
 			if (!b.Live) continue;
 			float t = b.Age / BurstSeconds;
-			Vector2 at = ToLocal(b.At);
-			DrawSetTransform(at, 0f, new Vector2(1f, CraterGround.Squash));
-			DrawCircle(Vector2.Zero, b.Radius * (0.3f + 0.7f * t), new Color(Night, 0.45f * (1f - t)));
-			DrawArc(Vector2.Zero, b.Radius * (0.3f + 0.7f * t) - 1.5f, 0f, Mathf.Tau, 32, new Color(Dark.Hot, 0.8f * (1f - t)), 3f, true);
-			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+			float r = b.Radius * (0.3f + 0.7f * t);
+			PixelInk.Ring(this, b.At, r, r, Dark.Edge, 2, (1f - t) * 1.4f);
+			PixelInk.Ring(this, b.At, r, r, t < 0.5f ? Dark.Hot : Dark.Mid, 1, (1f - t) * 1.6f);
 		}
 	}
 
 	// A sigil at a cursed body's feet: a ring of shadow with four hooked marks turning in it, pulsing
-	// brighter once it is armed - the moment the next hit will break it.
+	// brighter once it is armed - the moment the next hit will break it. A mark on one body, not an
+	// area: drawn flat to the ground, half as tall as it is wide, and stamped on the grid.
 	private void DrawSigils()
 	{
 		for (int i = 0; i < MaxSigils; i++)
@@ -411,34 +443,46 @@ public partial class ShadowCurse : Node2D
 				continue;
 			float a = Fade(s.Age, s.Life, 0.12f, 0.4f);
 			bool armed = s.Age >= SigilArmSeconds;
-			float pulse = armed ? 0.75f + 0.25f * MathF.Sin(clock * 7f + i) : 0.5f;
-			Vector2 at = marks.ToLocal(s.Target.GlobalPosition) + new Vector2(0f, 12f);
+			// Armed, it pulses between the Darkness's hot and mid; before that it is dim.
+			bool bright = armed && MathF.Sin(clock * 7f + i) > -0.2f;
+			Color ring = armed ? Dark.Mid : Dark.Edge;
+			Color hook = bright ? Dark.Hot : Dark.Mid;
+			Vector2 at = s.Target.GlobalPosition + new Vector2(0f, 12f);
 			// Wider than the body's own shadow and drawn heavy, so it reads round a pack's feet: the first
 			// build's thin ring was lost under the bodies in a crowd photograph (2026-10-29).
 			const float r = 19f;
-			marks.DrawSetTransform(at, 0f, new Vector2(1f, 0.5f));
-			marks.DrawCircle(Vector2.Zero, r + 2f, new Color(Night, 0.55f * a));
-			marks.DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 28, new Color(Dark.Mid, a * pulse), 3f, true);
+			PixelInk.Ring(marks, at, r + 2f, (r + 2f) * 0.5f, Night, 2, a * 1.2f);
+			PixelInk.Ring(marks, at, r, r * 0.5f, ring, 1, a * 1.4f);
 			float spin = clock * 1.6f + i;
 			for (int k = 0; k < 4; k++)
 			{
 				Vector2 dir = Vector2.FromAngle(spin + k * Mathf.Pi * 0.5f);
+				Vector2 squash = new(1f, 0.5f);
 				Vector2 tip = dir * r * 0.78f;
-				marks.DrawLine(dir * r * 0.22f, tip, new Color(Dark.Hot, a * pulse), 3f, true);
-				marks.DrawLine(tip, tip + dir.Orthogonal() * 5f, new Color(Dark.Hot, a * pulse), 3f, true);
+				Vector2 hookEnd = tip + dir.Orthogonal() * 5f;
+				PixelInk.Line(marks, at + dir * r * 0.22f * squash, at + tip * squash, hook, 1, a * 1.4f);
+				PixelInk.Line(marks, at + tip * squash, at + hookEnd * squash, hook, 1, a * 1.4f);
 			}
-			marks.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+		}
+	}
+
+	/// <summary>One path's or pall's quad: the shader decides every pixel and discards the rest.</summary>
+	private sealed partial class CurseQuad : Node2D
+	{
+		public bool Pall { get; set; }
+		public float Length { get; set; }
+		public float Reach { get; set; }
+
+		public override void _Draw()
+		{
+			float r = Reach + 2f;
+			if (Pall)
+				DrawRect(new Rect2(-r, -r, r * 2f, r * 2f), Colors.White);
+			else
+				DrawRect(new Rect2(-r, -r, Length + r * 2f, r * 2f), Colors.White);
 		}
 	}
 
 	private static float Fade(float age, float life, float inSeconds, float outSeconds) =>
 		Mathf.Clamp(age / inSeconds, 0f, 1f) * Mathf.Clamp((life - age) / outSeconds, 0f, 1f);
-
-	private static float Hash(uint seed, int i)
-	{
-		uint h = (uint)i * 374761393u + seed * 668265263u;
-		h = (h ^ (h >> 13)) * 1274126177u;
-		h ^= h >> 16;
-		return (h & 0xFFFFFF) / 16777216f;
-	}
 }
