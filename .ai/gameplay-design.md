@@ -720,6 +720,10 @@ every spell, boon and wizard is obtained, and every unlockable has exactly one s
   `ValidateElementReachability` counts them as reachable meanwhile. **Since 2026-10-25 four of the
   seven are the two early chapters' rewards** (`.ai/campaign.md`): Thornseed and Shadegrease by
   their bosses' deeds, Wishing Coin and Gilded Mote found in their side events. Three remain unsold.
+  **Since 2026-10-26 the shop sells those three, and since 2026-10-30 (schema 19) it sells no
+  spells**: every spell that is not a starter is an achievement's, and Purchase means the three
+  boons, the last section of the shop's one menu, Powers (`.ai/achievements-and-secrets.md` 2.4,
+  `.ai/level-up-screen.md` 4f).
 - **Discovery** — found in the world. Reserved; no entries yet.
 
 `RegressionChecks.ValidateBoonSources` holds the same rule for boons that `ValidateUnlockCatalog`
