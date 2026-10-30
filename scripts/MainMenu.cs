@@ -583,8 +583,14 @@ public partial class MainMenu : Control
 
 		// Above the list and outside its scroll, so a tab is never scrolled away and choosing one
 		// rebuilds the rows under it without freeing the button the selection is on.
+		// In the list's gutter (CodexRows.WithGutter's 2 and 18), so the strip's ends line up with the
+		// rows' edges rather than running on over the scroll bar - on a phone the four tabs fill the width.
 		achievementTabs = AchievementsPage.BuildTabs(AchievementsPage.MenuFilter, OnAchievementFilterChosen);
-		vbox.AddChild(achievementTabs);
+		var tabMargin = new MarginContainer { Name = "AchievementTabsMargin", MouseFilter = Control.MouseFilterEnum.Ignore };
+		tabMargin.AddThemeConstantOverride("margin_left", 2);
+		tabMargin.AddThemeConstantOverride("margin_right", 18);
+		tabMargin.AddChild(achievementTabs);
+		vbox.AddChild(tabMargin);
 
 		vbox.AddChild(CodexRows.BuildScroll("AchievementScroll", CodexRows.BuildList("AchievementList")));
 
@@ -2104,10 +2110,12 @@ public partial class MainMenu : Control
 		codexColumnsBuilt = CodexRows.ColumnsFor(this);
 		bool narrow = ResponsiveLayout.IsNarrow(this);
 		AchievementsPage.LayoutTabs(achievementTabs, narrow);
+		AchievementsPage.MarkTab(achievementTabs, AchievementsPage.MenuFilter);
 
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
 		AchievementsPage.Result page = AchievementsPage.Build(achievementList, AchievementContext.ForSave(data),
 			AchievementsPage.PageMode.Menu, AchievementsPage.MenuFilter, string.Empty);
+		AchievementsPage.LinkTabsToList(achievementTabs, achievementList, AchievementsPage.MenuFilter);
 		// The bar under the count only where there is height for it: on a 720-tall PC canvas the heading,
 		// the subtitle, the count and the tabs already stand over the list, and every unit they take is a
 		// row the list cannot show. The phone's portrait canvas has the height to spare.

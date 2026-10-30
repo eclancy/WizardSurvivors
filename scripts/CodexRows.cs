@@ -47,7 +47,7 @@ public static class CodexRows
 	public const string SpellIndexTitle = "Spell Index";
 	public const string SpellIndexSubtitle = "Every spell, and how to find the ones you have not.";
 	public const string UnlocksTitle = "Achievements";
-	public const string UnlocksSubtitle = "Each one pays something - a spell, a boon, a wizard or Arcane Energy. Some are found, not done.";
+	public const string UnlocksSubtitle = "Each pays a spell, a boon, a wizard or Arcane Energy. Some are found, not done.";
 
 	/// <summary>
 	/// The achievements summary line: "41 of 88 earned  ·  6 secrets found". On a phone the two halves
@@ -671,7 +671,7 @@ public static class CodexRows
 		string art = secret?.MetaReward == SecretMetaReward.Spell ? UnknownSpellArt
 			: secret != null && secret.IsKeepsake ? SecretArt + "keepsake.png"
 			: SecretArt + "mark-page.png";
-		return BuildSilhouette(BonelightSkin.LoadTextureSafe(art), palette);
+		return BuildSilhouette(BonelightSkin.LoadTextureSafe(art), palette, (int)GlyphBox);
 	}
 
 	/// <summary>
@@ -680,13 +680,23 @@ public static class CodexRows
 	/// with a rim measured for this page. Built per call and never cached - a static Texture2D
 	/// outlives the engine's own reference (BonelightSkin's remarks); each source is at most 64x64.
 	/// </summary>
-	public static Texture2D BuildSilhouette(Texture2D source, Palette palette)
+	/// <param name="size">
+	/// When given and smaller than the source, the shape is scaled down to it BEFORE its rim is found,
+	/// and the silhouette is drawn at that size unscaled. Halving a finished silhouette instead keeps
+	/// every other pixel, and a one-pixel rim came out as a dotted line.
+	/// </param>
+	public static Texture2D BuildSilhouette(Texture2D source, Palette palette, int size = 0)
 	{
 		Image image = source?.GetImage();
 		if (image == null || image.IsEmpty())
 			return null;
 		if (image.IsCompressed())
 			image.Decompress();
+		if (size > 0 && image.GetWidth() > size)
+		{
+			image.Convert(Image.Format.Rgba8);
+			image.Resize(size, Math.Max(1, image.GetHeight() * size / image.GetWidth()), Image.Interpolation.Bilinear);
+		}
 
 		int w = image.GetWidth();
 		int h = image.GetHeight();

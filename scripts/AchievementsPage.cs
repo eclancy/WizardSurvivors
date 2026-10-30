@@ -188,6 +188,73 @@ public static class AchievementsPage
 		}
 	}
 
+	/// <summary>
+	/// Shows <paramref name="filter"/> as the chosen tab. A click or a pad's A on a toggle in a group
+	/// does this by itself; a press that arrives as the signal alone (the harness's, a panel opened
+	/// on a remembered tab) does not, and the strip would underline one tab over another's list.
+	/// </summary>
+	public static void MarkTab(HBoxContainer bar, Filter filter)
+	{
+		if (bar == null)
+			return;
+		foreach (Filter each in Enum.GetValues<Filter>())
+			TabFor(bar, each)?.SetPressedNoSignal(each == filter);
+	}
+
+	/// <summary>
+	/// Joins the strip to the list it chose (4.8): down from any tab enters the list at its first row,
+	/// and up from the first row - either column - goes back to the CHOSEN tab. Left to geometry, up
+	/// from the left column on a PC landed on All whichever tab was showing, and down from Secrets
+	/// dropped into the second column. Call after every build: the rows are new each time.
+	/// </summary>
+	public static void LinkTabsToList(HBoxContainer bar, VBoxContainer list, Filter chosen)
+	{
+		Button tab = TabFor(bar, chosen);
+		GridContainer first = list == null ? null : FirstRows(list);
+		if (tab == null || first == null)
+			return;
+		var stops = new List<Control>();
+		for (int i = 0; i < first.GetChildCount() && i < Math.Max(1, first.Columns); i++)
+		{
+			if (FirstStop(first.GetChild(i)) is Control stop)
+				stops.Add(stop);
+		}
+		if (stops.Count == 0)
+			return;
+		foreach (Control stop in stops)
+			stop.FocusNeighborTop = stop.GetPathTo(tab);
+		foreach (Node child in bar.GetChildren())
+		{
+			if (child is Button each)
+				each.FocusNeighborBottom = each.GetPathTo(stops[0]);
+		}
+	}
+
+	private static GridContainer FirstRows(Node node)
+	{
+		foreach (Node child in node.GetChildren())
+		{
+			if (child is GridContainer grid && grid.Name == CodexRows.SectionRowsName && grid.GetChildCount() > 0)
+				return grid;
+			if (FirstRows(child) is GridContainer found)
+				return found;
+		}
+		return null;
+	}
+
+	// The control a row's focus lands on: its overlay, or the first focusable thing in it.
+	private static Control FirstStop(Node node)
+	{
+		if (node is BaseButton button && button.FocusMode != Control.FocusModeEnum.None && !button.Disabled)
+			return button;
+		foreach (Node child in node.GetChildren())
+		{
+			if (FirstStop(child) is Control stop)
+				return stop;
+		}
+		return null;
+	}
+
 	/// <summary>The tab button for <paramref name="filter"/>, to put the selection on as the panel opens.</summary>
 	public static Button TabFor(HBoxContainer bar, Filter filter) =>
 		bar?.GetNodeOrNull<Button>("AchievementsTab" + filter);
@@ -467,10 +534,9 @@ public static class AchievementsPage
 			if (chapter.Sealed.Count > 0)
 				rows.Add(SealedChapterRow(chapter));
 		}
-		int total = page.Chapters.Sum(c => c.Total);
-		int found = page.Chapters.Sum(c => c.Found);
+		int left = page.Chapters.Sum(c => c.Total - c.Found);
 		if (rows.Count > 0)
-			CodexRows.AddSection(list, "Still to find", $"{total - found} of {total}", CodexRows.Stone, columns, rows);
+			CodexRows.AddSection(list, "Still to find", $"{left} to find", CodexRows.Stone, columns, rows);
 
 		var done = page.Items.Where(i => i.Done && i.Secret != null).ToList();
 		if (done.Count > 0)
