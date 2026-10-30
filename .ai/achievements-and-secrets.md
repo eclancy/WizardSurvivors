@@ -709,6 +709,18 @@ it keeps its design.
 | S5 | **The Swallow-Hole** | **new, vault** | 5-7 chunks | **lure**: a sinkhole of black mud about 160 px across. Any enemy whose feet enter it sinks and is gone (counted, no XP); thirty sunk and the hole gives up what it took. It is not blocking ground - enemies must be able to walk in, and they mask the same layer his feet do - so it is a hazard to him instead: wading in slows him to a crawl and costs 1 HP a second. The flow field runs straight through it, so a horde chasing a wizard who stands at the rim walks into it; standing at the edge and letting them come is the whole ask | far: reeds lean toward it, the ground goes from bog to black mud over two chunks; near: bubbles, and the glint at the bottom | **Gravewell**; later runs a chest |
 | S6 | **The Peat Bank** | **new** | mid | **strike**: about 400 landed near a cut peat bank; a bog-oak chest comes loose | a straight cut face in the bog, the only straight thing there | a chest |
 
+**S5 built (2026-10-30, `wip/vaults-b`):** `SwallowHole.cs` on `SecretLure` (radius 80, thirty), its mud
+`scenes/shaders/swallow_hole.gdshader` (the mire's way: one quad on the 2-unit cell, the bank only inward
+of the trigger, a log-spiral pull in Darkness's edge that speeds as it fills, bubbles, a ring where each
+one went in, the glint at the bottom brightening as it fills - the one progress cue), its reeds
+`tools/art/secret_swamp.py`. Not solid; wading slows him to 0.3 of his step and costs 1 HP a second
+through `Player.TakeDamage`, until it is sated. Full, it heaves into a dome, breaks, and the light comes to
+him (`VaultLight`). **One shared edit:** `SecretFarTell.LeanToward` (off by default), so the far tell's
+reeds lean toward it. Walked by `--secret-probe --stage=3` (`_UiShot.VaultWalk.cs`): all pass on seeds
+4242 and 777 fresh, and 4242 `--all-unlocked` (a chest instead); thirty lured across in 9 to 11 s of a
+chasing pack, no kills, no XP. Needs eyes: whether thirty is right in a real horde, and whether the glint
+reads at the bottom on the phone.
+
 ### 8.7 Mystic Ruins (`stage_4`) - no event
 
 | id | secret | status | where | how it is found | tell | pays |

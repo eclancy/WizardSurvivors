@@ -2617,7 +2617,7 @@ public partial class _UiShot : Node
 			{
 				secretProbeStarted = true;
 				GetTree().Root.AddChild(probeSecrets.Vault != null
-					? new VaultProbe { Director = probeSecrets, Hero = secretHero }
+					? NewVaultProbe(probeSecrets, secretHero)
 					: new SecretProbe { Director = probeSecrets, Hero = secretHero });
 			}
 			if (secretStage >= 0 && !secretStaged && frames >= (secretStageFrame >= 0 ? secretStageFrame : WarmupFrames / 3)
@@ -2625,7 +2625,11 @@ public partial class _UiShot : Node
 			{
 				secretStaged = true;
 				Breakable crystal = posed.Vault?.GetNodeOrNull<Breakable>("Crystal");
-				if (crystal == null)
+				// A vault that is not a breakable poses itself (PoseForProbe(stage): the Swallow-Hole half full,
+				// the Broken Ward's stones lit, and so on - _UiShot.VaultWalk.cs).
+				if (crystal == null && posed.Vault != null && posed.Vault.HasMethod("PoseForProbe"))
+					posed.Vault.Call("PoseForProbe", secretStage);
+				else if (crystal == null)
 					GD.PrintErr($"_UiShot: --secret-stage: stage {Global.SelectedStageIdx} has no breakable vault");
 				else if (secretStage >= crystal.StageCount + 1)
 					crystal.BreakNow();

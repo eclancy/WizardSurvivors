@@ -40,6 +40,12 @@ public sealed class SecretFarTell
 	public int MaxScale { get; init; } = 1;
 	/// <summary>Texture pixels from the bottom edge up to the contact shadow's middle: where it stands.</summary>
 	public float FootFromBottom { get; init; } = 10f;
+	/// <summary>
+	/// The pieces lean toward the site (the Swallow-Hole's reeds, 8.6): every texture is authored leaning
+	/// to +x, and a piece east of the site is flipped so it leans back west. Off: flipped at random, as
+	/// before. The roll is drawn either way, so turning it on moves no piece.
+	/// </summary>
+	public bool LeanToward { get; init; }
 
 	private Texture2D[] far;
 	private Texture2D[] near;
@@ -92,7 +98,7 @@ public sealed class SecretFarTell
 				Position = at.Round(),
 				Offset = new Vector2(0f, -texture.GetHeight() * 0.5f + FootFromBottom),
 				Scale = new Vector2(scale, scale),
-				FlipH = flip,
+				FlipH = LeanToward ? at.X > site.X : flip,
 			};
 			sprite.AddToGroup(cracked ? GroupNear : Group);
 			parent.AddChild(sprite);
