@@ -358,14 +358,8 @@ public static class GlobalStatsManager
 			return multiplier;
 		}
 
-		int defeatStreak = GetConsecutiveOutcomeCount(data, "Defeat");
-		if (defeatStreak > 0)
-		{
-			float pityBonus = Math.Min(0.24f, defeatStreak * 0.045f);
-			multiplier += pityBonus;
-			notes.Add($"Pity +{Mathf.RoundToInt(pityBonus * 100f)}%");
-			parts?.Add(("Losing streak", pityBonus));
-		}
+		// There is no losing-streak ("pity") bonus any more: Eric, 2026-10-30, "remove pity streak". It
+		// paid up to +24% after consecutive defeats and showed as "Pity streak N" on the main menu.
 
 		int victoryStreak = GetConsecutiveOutcomeCount(data, "Victory");
 		if (victoryStreak >= 2)
@@ -402,11 +396,8 @@ public static class GlobalStatsManager
 		if (data == null)
 			return 1.0f;
 
-		int defeatStreak = GetConsecutiveOutcomeCount(data, "Defeat");
 		int victoryStreak = GetConsecutiveOutcomeCount(data, "Victory");
 		float multiplier = 1.0f;
-		if (defeatStreak > 0)
-			multiplier += Math.Min(0.24f, defeatStreak * 0.045f);
 		if (victoryStreak >= 2)
 			multiplier += Math.Min(0.14f, (victoryStreak - 1) * 0.025f);
 
