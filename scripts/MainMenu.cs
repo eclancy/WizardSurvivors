@@ -14,10 +14,6 @@ public partial class MainMenu : Control
 	private Button spellIndexButton = null!;
 	private Button unlocksButton = null!;
 	private Button arcaneUpgradesButton = null!;
-	// The shop is two menus (2026-10-28, Eric: "let's separate powers (passive buffs we can buy) in a
-	// different menu from the other unlockables we can buy"). arcaneUpgradesButton keeps its node name
-	// - the harnesses press it - and opens Powers; this one opens the spells and boons for sale.
-	private Button spellsBoonsButton = null!;
 	private Button optionsButton = null!;
 	private Button reportBugButton;
 	private Button backFromArcaneButton = null!;
@@ -106,13 +102,12 @@ public partial class MainMenu : Control
 		public int BaseCost;
 		public int CostPerLevel;
 		public int MaxLevel;
-		public bool IsSpellUnlock;
 		// Curation is the one upgrade whose ceiling is not a constant: it rises as the spellbook
 		// grows, so a fresh save is offered none of it and a finished one can prune hard.
 		public bool HasPoolScaledMaxLevel;
-		public string SpellId = string.Empty;
-		// A boon sold once (UnlockCatalog.PurchasableBoons). It is an unlock card like a spell's - drawn
-		// the same, bought once - so IsSpellUnlock is true for it too, and this says which kind.
+		// A boon sold once (UnlockCatalog.PurchasableBoons), the one thing in the shop that is not a
+		// levelled upgrade. Spells were sold the same way until schema 19; every spell is an
+		// achievement's now (.ai/achievements-and-secrets.md 2.4).
 		public string BoonId = string.Empty;
 		public bool IsBoon => !string.IsNullOrEmpty(BoonId);
 	}
@@ -130,8 +125,9 @@ public partial class MainMenu : Control
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn/ArcaneUpgradesButton");
-		// Before ApplyMenuSkin, which styles the shop's two buttons as one tier.
-		spellsBoonsButton = BuildSpellsBoonsButton();
+		// The shop's one button (OnArcaneUpgradesPressed). Relabelled, not renamed: the harnesses
+		// press it by its node name.
+		arcaneUpgradesButton.Text = "Powers";
 		unlocksButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton");
 		spellIndexButton = GetNode<Button>("SpellIndexButton");
 		optionsButton = GetNode<Button>("OptionsButton");
@@ -166,8 +162,8 @@ public partial class MainMenu : Control
 		ApplyMenuSkin();
 		ApplyOptionsSolidBackground();
 
-		// Spellbook first: BuildUpgradeDefinitions names its shop rows from these entries, and the
-		// shop's spell pages take their icons, tags and descriptions from them.
+		// The shop needs its definitions before its cards; the boons' pages read BoonCatalog, not these
+		// entries (the shop's spell pages did, until it stopped selling spells).
 		BuildSpellbookEntries();
 		BuildUpgradeDefinitions();
 		BuildShop();
@@ -178,7 +174,6 @@ public partial class MainMenu : Control
 		spellIndexButton.Pressed += OnSpellbookPressed;
 		unlocksButton.Pressed += OnAchievementsPressed;
 		arcaneUpgradesButton.Pressed += OnArcaneUpgradesPressed;
-		spellsBoonsButton.Pressed += OnSpellsBoonsPressed;
 		optionsButton.Pressed += OnOptionsPressed;
 		backFromArcaneButton.Pressed += ShowMainPanel;
 		backFromSpellbookButton.Pressed += ShowMainPanel;
@@ -257,7 +252,7 @@ public partial class MainMenu : Control
 		// (Arcane Upgrades) and what you earn (Unlocks). The Spell Index used to stand between them
 		// as a peer, and it is not one - it changes nothing, it is the catalogue you look things up
 		// in - so it went down to the utilities with Options and Report a bug.
-		foreach (Button secondary in new[] { arcaneUpgradesButton, spellsBoonsButton, unlocksButton })
+		foreach (Button secondary in new[] { arcaneUpgradesButton, unlocksButton })
 		{
 			StyleMenuTier(secondary, MenuTier.Secondary);
 			ResponsiveLayout.SetFont(secondary, ResponsiveLayout.TextRole.Label);
@@ -646,13 +641,13 @@ public partial class MainMenu : Control
 		return line;
 	}
 
-	// Under the two shop buttons, inside their column, so it reads as their own caption
+	// Under the shop button, inside its column, so it reads as the button's own caption
 	// rather than as a readout floating on the art. Gold like the shop's purse, outlined like the
 	// preset line in the opposite corner: it sits on the title art, not on a panel, and the MENU_BOX
 	// pocket the art keeps dark under the buttons is what it is measured against (ui_contrast.py).
 	private void EnsureMenuEnergyReadout()
 	{
-		// The shop's column, which holds the two shop buttons' row (BuildSpellsBoonsButton) and this.
+		// The shop's column, which holds the shop button (Powers) and this.
 		Control column = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn");
 		if (column == null || column.GetNodeOrNull("MenuPurse") != null)
 			return;
@@ -711,46 +706,16 @@ public partial class MainMenu : Control
 		GetTree().ChangeSceneToFile("res://scenes/CharacterSelection.tscn");
 	}
 
-	// The two shop buttons side by side over the purse they both spend, in the shop's column: Powers
-	// (the scene's Arcane Upgrades button, relabelled) and Spells & Boons. The column takes two shares
-	// of the row to Unlocks' one, so each shop button keeps the width the row gave one before.
-	private Button BuildSpellsBoonsButton()
+	// The shop is one button again, Powers, over the purse it spends. From 2026-10-28 to 2026-10-30 it
+	// stood beside a second, Spells & Boons; then the shop stopped selling spells
+	// (.ai/achievements-and-secrets.md 2.4), the three boons left on that shelf were folded into
+	// Powers as its last section (decision 5), and the button went. The row is Powers and Unlocks
+	// again, half each, as it was before the split.
+	private void OnArcaneUpgradesPressed()
 	{
-		Control column = arcaneUpgradesButton.GetParent() as Control;
-		var pair = new HBoxContainer { Name = "ShopButtons" };
-		pair.AddThemeConstantOverride("separation", 10);
-		column.AddChild(pair);
-		column.MoveChild(pair, 0);
-		arcaneUpgradesButton.Reparent(pair);
-		arcaneUpgradesButton.Text = "Powers";
-		arcaneUpgradesButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		var button = new Button
-		{
-			Name = "SpellsBoonsButton",
-			Text = "Spells & Boons",
-			CustomMinimumSize = arcaneUpgradesButton.CustomMinimumSize,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-		};
-		pair.AddChild(button);
-		column.SizeFlagsStretchRatio = 2f;
-		return button;
-	}
-
-	private void OnArcaneUpgradesPressed() => OpenShop(ShopMode.Powers);
-
-	private void OnSpellsBoonsPressed() => OpenShop(ShopMode.Unlocks);
-
-	private void OpenShop(ShopMode mode)
-	{
-		shopMode = mode;
-		// The heading moves into the shop's band when the band is built (EnsureShopHeader), so it is
-		// found by name rather than by its scene path.
-		Label title = arcaneUpgradesPanel.FindChild("ArcaneUpgradesTitle", true, false) as Label;
-		if (title != null)
-			title.Text = mode == ShopMode.Powers ? "Powers" : "Spells & Boons";
 		RefreshArcaneEnergy();
-		// Rebuilt on every visit rather than refreshed, so the sections come in the order that is
-		// right NOW (the spells for sale lead until the last is bought - MainMenu.Shop.cs).
+		// Rebuilt on every visit rather than refreshed, so what each section's note says is true NOW
+		// (the boons' changes once the last is bought - MainMenu.Shop.cs).
 		BuildShop();
 		ShowPanel(arcaneUpgradesPanel);
 		OpenShopAtTop();
@@ -1734,25 +1699,13 @@ public partial class MainMenu : Control
 			"One more spell may be set aside from the level-up pool", 80, 40, 1);
 		upgradeDefinitions[GlobalStatsManager.CurationUpgradeId].HasPoolScaledMaxLevel = true;
 
-		// Driven by UnlockCatalog rather than a hand-kept list. The old list named 22 spells that
-		// were every one of them already unlocked by default, so the entire shop (then the Arcane
-		// Codex) read as bought-out on a fresh save.
-		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableSpells)
-			RegisterSpellUnlock(definition.Id, $"Unlock {SpellDisplayNameFor(definition.Id)}", definition.PurchaseCost);
-		// And the boons the catalog prices. No screen sold them, so Quicksilver Bead, Deepwater Pearl and
-		// Saltbound Chain - Purchase entries since schema 9 - were cards no new save could ever be dealt
-		// (2026-10-26).
+		// The boons the catalog prices, driven by UnlockCatalog rather than a hand-kept list. No screen
+		// sold them until 2026-10-26, so Quicksilver Bead, Deepwater Pearl and Saltbound Chain -
+		// Purchase entries since schema 9 - were cards no new save could ever be dealt.
+		// No spells: the shop sold nine until schema 19, and every one is an achievement's now
+		// (.ai/achievements-and-secrets.md 2.4). A copy anybody bought stays in UnlockedSpellIds.
 		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableBoons)
 			RegisterBoonUnlock(definition.Id, definition.PurchaseCost);
-	}
-
-	// Shop rows are named from the spellbook so a spell has one display name, not two. Passives have
-	// no .tres, which is why this reads the entry list rather than loading resources.
-	private string SpellDisplayNameFor(string spellId)
-	{
-		SpellbookEntry entry = spellbookEntries.FirstOrDefault(
-			e => e.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
-		return entry != null ? entry.DisplayName : spellId;
 	}
 
 	private void BuildSpellbookEntries()
@@ -2157,21 +2110,6 @@ public partial class MainMenu : Control
 		};
 	}
 
-	private void RegisterSpellUnlock(string spellId, string displayName, int cost)
-	{
-		upgradeDefinitions[$"spell:{spellId}"] = new UpgradeDefinition
-		{
-			Id = $"spell:{spellId}",
-			DisplayName = displayName,
-			EffectText = "Adds this spell to future level-up offers.",
-			BaseCost = cost,
-			CostPerLevel = 0,
-			MaxLevel = 1,
-			IsSpellUnlock = true,
-			SpellId = spellId
-		};
-	}
-
 	private void RegisterBoonUnlock(string boonId, int cost)
 	{
 		BoonDefinition boon = BoonCatalog.GetById(boonId);
@@ -2183,7 +2121,6 @@ public partial class MainMenu : Control
 			BaseCost = cost,
 			CostPerLevel = 0,
 			MaxLevel = 1,
-			IsSpellUnlock = true,
 			BoonId = boonId
 		};
 	}
@@ -2192,8 +2129,6 @@ public partial class MainMenu : Control
 	{
 		if (def.IsBoon)
 			return GlobalStatsManager.IsBoonUnlocked(saveManager.Data, def.BoonId) ? 1 : 0;
-		if (def.IsSpellUnlock)
-			return GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager.Data, def.SpellId) ? 1 : 0;
 
 		return GlobalStatsManager.GetUpgradeLevel(saveManager.Data, def.Id);
 	}
