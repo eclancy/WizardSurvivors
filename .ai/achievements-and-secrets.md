@@ -777,6 +777,20 @@ thinks to stop, and whether the streaks over the bodies are too thick in a crowd
 | A4 | The Mirage | planned | - | stillness | a pool always ahead | 60 s of +20% speed |
 | A5 | **The Fulgurite** | **new, vault** | 5-7 chunks | **storm**: a branching tree of glass stands in the dunes where lightning struck. A dry storm passes over it every 90 pace seconds (clouds gather for 10 s, then six telegraphed strikes land round it over 6 s - `TelegraphedGroundHit`, 3 damage each, which also hit enemies). Stand within 120 px of the glass through the strikes: it draws the last one into itself and rings | far: glass beads in the sand and a dark sky over one place, visible from two chunks; near: the glass tree with the glint in its root | **Stormsweep**; later runs a chest |
 
+**A5 built (2026-10-30, `wip/vaults-b`):** `Fulgurite.cs`, art `tools/art/secret_sands.py` (the glass in
+Wind's ramp with Lightning's seams - Stormsweep is both - still, charged and ringing; beads and twigs of
+the same glass for the far tell). Storms on `Node2DGame.PaceSeconds`: the first at 60, then every 90;
+the cloud (stamped puffs of the violet row, always over the glass, the only one in the Sands' sky)
+spreads and darkens for 10 s, then six bolts a second apart, each warned by the shared
+`TelegraphedGroundHit` (3 to him) and dealing 3 to every enemy under it; two are called at his feet,
+so holding the 120 px circle means moving inside it. Held through all six, the last is drawn into the
+glass with no warning, it rings, and the light comes out of its root to him. Solid foot. No storm while
+the boss is up. Walked on seed 4242, fresh save, all pass: no storm before pace 60 and one at 60.0, six
+called, the three that landed on bodies hit them, he held the circle stepping out from under the two at
+his feet, and it rang. Needs eyes: the wait for a storm (up to 90 s) in play, whether the cloud over
+the top of the screen hides too much of a crowd, and whether the glass reads apart from the Sands'
+bleached dead trees.
+
 ### 8.10 The Emberdeep (`stage_7`) - no event
 
 The gate chapter. Whatever is decided in 2.5, a secret here pays nothing the gate counts.
