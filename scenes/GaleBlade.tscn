@@ -1,43 +1,16 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
-[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/effects/gale-blade.png" id="3_bolt_sheet"]
+[ext_resource type="Script" path="res://scripts/GaleBladeLook.cs" id="2_look"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_galeblade"]
 radius = 5.0
 
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_galeblade"]
-lifetime_randomness = 0.3
-particle_flag_disable_z = true
-emission_shape = 1
-emission_sphere_radius = 3.0
-direction = Vector3(-1, 0, 0)
-spread = 15.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.5
-scale_max = 1.2
-color = Color(0.85, 0.95, 1.0, 0.8)
-
-[sub_resource type="AtlasTexture" id="Atlas_gale_blade_0"]
-atlas = ExtResource("3_bolt_sheet")
-region = Rect2(0, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_gale_blade_1"]
-atlas = ExtResource("3_bolt_sheet")
-region = Rect2(64, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_gale_blade_2"]
-atlas = ExtResource("3_bolt_sheet")
-region = Rect2(128, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_gale_blade_3"]
-atlas = ExtResource("3_bolt_sheet")
-region = Rect2(192, 0, 64, 64)
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_gale_blade"]
-animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_gale_blade_0")}, {"duration": 1.0, "texture": SubResource("Atlas_gale_blade_1")}, {"duration": 1.0, "texture": SubResource("Atlas_gale_blade_2")}, {"duration": 1.0, "texture": SubResource("Atlas_gale_blade_3")}], "loop": true, "name": &"default", "speed": 14.0}]
-
+; The blade draws itself (scripts/GaleBladeLook.cs, scenes/shaders/gale_blade.gdshader): a crescent
+; of wind spinning on the world's 2 px grid, drawn to the swath it cuts (ElementalBolt sets this
+; circle to HitRadius in _Ready; the 5.0 here is the editor's default), with its spin drawn as ghosts
+; of itself and an Eddy's wind out to the reach the eddy cuts. It was a sprite spun with the bolt at
+; 95% opacity under a tint, trailed by translucent particles.
 [node name="GaleBlade" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
@@ -46,21 +19,8 @@ BasePierce = 0
 Homing = false
 Returning = true
 
-[node name="PlaceholderShape" type="Node2D" parent="."]
-script = ExtResource("2")
-ShapeColor = Color(0.85, 0.95, 1.0, 0.0)
-Radius = 5.0
-
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="PlaceholderShape"]
-scale = Vector2(1.0, 1.0)
-modulate = Color(0.88, 1.0, 1.0, 0.95)
-sprite_frames = SubResource("SpriteFrames_gale_blade")
-animation = &"default"
-autoplay = "default"
+[node name="Look" type="Node2D" parent="."]
+script = ExtResource("2_look")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_galeblade")
-
-[node name="TrailParticles" type="GPUParticles2D" parent="."]
-amount = 8
-process_material = SubResource("ParticleProcessMaterial_galeblade")

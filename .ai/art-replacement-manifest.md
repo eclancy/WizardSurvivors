@@ -529,6 +529,14 @@ their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn win
 `scenes/shaders/cyclone_whirl.gdshader` on the world's 2-unit cell; Wind Shear's crescents and the
 Endless Chase's throws are stamped in world-grid cells. Section 9 has its audit.
 
+`HollowStar`, `IronPalisade`, `Starfall`, `ThunderStrike` (Gale Blade's Thunderhead) and `LatticeField`
+(the Lattice) no longer have it either (2026-10-29): Hollow Star's well is one shader on one quad
+(`scenes/shaders/hollow_star_well.gdshader`), every line these spells drew is a `SpellStrokes` stroke
+on the world's 2-unit cell (`spell_strokes.gdshader`), Iron Palisade's stakes and caltrops are steel-row
+pixels drawn upright in world coordinates, and every fade among them - and the Familiar's, Gravewell's
+and Mirefoot's wisps' - is a dither (`spell_dither.gdshader`). Section 9, "The trap and star spells'
+shared pieces" and after, has each part.
+
 `SolarFlare` (`SolarFlareVisual`) no longer has it either (2026-10-29): the burst, Corona Discharge's
 beams and the charge at his boots are `scenes/shaders/solar_flare.gdshader` on the world's 2-unit cell,
 and Sun Dogs' mock suns are stamped cell by cell. Section 9 has the audit.
@@ -935,6 +943,25 @@ icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall
 | `ThunderStrike` | **Failed**: three translucent `DrawPolyline`s and two soft discs | Strokes: a white-hot spine 3 px across, a hot body, the edge as a dithered glow; the knot a white point in a dithered hot glow; the flicker a dissolve |
 | `LatticeField` | **Failed**: `DrawLine` arcs and translucent halos | Strokes: hot spines with a dithered edge, kinked as before; each linked body's halo a ring of the ramp's mid at the old halo's edge, dithered to half (a status mark, not an area marker; a fill of dots read as a screen door) |
 
+### The Familiar
+
+| Part | Audit | Now |
+|---|---|---|
+| The creatures (`tools/art/familiar.py`, x2) | Pass - opaque, on-palette, binary alpha. The dog's toned-down eye is untouched | Unchanged |
+| The blink | **Failed**: the sprite faded out and in with alpha | Dissolves by texel dither, whole art pixels |
+| Jaws, claws, pecks, puffs, howls, feathers | Passed as cells; failed on their alpha fades | Faded by dither |
+
+### The trap and star spells: what only a build checked, and what still needs eyes
+
+Built, validated (`ContentValidator`: 0 errors, the usual test-wizard warning) and photographed with
+`_UiShot` before and after (`vis_traps_*`). Not photographed in the act: the Familiar's blink (0.14 s;
+it rides the same texel dither as Gravewell's fading pit, which was), Twin Stars' tether and Nova
+Seed's shards only at the game's zoom in a scattered crowd. Still for eyes in a real run: the phone's
+portrait canvas - nothing here is layout, but what the strokes and the dither cost on the Pixel 9 is
+unmeasured (`--profile` shows Starfall's section) - and whether Glacial Spike's fixed-size spike reads
+right in a level 8 crowd now that only its ice debris grows with Area. `.ai/spell-roster.md` still says
+Glacial Spike's "drawing follows" its Area: it is the debris that does.
+
 ### Cyclone Slash
 
 Eric, of a level 8 Twin Gyres with Wind Shear: *"does not look up to our typical visual fidelity."*
@@ -1254,6 +1281,23 @@ the game's zoom on the Sketchbook's paper (stage 8).
 
 Not changed, and why: `spell_fx.py` still draws `molten-shard.png` (the generator is shared with other
 spells' sprites, so the entry was left rather than pull a shared file into this commit); nothing loads it.
+
+### Gale Blade
+
+Audited as Molten Shard was: the base spell and level 8 with all six pairings (Eddy, Hooked Throw or Live
+Wire with Thunderhead or Squall), at `--zoom=1.6` on the Cursed Dungeon and the game's zoom on the Frozen
+Waste, and the base with two pairings that show every card at the game's zoom on the Sketchbook's paper.
+
+| Part | Audit | Now |
+|---|---|---|
+| The blade, out and home (and Squall's four extra blades, the same scene) | **Failed.** `gale-blade.png`, three arcs, spun with the bolt at sixteen radians a second - its pixels on a rotated grid at every angle but four - at 95% opacity, under the card tints | `scenes/shaders/gale_blade.gdshader` on one quad (`GaleBladeLook`, the scene's `Look` child; `gale-blade.png` is no longer referenced by a scene). A crescent of wind - a disc less a disc set behind it, so its belly leads and its horns sweep back - its cutting edge white, then Wind's hot and mid, its inner edge in Wind's saturated edge stop, and an art pixel of that edge round the cutting edge too - a cold glow on the dark floors, and the contour that keeps a white edge from vanishing on the pale ones (it did, on the Sketchbook's paper, until it had one). Drawn to the swath it cuts, `HitRadius` plus a body, as the Riptide wave is; the horns are on that radius, so as it spins it sweeps what it cuts |
+| Its trail | **Failed.** Untextured `GPUParticles2D`, translucent, off the grid | The spin is drawn instead: two ghosts of the crescent a little behind it in its turn, a ramp stop and two down, dithered thinner each time |
+| Eddy, hanging at the end of the throw | **Failed** (the sprite, swollen and spun faster); nothing showed the reach its recut scans, which is wider than the swollen blade | The same shader: the blade swells with the node, and rings of wind streaks wheel round it out to `ElementalBolt.EddyReachNow` - the outermost ring's pixels on the reach its recut scans - growing in with the swell. The stuff that cuts, laid out to the radius it cuts, not a ring drawn round it |
+| Hooked Throw | Nothing drawn of its own (a path) | - |
+| Live Wire's wire | **Failed.** Three stroked polylines from the hand - a 5 px band of Lightning's edge at 55% alpha under a hot and a white line - at the blade's angle, drawn from 18 px above the point the cut measures from | `scenes/shaders/live_wire.gdshader` on one quad (`LiveWireLook`, a top-level child of the blade it spans every frame): a white-hot core one art pixel wide, a hot pixel either side where it kinks, the odd spark of mid and edge, re-jagged every 0.06 s as before. It now runs along exactly the segment the cut measures (the wizard's position to the blade), leaving him at the edge of his body rather than across his sprite, and every kink and spark stays inside `LiveWireHalfWidth`, the band it cuts |
+| Thunderhead's strike (`ThunderStrike`) | **Failed** (stroked translucent polylines, soft discs) | Done in the strays pass above (`SpellStrokes` strokes, a dithered glow, a dissolve; commit 4327ca5), which landed first; this pass left it as that one made it |
+| Thunderhead's burst | Passed - the shared `ImpactDebrisLayer` | Unchanged |
+| Squall's burst into five | Nothing drawn of its own beyond the blades | - |
 
 ### Solar Flare
 

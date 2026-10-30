@@ -319,8 +319,10 @@ public static class StageCatalog
 				if (previous == null)
 					return "Locked";
 				BossDefinition boss = BossCatalog.ForStageIndex(previous.Index);
+				// "defeat the Hayward", not "defeat The Hayward": a name's article is lower case mid-sentence.
+				// The world map shows every locked chapter's hint, where the old list hid them all.
 				return boss != null
-					? $"Locked — defeat {boss.DisplayName} in the {StripArticle(previous.DisplayName)}"
+					? $"Locked — defeat {MidSentence(boss.DisplayName)} in the {StripArticle(previous.DisplayName)}"
 					: $"Locked — clear the {StripArticle(previous.DisplayName)}";
 			default:
 				return string.Empty;
@@ -330,6 +332,9 @@ public static class StageCatalog
 	// "the The Emberdeep" is what a hint built from a name that already carries its article reads as.
 	private static string StripArticle(string name) =>
 		name != null && name.StartsWith("The ", StringComparison.Ordinal) ? name.Substring(4) : name;
+
+	private static string MidSentence(string name) =>
+		name != null && name.StartsWith("The ", StringComparison.Ordinal) ? "the " + name.Substring(4) : name;
 
 	public static StageDefinition GetByIndex(int index)
 	{

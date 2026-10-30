@@ -19,10 +19,11 @@ namespace WizardSurvivors.scripts;
 // down lightning where it turns or bursts into five. Frost Shard takes none of them, and with no such
 // card taken every path below is the one it always was.
 //
-// THE LOOK IS A CHILD'S. Riptide's and Molten Shard's scenes carry a child that paints the bolt from the
-// numbers it hits with, as pixel art on the world's 2 px grid (2026-10-29): RiptideWave and
-// MoltenShardLook, each one quad and one shader. What they need to know of the bolt's state is exposed
-// below (HitRadius, IsLodged, LodgeFuse, IsForging).
+// THE LOOK IS A CHILD'S. Riptide's, Molten Shard's and Gale Blade's scenes carry a child that paints the
+// bolt from the numbers it hits with, as pixel art on the world's 2 px grid (2026-10-29): RiptideWave,
+// MoltenShardLook and GaleBladeLook, each one quad and one shader. What they need to know of the bolt's
+// state is exposed below (HitRadius, IsLodged, LodgeFuse, IsForging, EddyReachNow, EddySwell); Live Wire's
+// line is LiveWireLook, a child it spans every frame over the segment the cut measures.
 public partial class ElementalBolt : Area2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -193,17 +194,16 @@ public partial class ElementalBolt : Area2D
 	private System.Collections.Generic.HashSet<ulong> struckOnce;
 
 	// Gale Blade. The way home bends (a hook, or one path of a squall's five); the eddy it hangs in;
-	// the squall still to burst when the eddy ends; the live wire's tick and its jagged line.
+	// the squall still to burst when the eddy ends; the live wire's tick, and the wire drawn
+	// (LiveWireLook, a child that draws itself in world space).
 	private float returnBend;
 	private float returnStartDistance = 1f;
 	private float eddyLeft;
 	private float eddyRecut;
 	private bool squallPending;
 	private float wireTick;
-	private float wireJitterClock;
-	private const int WirePoints = 10;
-	private readonly Vector2[] wire = new Vector2[WirePoints];
-	private readonly float[] wireOffsets = new float[WirePoints];
+	private LiveWireLook wireLook;
+	private float eddySwell;
 	private static int hookFlip;
 
 	public override void _Ready()
@@ -304,6 +304,13 @@ public partial class ElementalBolt : Area2D
 			ConfigureArcVisual(instantBoltToLocal.Length());
 			ResolveImpact(instantTarget, keepAliveForVisual: true);
 			return;
+		}
+
+		// Live Wire: the line of lightning from the hand to the blade, drawn by its own child.
+		if (liveWire && wireLook == null)
+		{
+			wireLook = new LiveWireLook { Name = "LiveWire", Gilded = SpellData?.IsLegendary ?? false };
+			AddChild(wireLook);
 		}
 
 		// Slag Trail: the shard lays its line from the hand that threw it.
@@ -477,6 +484,7 @@ public partial class ElementalBolt : Area2D
 		eddyLeft -= delta;
 		float t = 1f - Mathf.Clamp(eddyLeft / BoltEvolutions.EddySeconds, 0f, 1f);
 		float swell = MathF.Min(1f, MathF.Min(t, 1f - t) / 0.15f);
+		eddySwell = swell;
 		Scale = shotScale * Mathf.Lerp(1f, BoltEvolutions.EddyScale, swell);
 		Rotation += ReturnSpinSpeed * 2.2f * delta;
 
@@ -497,6 +505,7 @@ public partial class ElementalBolt : Area2D
 		if (eddyLeft <= 0f)
 		{
 			eddyLeft = 0f;
+			eddySwell = 0f;
 			Scale = shotScale;
 			struckThisLeg?.Clear();
 			if (squallPending)
@@ -510,6 +519,12 @@ public partial class ElementalBolt : Area2D
 	// The blade's drawn half-length at full swell (the sheet's blade is about 44 px end to end at scale
 	// 1), with a body's allowance, as every zone in the game is measured against enemy centres.
 	private float EddyReach() => 22f * BoltEvolutions.EddyScale * MathF.Max(0.01f, shotScale.X) * AreaMultiplier + RiptideWave.BodyAllowance;
+
+	/// <summary>While the blade hangs in an Eddy, the reach its recut scans (world px); 0 otherwise. GaleBladeLook draws the wind to it.</summary>
+	public float EddyReachNow => eddyLeft > 0f ? EddyReach() : 0f;
+
+	/// <summary>How far a hanging blade has swollen into its eddy, 0..1 (0 when it is not hanging).</summary>
+	public float EddySwell => eddyLeft > 0f ? eddySwell : 0f;
 
 	// Thunderhead: lightning out of the sky onto the point the blade turns at.
 	private void StrikeThunder()
@@ -591,14 +606,10 @@ public partial class ElementalBolt : Area2D
 	// line crosses; every few frames the line is re-jagged, so it crackles rather than hangs.
 	private void TickLiveWire(float delta)
 	{
-		wireJitterClock -= delta;
-		if (wireJitterClock <= 0f)
-		{
-			wireJitterClock = 0.06f;
-			for (int i = 0; i < WirePoints; i++)
-				wireOffsets[i] = (i == 0 || i == WirePoints - 1) ? 0f : (float)GD.RandRange(-7.0, 7.0);
-		}
-		QueueRedraw();
+		// The wire is drawn over exactly the segment the cut below measures from, every frame; the shader
+		// re-jags it inside the band it cuts (live_wire.gdshader).
+		if (wireLook != null && PlayerRef != null && IsInstanceValid(PlayerRef))
+			wireLook.Span(PlayerRef.GlobalPosition, GlobalPosition);
 
 		wireTick -= delta;
 		if (wireTick > 0f)
@@ -628,23 +639,6 @@ public partial class ElementalBolt : Area2D
 			return p.DistanceTo(a);
 		float t = Mathf.Clamp((p - a).Dot(ab) / lengthSquared, 0f, 1f);
 		return p.DistanceTo(a + ab * t);
-	}
-
-	public override void _Draw()
-	{
-		if (!liveWire || PlayerRef == null || !IsInstanceValid(PlayerRef))
-			return;
-		// In world space: the blade spins, and the wire runs from the hand, not from the blade's frame.
-		DrawSetTransformMatrix(GlobalTransform.AffineInverse());
-		Vector2 a = PlayerRef.GlobalPosition + new Vector2(0f, -18f);
-		Vector2 b = GlobalPosition;
-		Vector2 across = (b - a).Orthogonal().Normalized();
-		for (int i = 0; i < WirePoints; i++)
-			wire[i] = a.Lerp(b, i / (float)(WirePoints - 1)) + across * wireOffsets[i];
-		ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Lightning);
-		DrawPolyline(wire, ramp.Edge with { A = 0.55f }, 5f);
-		DrawPolyline(wire, ramp.Hot, 2.2f);
-		DrawPolyline(wire, ramp.Core, 1f);
 	}
 
 	private void OnAreaEntered(Area2D area) => HandleHit(area);
