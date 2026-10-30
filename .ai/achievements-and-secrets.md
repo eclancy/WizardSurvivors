@@ -10,9 +10,14 @@ Eric, 2026-10-29:
 > Let's add significantly more secrets, like a giant crystal that needs to be destroyed to find a
 > related spell, etc."
 
-**Status: design only.** Nothing here is built. It is written to be reviewed first and then split
-between several agents (section 9). Its sister doc, `.ai/endgame-castle.md`, designs the castle
-chapters from the same message; their secrets are listed here (section 8.12) and their rooms there.
+**Status: design, decided 2026-10-30, not built.** Eric accepted every recommendation (section 10),
+confirming three directly: the final gate is **every wizard freed and the Long Coil beaten**; the shop
+stops selling spells and Arcane Energy keeps the stat upgrades and the boons; Fireball goes to the
+Long Coil. The unlock core (piece A1, section 9) is being built now. Its sister doc,
+`.ai/endgame-castle.md`, designs the castle chapters from the same message - and there Eric chose to
+**move the Cursed Dungeon into the castle**, which this doc now follows: the Dungeon, its deed, its
+key event and Tituba, and its spell vault are past the gate (8.5). Castle secrets are listed here
+(section 8.12) and their rooms there.
 
 Read with `.ai/stage-secrets.md` (what a secret is, its tells, its placement, its rules - all of it
 still holds except the payment rule, which section 6 revises), `.ai/side-events.md`,
@@ -151,7 +156,7 @@ earned (2.3).
 | Bramble Seed | **The Grove Held** | Road | win the grove (Forest) | was a Discovery; now a deed with the same trigger |
 | Thorned Vine | Forest Cleared | Road | beat Elderbark | unchanged |
 | Riptide | Silence in the Deep | Road | beat the Hollow Choir | unchanged |
-| Shadow Bolt | Dungeon Conqueror | Road | beat the Gaoler | unchanged |
+| Shadow Bolt | Dungeon Conqueror | Road | beat the Gaoler | unchanged; the Dungeon is in the castle now, past the gate (8.5) |
 | Contagion | **The Lanterns Out** | Road | snuff the bog lanterns (Swamp) | was a Discovery |
 | Mirefoot | Cut the Rot Out | Road | beat Mother Rot | unchanged |
 | Spiritual Weapon | Ruins Delver | Road | beat the Archivist | unchanged |
@@ -161,14 +166,16 @@ earned (2.3).
 | **Familiar** | **The Pinfold** | Secret | a hound of light in the Hayward's pound; wake its guards, beat them, and it comes to you (Fields) | the Hayward impounded strays (`campaign.md` 5). The Familiar is that hound, and the next chapter's Coursing needs it |
 | **Starfall** | **The Fallen Star** | Secret | gather the seven shards strewn along a fallen star's trail, then stand in its crater (Broken Circle) | a rain of many small lights, earned by picking up many small lights. The moot watched this sky |
 | **Frost Shard** | **The Geode Heart** | Secret | break a crystal three men tall by fighting at its foot (Sunken Cave) | **Eric's giant crystal.** Frost Shard makes every death shatter; it is learned by shattering the biggest thing in the cave. Moved from Survivor |
-| **Molten Shard** | **The Cold Forge** | Secret | kill on the hearth of the gaol's dead smithy until it roars (Cursed Dungeon) | Metal and Fire: the forge that made the shackles makes your shards |
+| **Molten Shard** | **The Cold Forge** | Secret | kill on the hearth of the gaol's dead smithy until it roars (Cursed Dungeon, in the castle now) | Metal and Fire: the forge that made the shackles makes your shards |
 | **Gravewell** | **The Swallow-Hole** | Secret | lure thirty of his creatures into a sinkhole in the bog (Blighted Swamp) | a trap you let them come to, learned from a hole they walked into |
 | **Kindled Ward** | **The Broken Ward** | Secret | touch five notched ward stones in notch order; the ward re-forms, and its light comes to you (Mystic Ruins) | "The old wards were broken from the inside." A ward that stands on its own, from a ward made whole |
 | **Sleet Runes** | **The Buried Runes** | Secret | stand still in a drift field until the snow settles, then dig up the rune-stones it shows (Frozen Waste) | walking aims the runes; stopping is what finds them |
 | **Stormsweep** | **The Fulgurite** | Secret | stand by a glass tree in the dunes when the dry storm comes round and draws its lightning (Scorched Sands) | lightning that strikes sand leaves glass; a sweep of lightning, from where it struck |
 
-Totals: **11 Feats, 9 Road deeds, 9 secrets** - one spell vault in each of the nine chapters before
-the gate. Each vault is detailed in section 8.
+Totals: **11 Feats, 9 Road deeds, 9 secrets** - one spell vault in each campaign chapter but the
+Emberdeep: eight on the road before the gate, and the Cursed Dungeon's, which moves past it into the
+castle with its chapter (`.ai/endgame-castle.md` 1.3). The gate counts no spells (2.5), so a vault
+behind it closes nothing. Each vault is detailed in section 8.
 
 ### 2.2 What moved, and why
 
@@ -190,7 +197,8 @@ Shard's shatter is the better story anyway.
 - **Tituba, Väinämöinen, Wishing Coin and Gilded Mote become Road deeds** with their side events as
   triggers ("Tituba Freed", "Out of the Ice", "The Last Coin", "The Circle Relit"), granted at once as
   now. Their reveal rules are unchanged: a deed that frees a secret wizard is a sealed row until his
-  chapter opens.
+  chapter opens. Tituba's chapter is the castle's dungeon now, so on a new save her row stays sealed
+  until late; how the gates treat her is `.ai/endgame-castle.md` 1.6.
 - **John Dee and Laelaps** are already achievements.
 - **The three shop boons stay in the shop** (2.4). Boons are not under the rule, and Water draws
   two of its carriers from them: holding them back behind chapters would thin the element Tituba's
@@ -206,39 +214,41 @@ id, and `ValidateUnlockCatalog` requires that **every spell's source is `Starter
 - **What Arcane Energy is for: Powers, the three boons, and Redaction.** That was 95% of it
   already (1.4). The early game loses its cheapest buys (110 to 170), so the first purchases a new
   save makes are now Powers levels, which start at 20 to 60.
-- **The "Spells & Boons" menu holds three boons.** Recommended: fold them into Powers as its last
-  section and take the button off the title menu (decision 3). Every card in that shop is then a
+- **The "Spells & Boons" menu holds three boons.** Decided: fold them into Powers as its last
+  section and take the button off the title menu (decision 5). Every card in that shop is then a
   stat or a boon; every spell is on the achievements page.
 - **Arcane Energy does not buy a skip.** No achievement can be bought outright: that would make the
-  secrets a price list. A hint for a hidden achievement could be sold (decision 9), but is not
+  secrets a price list. A hint for a hidden achievement could be sold (decision 10), but is not
   recommended for the first version.
 
-### 2.5 The final chapter's gate
+### 2.5 The final chapter's gate (decided: wizards, not spells)
 
 Today the Emberdeep opens on **every spell and every wizard**, live. Under the new rule nine spells
 are behind secrets, and `.ai/stage-secrets.md` section 1 already said why that is a problem: a
-secret is missable by design, and a gate behind luck is a bad gate. There are two honest answers.
-
-**A. Narrow the gate to every wizard freed - recommended.** `.ai/world-and-tone.md` already names
-this as the fallback: *"the fiction survives being narrowed to every wizard freed - losing a spell is
-losing a weapon, losing a wizard is leaving a person behind. Narrow it there first."*
+secret is missable by design, and a gate behind luck is a bad gate. The draft weighed two answers -
+narrow the gate to wizards, or keep it total and make the vaults carry it - and **Eric chose to
+narrow it**, the fallback `.ai/world-and-tone.md` already named: *"the fiction survives being
+narrowed to every wizard freed - losing a spell is losing a weapon, losing a wizard is leaving a
+person behind. Narrow it there first."*
 
 - The Emberdeep's gate becomes **the Long Coil beaten and every wizard freed** (a new
   `StageGate.PreviousBossAndWizards`). The previous boss keeps the road one road: without it the
   Sands could be skipped once Väinämöinen is free.
+- **"Every wizard" means every wizard whose rescue chapter comes before the gate.** With the Cursed
+  Dungeon moved into the castle, Tituba is freed behind the Emberdeep; counting her would be the
+  Fireball bug again, for a person. So the gate counts the four starters, John Dee and Väinämöinen
+  (Laelaps is outside every gate), and `ValidateGateReachability` holds it. **The rule is written per
+  gate chapter** - "every wizard whose rescue comes before *this* chapter" - because the castle doc
+  gives the Throne the same kind of gate, where "every wizard" includes Tituba and the fiction's
+  sentence is true where he actually is (`.ai/endgame-castle.md` 1.6).
 - Spells become the collection, not the key. A Collection deed, **The Grimoire Restored** (every
-  spell recovered), pays 500 Arcane Energy and a mark on the save (decision 1).
+  spell recovered), pays 500 Arcane Energy and a mark on the save.
 - It ends a recurring cost: schemas 14, 15 and 16 exist only because a new spell would have closed
-  the Emberdeep to saves that had opened it. Under A a new spell needs no migration.
-- It lets the chapters after the gate - the castle, `.ai/endgame-castle.md` - pay spells.
-- The Fireball case cannot recur for spells; the reachability check (A1) still guards wizards.
+  the Emberdeep to saves that had opened it. A new spell needs no migration now.
+- It lets the chapters after the gate pay spells: the Dungeon's Shadow Bolt and Molten Shard already
+  do, and close nothing.
 
-**B. Keep the total gate.** Then the vaults carry the gate's weight, so they must not be left to
-luck, and they are not: each vault is in every run of its chapter, in the mid band, with a far tell
-and a chapter hint on the Spell Index (6.4). Finding all nine is a search a player can repeat, not a
-roll. Fireball still moves (2.2), and nothing past the gate may ever pay a spell or a wizard.
-
-Both keep everything a save already has: section 3.
+Everything a save already has is kept: section 3.
 
 ### 2.6 How it is held
 
@@ -264,10 +274,11 @@ Both keep everything a save already has: section 3.
 - **Validators** (`RegressionChecks`):
   - `ValidateUnlockCatalog`: every spell is `Starter` or `Achievement`; every achievement source
     exists, in both directions, as today.
-  - **`ValidateGateReachability` (new):** everything the final gate counts has a source that can be
-    met before the gate - a Road or Secret deed's `StageId` is earlier in the campaign than the gate
-    chapter, and a Feat names no chapter at or past it. This is the check that would have caught
-    Fireball.
+  - **`ValidateGateReachability` (new):** for every gate chapter, everything that gate counts has a
+    source that can be met before it - a Road or Secret deed's `StageId` is earlier in the campaign
+    than the gate chapter, and a Feat names no chapter at or past it. This is the check that would
+    have caught Fireball, and it is what keeps Tituba out of the Emberdeep's count and in the
+    Throne's.
   - `ValidateSecretCatalog`: section 6.2's revised rules.
   - `ValidateAchievements`: every derived deed has a name, a measure and a reward; no Hidden deed
     is complete on a new save; every Hidden deed has a sealed line and a seen line (4.3).
@@ -324,8 +335,8 @@ screen. It keeps both places and one builder.
 ### 4.1 Its name
 
 Eric called it "the achievements menu"; the player chose "Unlocks" for it earlier because "Deeds"
-hid what the entries were for (`.ai/level-up-screen.md` 4c). Recommended: **Achievements** (decision
-2) - every entry still pays something and says so, and secrets are achievements now, which "Unlocks"
+hid what the entries were for (`.ai/level-up-screen.md` 4c). Decided: **Achievements** (decision
+4) - every entry still pays something and says so, and secrets are achievements now, which "Unlocks"
 does not say. It is one constant (`CodexRows.UnlocksTitle`) and the subtitle.
 
 ### 4.2 What is listed, and when
@@ -534,8 +545,11 @@ different things:
 4. **The wizard's own element is carried by his starting spell**, so tier 6 for his Apotheosis
    never waits on a secret.
 5. **No element's capstone waits on a secret.** `ValidateElementReachability` gains a second pass
-   that counts only starters, Feats and Road deeds: every element must still reach 6. Ten of the
-   twelve have a pure carrier outside the vaults (Hollow Star moves to a Feat for exactly this).
+   that counts only starters, Feats and Road deeds **from chapters before the gate** (the build a
+   player has on the road): every element must still reach 6. With the Dungeon in the castle, its
+   Shadow Bolt and Molten Shard drop out of that pass; Darkness and Poison keep Hollow Star, Void
+   Lance, Contagion and the rest, Metal and Fire keep Iron Palisade, Fireball and the boons. Ten of
+   the twelve have a pure carrier outside the vaults (Hollow Star moves to a Feat for exactly this).
    **Light is the one to watch**: both its pure spells, Kindled Ward and Starfall, become vaults,
    so it has to reach 6 through hybrids - Aegis Ward, Solar Flare, Spiritual Weapon, their
    evolutions, and Lantern Oil, Gilded Mote, Wishing Coin and Sunsteel Filament. On paper that is
@@ -654,6 +668,12 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 
 ### 8.5 Cursed Dungeon (`stage_1`) - event: the Gaoler's key (carry)
 
+**In the castle now** (`.ai/endgame-castle.md` 1.3 and section 4): chapter 11 of 13, between the Last
+Bridge and the Court, unchanged but for its place. Its secrets move with it, its vault (the Cold
+Forge) included, and gain the Oubliette (D7), moved from the castle doc's first-draft Undercroft. The
+Gaoler's Ledger now arrives late, a chapter before the Court's Library reveals every secret's hint;
+it keeps its design.
+
 | id | secret | status | where | how it is found | tell | pays |
 |---|---|---|---|---|---|---|
 | D1 | Chalk Marks | planned | mid | follow | a chalk arrow at a junction | a stash: a chest |
@@ -662,6 +682,7 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | D4 | The Gaoler's Ledger | planned, keepsake | 10-12 | guarded, then touch | a lectern in an empty hall | a chest; the ledger, once (4.3) |
 | D5 | **The Cold Forge** | **new, vault** | 5-7 chunks, in a hall room | **cull**: kill 40 enemies standing on the forge's hearth ring (a 180 px circle in front of the anvil); each kill sets an ember in the dead coals until the forge roars | far: the walls' sconces give way to soot-stained faces and dropped shackles from two chunks out; near: the anvil, with a warm glint on the horn | **Molten Shard**; later runs a chest |
 | D6 | **The Empty Cell** | **new** | mid | **untouched**: stand in the one cell whose door stands open for 4 s without being struck | a cell door open in a corridor of shut ones; the name scratched off the lintel | heal 50%; page. Absence, never a body |
+| D7 | **The Oubliette** | **new** | mid, in a dead-end hall room | **untouched** for 5 s on a grate in the floor | a draught of cold motes rising through the grate; a voice below | 150 Arcane Energy, once; when Merlin is built, his card turns from a sealed blank to a silhouette here (`.ai/endgame-castle.md`, decision 11) |
 
 ### 8.6 Blighted Swamp (`stage_3`) - event: snuff the lanterns (explore)
 
@@ -729,7 +750,7 @@ run). Listed here as achievements; their places, rooms and art are in the castle
 | chapter | secrets |
 |---|---|
 | The Last Bridge | the Toll Stone (touch: 30 Arcane Energy), the Span Lantern (linger: the collapse waits 30 s), the Gargoyle's Perch (strike: a chest), **the Names on the Parapet** (keepsake, gather: 150 Arcane Energy) |
-| The Undercroft | the Stolen Lights (strike: sealed vault doors, a relic chest each, two a run), the Cistern Bell (risk), the Cellarer's Stores (linger: heal), **the Oubliette** (keepsake; see the castle doc's Merlin decision) |
+| Cursed Dungeon | moved into the castle with its chapter: D1 to D7 (8.5), its vault the Cold Forge. (The first draft's Undercroft and its secrets are not built; the Oubliette moved to the Dungeon as D7) |
 | The Court | its rooms are its secrets: the Great Hall, the Chapel, the Library (reveals every secret's hint, 4.3), the Armoury, the Map Room, the Treasury, the Gallery, the Kennels, the Kitchens, the Minstrels' Gallery, the Solar, and **the Keepsake Doors** (one door for every chapter keepsake found) |
 | The Throne | none in the fight (secrets stand down for a boss); its deeds are Feats |
 
@@ -742,9 +763,9 @@ own plan; the two meet only at `SecretCatalog`'s castle files and the achievemen
 
 | piece | what | files it owns | depends on |
 |---|---|---|---|
-| **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators) | Eric's decisions 1, 6, 7 |
-| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 2), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them) |
-| **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers or left (decision 3) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods) | A1 |
+| **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it | decided; **in progress** |
+| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them) |
+| **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods) | A1 |
 | **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | A1 |
 | **A5-A13 One chapter's secrets each** | that chapter's rows of section 8: its vault first, then the rest; art in `tools/art/secret_<chapter>.py` | its own `SecretCatalog.<Chapter>.cs`, its own secret scripts and generator | A4 |
 | **A14 Sounds** | the shimmer (seen) and found stings `.ai/stage-secrets.md` 7.7 asked for, and the crystal's shatter | `tools/audio/`, `SfxCatalog.cs` | none |
@@ -774,33 +795,24 @@ lands, a found vault still grants its spell and the old Unlocks list shows its d
 
 ---
 
-## 10. Decisions for Eric
+## 10. Decisions (decided by Eric, 2026-10-30)
 
-1. **The final gate.** (2.5) Narrow it to *every wizard freed and the Long Coil beaten*, with
-   "every spell recovered" a Collection deed; or keep it total and rely on the vaults being
-   guaranteed and hinted. **Recommended: narrow it.** It is the fallback `world-and-tone.md` names,
-   it ends the migration every new spell has needed, and it lets the castle pay spells.
-2. **Call the menu "Achievements"?** (4.1) **Recommended: yes**, your word for it, and secrets are in
-   it now.
-3. **The shop's last three boons.** Fold them into Powers and drop the "Spells & Boons" button, or
-   keep a "Boons" menu. **Recommended: fold them in.**
-4. **Revealed by being seen.** (4.3) A hidden achievement gets its own row, name and an observation
-   once its tell has been on screen. The alternative is to show nothing until it is found.
-   **Recommended: seen.**
-5. **Name the chapter of each spell vault on the Spell Index** ("Hidden somewhere in the Sunken
-   Cave"). **Recommended: yes**; it is where to look, not what to do.
-6. **Fireball moves to the Long Coil's deed** (beside Sunsteel Filament), and the Warden of the
-   Deep's deed pays 300 Arcane Energy and opens the castle (2.2). This is the fix for the Emberdeep
-   being unreachable on new saves, so something has to move; **recommended: this.** Under decision
-   1's narrowed gate Fireball could stay where it is, but it would still be a spell that only the
-   gate's far side pays, and the Long Coil's is the better slot for the big slow one.
-7. **The pairings**: Frost Shard to the giant crystal, Hollow Star to Survivor, and the nine vaults
-   of 2.1. **Recommended as written**; any vault can take a different spell by editing one row,
-   provided the element check in 6.3 still passes.
-8. **A found spell joins the pool at the next level-up of the same run**, or only from the next run.
-   **Recommended: at once** (6.3, item 1 says why it is safe).
-9. **Sell hints for hidden achievements for Arcane Energy?** **Recommended: not now.** The Library
-   and the Ledger reveal them as rewards; revisit if players stall.
-10. **A new crystal spell** for the Geode Heart rather than Frost Shard? **Recommended: no.**
-    Frost Shard's shatter is the crystal's spell. A new spell is better placed in the castle,
-    where (with decision 1) it closes nothing.
+Every recommendation stands. The first three were confirmed directly.
+
+| # | question | decided |
+|---|---|---|
+| 1 | the final gate (2.5) | **narrowed: the Long Coil beaten and every wizard freed** - every wizard whose rescue comes before the gate, written per gate chapter, since the Cursed Dungeon (and Tituba) moved past it. "Every spell recovered" is a Collection deed, *The Grimoire Restored*, 500 Arcane Energy |
+| 2 | the shop (2.4) | **it stops selling spells**; Arcane Energy keeps the stat upgrades, the three boons and Redaction |
+| 3 | Fireball (2.2) | **to the Long Coil's deed**, beside Sunsteel Filament; the Warden of the Deep's deed pays 300 Arcane Energy and opens the castle |
+| 4 | the menu's name (4.1) | **Achievements** |
+| 5 | the last three boons (2.4) | **folded into Powers**; the "Spells & Boons" button leaves the title menu |
+| 6 | hidden achievements (4.3) | **revealed once seen**: name and an observation after the tell has been on screen |
+| 7 | spell vault hints (4.3, 6.4) | **the Spell Index names each vault's chapter** ("Hidden somewhere in the Sunken Cave") |
+| 8 | the pairings (2.1) | **as written**: Frost Shard to the Geode Heart, Hollow Star to Survivor, the nine vaults - the Cold Forge's now in the castle with its chapter |
+| 9 | when a found spell joins the pool (6.2) | **at once**, from the next level-up of the same run |
+| 10 | selling hints for Arcane Energy | **not now**; the Library and the Ledger reveal them as rewards |
+| 11 | a new crystal spell | **no**; Frost Shard is the crystal's spell |
+
+**Raised since, and answered in the castle doc** (`.ai/endgame-castle.md` 10.2): whether the Throne
+also needs every wizard freed (recommended yes, so Tituba is counted where he is), and the schema 20
+step that moves the Dungeon, which follows this doc's schema 19.
