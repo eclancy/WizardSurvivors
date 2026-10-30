@@ -349,27 +349,65 @@ public partial class ElementalPulse : Area2D
 	// Each mock sun between pulses: a halo, a glow and a white-gold kernel with four short rays turning
 	// slowly, throbbing on its own beat. Small on purpose - it says where the next flare goes off, and the
 	// burst says how far it reaches (2c: no ring at the reach).
-	private static readonly Color SunCore = new Color(1.0f, 0.96f, 0.76f);
-	private static readonly Color SunFlare = new Color(1.0f, 0.60f, 0.13f);
+	//
+	// As pixel art since 2026-10-29: it was three translucent discs and four antialiased lines. Now every
+	// part is a square of the world's 2 px grid in an opaque Light tone, stamped cell by cell round the
+	// sun's snapped centre - the halo and the glow as Bayer dither, the rays as the cells they cross - so it
+	// sits on the same grid as the wizard and the floor however he stands. A few dozen rects a sun.
+	private static readonly ElementColors.Ramp LightRamp = ElementColors.GetRamp(Element.Light);
 
 	private void DrawSunDogs()
 	{
+		const float grid = WhipLimb.Grid;
 		float distance = range * (1f + StillRadiusGrowth * StillCharge) * SunDogOffset;
+		Vector2 here = sunDogGlow.GlobalPosition;
 		for (int side = 0; side < 2; side++)
 		{
 			var at = new Vector2(side == 0 ? -distance : distance, 0f);
 			float throb = 0.5f + 0.5f * MathF.Sin(sunDogClock * 3.1f + side * 1.7f);
 			float r = Mathf.Lerp(5f, 6.5f, throb);
-			sunDogGlow.DrawCircle(at, r * 2.6f, new Color(SunFlare.R, SunFlare.G, SunFlare.B, 0.12f + 0.06f * throb));
-			sunDogGlow.DrawCircle(at, r * 1.6f, new Color(SunFlare.R, SunFlare.G, SunFlare.B, 0.35f));
 			float turn = sunDogClock * 0.8f + side * 0.6f;
-			for (int k = 0; k < 4; k++)
+			// The sun's centre on a grid line of the world; every cell is then measured from it.
+			Vector2 world = here + at;
+			var centre = new Vector2(MathF.Round(world.X / grid) * grid, MathF.Round(world.Y / grid) * grid);
+			int span = (int)MathF.Ceiling(r * 2.6f / grid);
+			for (int j = -span; j < span; j++)
 			{
-				Vector2 dir = Vector2.FromAngle(turn + Mathf.Tau * k / 4f);
-				sunDogGlow.DrawLine(at + dir * r * 1.1f, at + dir * r * 2.3f, new Color(SunCore.R, SunCore.G, SunCore.B, 0.7f), 2f);
+				for (int i = -span; i < span; i++)
+				{
+					var p = new Vector2((i + 0.5f) * grid, (j + 0.5f) * grid);
+					float d = p.Length();
+					float b = PixelInk.Bayer((int)(centre.X / grid) + i, (int)(centre.Y / grid) + j);
+					Color c;
+					if (d < r)
+						c = d < r * 0.55f ? LightRamp.Core : LightRamp.Hot;
+					else if (OnSunDogRay(p, d, r, turn))
+						c = LightRamp.Hot;
+					else if (d < r * 1.6f && b < 0.62f)
+						c = LightRamp.Mid;
+					else if (d < r * 2.6f && b < 0.1f + 0.08f * throb)
+						c = LightRamp.Edge;
+					else
+						continue;
+					sunDogGlow.DrawRect(new Rect2(centre + new Vector2(i * grid, j * grid) - here, grid, grid), c);
+				}
 			}
-			sunDogGlow.DrawCircle(at, r, new Color(SunCore.R, SunCore.G, SunCore.B, 0.95f));
 		}
+	}
+
+	// Whether a cell lies on one of a mock sun's four turning rays: from just outside its kernel to a
+	// little more than twice its radius, one art pixel wide.
+	private static bool OnSunDogRay(Vector2 p, float d, float r, float turn)
+	{
+		if (d < r * 1.1f || d > r * 2.3f)
+			return false;
+		for (int k = 0; k < 4; k++)
+		{
+			Vector2 dir = Vector2.FromAngle(turn + Mathf.Tau * k / 4f);
+			if (p.Dot(dir) > 0f && MathF.Abs(p.Cross(dir)) < WhipLimb.Grid * 0.75f)
+				return true;
+		}
+		return false;
 	}
 
 	// SOLAR PROMINENCE (solar_flare_scorching_heat, 2h). The card was Scorching Heat: +45% damage and the
