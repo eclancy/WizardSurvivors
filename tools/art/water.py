@@ -25,7 +25,8 @@ one or two steps darker than the floor round it, so a pond sits in the stage's v
 reads as water by its SHAPE, its shore and its reflections rather than by being the brightest thing
 on screen. Forest ponds are deep blue-teal, the Swamp's murk is grey-green with brown in it and
 duckweed on it, the Frozen Waste's water is black-blue with a pale ice shelf for a shore, and
-anything else (a cave or castle pool) is near-black stone-blue.
+anything else (a cave or castle pool) is near-black stone-blue. The Last Bridge's drop is the `abyss`:
+not water at the foot of a bank but the sea a long way down, `occ` with mist lying over it.
 
 THE THREE RENDERS THAT WERE THROWN AWAY (`.ai/terrain.md` section 3) still hold: no sine bands, no
 per-pixel hashed mottle, no blocky depth mosaic. Every mark here is a shape - a patch, a streak,

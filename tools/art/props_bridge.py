@@ -213,7 +213,7 @@ def slash(outer, variant):
     def coping(gx, gy):
         # The arris toward the key (the north-west edge) catches it; the rest is lit stone.
         d = (gx - a0[0]) * N[0] + (gy - a0[1]) * N[1]      # distance across, from the line
-        nw_edge = min(0.0, off) if True else 0.0
+        nw_edge = min(0.0, off)                            # the footprint's north-west side
         if d - nw_edge < 1.0:
             return ST[0]
         return ST[1]
@@ -241,7 +241,6 @@ def slash(outer, variant):
     q1 = (a0[0] + D[0] * m1, a0[1] + D[1] * m1)
     r0 = (q0[0] + N[0] * off, q0[1] + N[1] * off)
     r1 = (q1[0] + N[0] * off, q1[1] + N[1] * off)
-    south_west_end = (q0 if not outer else q0) if off > 0 else r0
     # The merlon's south-west end, across the wall's thickness (facing south-west: half-lit).
     start = q0 if off > 0 else r0
     p.face((start[0], start[1], 0.0), N, T, height, height + M, masonry(ST[2], ST[3], 3, 9, R2, 21))
@@ -314,11 +313,10 @@ def backslash(outer, tall=False):
     q1 = (D[0] * m1, D[1] * m1)
     r0 = (q0[0] + N[0] * off, q0[1] + N[1] * off)
     r1 = (q1[0] + N[0] * off, q1[1] + N[1] * off)
-    # The merlon's south-east end (facing south-east: in shadow), across the thickness.
-    se_start = q1 if off < 0 else r1
-    p.face((se_start[0] - N[0] * thick if off < 0 else se_start[0], 0.0, 0.0) if False else
-           ((q1[0] if off > 0 else r1[0]), (q1[1] if off > 0 else r1[1]), 0.0),
-           N, thick, height, height + merlon, masonry(ST[3], ST[4], 3, 9, R2, 35))
+    # The merlon's south-east end (facing south-east: in shadow), across the thickness, from its
+    # north-east corner toward the south-west.
+    ne = q1 if off > 0 else r1
+    p.face((ne[0], ne[1], 0.0), N, thick, height, height + merlon, masonry(ST[3], ST[4], 3, 9, R2, 35))
     sw_line = r0 if outer else q0
     p.face((sw_line[0], sw_line[1], 0.0), D, m1 - m0, height, height + merlon, masonry(ST[2], ST[3], 3, 6, R2 * 2, 37))
     p.top([q0, q1, r1, r0], height + merlon, lambda gx, gy: ST[1])

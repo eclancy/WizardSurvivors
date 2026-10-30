@@ -22,12 +22,12 @@ nearly equally near. It reads as squarish stones laid by hand, and nothing in it
 
 THE JOINTS ARE SHARED, THE STONES ARE NOT. The joint pattern is the same in every variant - drawn
 from a fixed seed, independent of the variant - so any variant meets any other across a tile edge
-with no seam. What a variant changes is inside: which interior stones are a shade lighter or darker,
-two stones laid as one long one, a cracked sett, a sett gone. A stone that touches the tile edge
-keeps the shared tone, so the half of it in the next tile always matches.
+with no seam. What a variant changes is inside: two interior stones laid as one long one, a cracked
+sett. Tone is the same in every stone (body_deck says why), so the half of a stone in the next tile
+always matches.
 
-QUIET. Stone's deep half: faces on its shade stop, a few lighter stones on base, the lit edge a stop
-up on the upper left (the key), joints in its deep stop with `occ` in the worst of them. The deck is
+QUIET. Stone's deep half: faces on its shade stop, the lit edge a stop up on the upper left (the key),
+joints in its deep stop. The deck is
 two stops above the abyss either side (`occ` with mist) and well under any actor, as every floor is.
 Nothing grows here (decided: the bridge's dead are names, never bodies, and its weeds are none).
 """
@@ -139,12 +139,9 @@ INTERIOR_PAIRS = _neighbours()
 def body_deck(c):
     """The bridge's roadway: an irregular packing of setts, lit on the upper left.
 
-    Faces on stone's shade stop; one stone in three a stop lighter on its base (the shared choice for
-    border stones, the variant's own for the rest). Each stone's upper-left rim catches the key a stop
-    above its face, its lower-right rim sits a pixel into shadow, and the joints are stone's deep stop
-    with `occ` where three stones meet. Per variant: a pair of interior stones laid as one, a cracked
-    sett, a sett gone (a hole to the deep stop with an `occ` lip on its lit side - the hole's far wall
-    is what the light falls on).
+    Faces on stone's shade stop. Each stone's upper-left rim catches the key a stop above its face, its
+    lower-right rim sits a pixel into shadow, and the joints are stone's deep stop. Per variant: a pair
+    of interior stones laid as one, or a cracked sett.
     """
     v = T.VARIANT
     merged = set()
