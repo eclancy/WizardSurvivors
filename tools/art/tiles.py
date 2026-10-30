@@ -745,6 +745,13 @@ PROFILES = {
 # Terrain -> profile. Anything not listed is "soft".
 PROFILE_OF = {"lava": "hard", "pit": "hard"}
 
+# Terrain -> a function edge(c, role) that cuts and draws the role's edge itself, in place of a
+# profile's mask. For ground somebody LAID - a marble floor, oak boards, a carpet runner (the Court's,
+# terrain_court.py) - whose edge is a straight, square, drawn border rather than a fade: a carpet that
+# dithered into the flags under it would read as a stain. A chapter module adds its own entries here
+# (`tiles.EDGE_OF[name] = fn`); every terrain not listed keeps its profile.
+EDGE_OF = {}
+
 
 def wander(side, i, amp):
     """How far the boundary wanders at position i along a side, in pixels.
@@ -855,8 +862,11 @@ def emit_terrain(name, painter, rim_tone, roles):
             c = raster.Canvas(SIZE, SIZE, None)
             painter(c)
             if role != "fill":
-                prof = PROFILES[PROFILE_OF.get(name, "soft")]
-                apply_mask(c, role, prof, rim_tone)
+                if name in EDGE_OF:
+                    EDGE_OF[name](c, role)
+                else:
+                    prof = PROFILES[PROFILE_OF.get(name, "soft")]
+                    apply_mask(c, role, prof, rim_tone)
             out.append((role, variant, c))
             if name == "water":
                 break
