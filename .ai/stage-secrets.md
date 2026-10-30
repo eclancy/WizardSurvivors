@@ -4,7 +4,11 @@ A plan, and since 2026-10-28 partly a record. It sets out what a secret is in th
 placed in a stage that has no edge, what it may pay, and three to five concrete secrets for every
 chapter, then names the shared systems and the order to build them in. **Built so far (issue #20):
 the Enchanted Forest's Fenced Bloom and its keepsake, the First Tree, with the core they need** -
-section 12 says what was built, how it departs from this plan, and how to drive it.
+section 12 says what was built, how it departs from this plan, and how to drive it. **Since
+2026-10-30 (piece A4 of `.ai/achievements-and-secrets.md`): the secret core every chapter builds on -
+the per-chapter catalog files, placement by kind, the seen mark, the vault class, the far tell, and
+the strike, follow, gather and lure primitives - and the first spell vault, the Sunken Cave's Geode
+Heart.** Section 13 says what each piece is and is the recipe for adding a secret.
 
 Read first: `.ai/world-and-tone.md` (the premise and the tone rules), `.ai/side-events.md` (the
 five chapter events; secrets must not repeat them), `.ai/terrain.md` section 7 (chunk streaming),
@@ -918,3 +922,82 @@ secrets found in the in-memory save, to photograph the Unlocks list with somethi
 **Still to check by play:** whether the lap reads without being told (the turning flower and the
 motes are the only tutorial), whether anyone follows the seed's lean twelve chunks out in a
 fifteen-minute run, and whether the healing on every pen changes how the Forest is played.
+
+## 13. The secret core (piece A4, 2026-10-30), and how a chapter adds a secret
+
+Piece A4 of `.ai/achievements-and-secrets.md` (section 9): what every chapter's secrets stand on, so
+the agents building chapters in parallel each write their own catalog file and their own nodes and
+**never edit a shared file**. Built with one vault end to end as its proof - the Sunken Cave's Geode
+Heart (that doc's 8.4.1, and its section 12).
+
+### 13.1 The pieces
+
+| piece | file | what it is |
+|---|---|---|
+| the catalog, one file a chapter | `SecretCatalog.cs` (shared: the enums, `SecretDefinition`, the list of chapters, the deeds) and `SecretCatalog.<Chapter>.cs` (eleven, the `StageBestiary` names: `EnchantedForest`, `CursedDungeon`, `SunkenCave`, ...) | a chapter's rows of section 8, in a nested class with a `Build()`. A1's nine vaults moved into their chapters' files. `SecretDefinition` is a record, so a chapter builds A1's written-down vault with `Vault(...) with { IsBuilt = true, CreateSite = ... }` |
+| how it gets into a run | `SecretDefinition.Placement`, `Footprint`, `CreateSite`, `Install`, `RepeatReward` | `Anchor` (3-4 chunks, stream 9, at least 90 degrees off the side event), `Keepsake` (10-12 chunks, stream 7 - the First Tree's draw, unchanged), `Vault` (5-7 chunks, stream 8, at least 90 degrees off the side event and the keepsake; when they leave no such gap, the bearing farthest from both) or `Custom` (its `Install` hooks it in - the Fenced Bloom rides every flower pen through `SecretDirector.HookLandmarks`). `ValidateSecretCatalog` refuses a built secret with no way into the world, a vault not placed as a vault and a keepsake not placed as a keepsake |
+| the director | `SecretDirector` | places every built secret of the chapter by its placement, once at stage start, reserving its footprint; the run state (`StateOf(key)`: `Progress`, `Done`, `Step`, `Marks`); the **seen mark**; `Found`; the chest budget (`PayChest`, two a run); the far tells and the solid ground (below); `PlaceBesideSpawn` for `_UiShot --secret=` |
+| the base node | `SecretSite` | what every secret's node is: its id and director, its run state (`State`, keyed by `Key`), the seen check (`TellPosition`, `SeenRadius`), the warm glint (`DrawGlint`, `Breath`, `GoldHi`), and for a placed site `LayOut(placer)` (more points from the same seeded stream), `SolidFootprints` and `FarTell`. `FencedBloom` and `FirstTree` are `SecretSite`s now |
+| the vault | `SecretVault` | `Open(at)`: the vault is done for the run, and pays - the deed and its spell the first time ever (`Found`), a chest from the budget in a later run (6.4's exhausted rule) |
+| the seen mark | `SecretDirector._Process` | the first time the player is within a site's `SeenRadius` (450 px) of its `TellPosition`, the id goes on `SaveData.GlimpsedSecretIds` (saved with the next save) and `secret_seen` breathes once at the site, once per secret per save. Nothing else - no toast, no text. Not while the secrets stand down |
+| finding | `SecretDirector.Found` | as before (the toast, the page mark, a keepsake's pay), and now **`AchievementManager.CompleteNow`** with the secret's deed every find - a vault's spell is granted and saved at once, recorded for the results screen (`RecordDiscovery`), and the level-up pool (which reads the save live) offers it from the next level-up. A find again plays `secret_found`, the first find `meta_unlock`. A vault whose spell was already owned (bought) says "you already had it" |
+| the far tell | `SecretFarTell` | decor thickening toward a site over two chunks (quadratic, never a ring), with a near band where some pieces wear `NearTextures` (the cracked clusters). Furnished into each chunk as it streams in - `Node2DGame.FurnishChunk` calls `SecretDirector.FurnishChunk` beside the curated props - from its own rolls of (seed, chunk), every roll drawn before the spot is tested, under every rule a scattered sprite keeps (`Node2DGame.IsDecorSpotOpen`). No collision: a direction to walk in, not more to snag on. Each sprite is in the group `secret_far_tell` (or `_near`) |
+| solid ground | `SecretSite.SolidFootprints`, `SecretDirector.StampChunk` | circles stamped into the chunk's navigation flags as a fence is (`TerrainStreamer.FlagFence`) every time the chunk's data is made (`Node2DGame.PlanChunkFeatures` calls it), so the flow field routes the horde round, nothing spawns or drops inside, and a shot still flies over. The body that stops boots and bodies is the site's own `StaticBody2D` on `LevelTilePainter.TerrainCollisionLayer` |
+| strike | `StrikeListener`, `Breakable` | extracted from the thaw, which counts through `StrikeListener` and draws its cracks with `Breakable.DrawCracks` exactly as before. `StrikeListener`: damage landed on enemies within a radius of a point (`Player.EnemyDamagedAt`), weighted per spell. `Breakable`: a node with `Needed`, `Reach`, `StageCount` crack stages, its progress in a run state, listening only while the player is near and the owner allows (`CanProgress`), drawn from a strip (whole, each stage, broken) or in code; `Broke` fires the frame after the last hit, never inside it |
+| follow | `SecretMover` | moves ahead along a path when he comes within `StartleRadius`, waits facing him, settles at the end; goes home if he wanders `LeashRadius` off. `SecretMover.LayPath(placer, ...)` lays the path in `LayOut`. Draws a warm wisp unless the owner draws the figure |
+| gather | `SecretGather` | touch every point of a set, in any order (`State.Marks`, a bit a point, up to 64). `SecretGather.AlongTrail(placer, ...)` strews them along a line |
+| lure | `SecretLure` | an ordinary enemy whose feet enter the zone is taken - out of `"enemies"` that frame, freed, no XP and no kill - and counted to `Needed`. Never an elite or a boss. The hazard to the player the Swallow-Hole also is, is the vault's own rule |
+| carry | `SecretSeed` | still the Forest's; generalise it when the second carry secret is built |
+
+**Not built, and the one shared edit still to come:** the per-chunk *scatter* of section 7.2 - common
+secrets at a probability per super-cell in a band (the Fairy Ring, the Struck Oak, the Peat Bank). The
+first chapter that needs one adds `SecretPlacement.Scatter` to `SecretDirector.FurnishChunk` (the hook
+is already there: a scattered site is a node in the chunk's holder, keyed by its super-cell).
+
+### 13.2 Adding a secret (the recipe)
+
+1. **The entry**, in your chapter's file `scripts/SecretCatalog.<Chapter>.cs` - never `SecretCatalog.cs`.
+   A vault: A1 wrote it down already; build it with `Vault(...) with { IsBuilt = true, CreateSite = () =>
+   new global::MyVault() }` (it is placed as `Vault` with `SecretCatalog.VaultFootprint` by default).
+   Anything else: a `new SecretDefinition { ... }` with its `Placement` (`Anchor`, `Keepsake` or `Custom`),
+   `Footprint`, and `CreateSite` (or, for `Custom`, `Install`). Words: a `SeenLine` that says what is
+   seen and never what to do, a `FoundLine`, a `RunReward` for the toast (and a `RepeatReward` if a later
+   find pays something else). What it may pay is sections 3 and `.ai/achievements-and-secrets.md` 6.2;
+   `ValidateSecretCatalog` holds it.
+2. **The node**, `scripts/<Name>.cs`: a `SecretSite` (a vault: `SecretVault`), code-made, no scene, never
+   in `"enemies"`. Its progress lives in `State` or `Director.StateOf(Key + "/part")`, never in a field
+   that must outlive a chunk. Its near tell is `DrawGlint` (or its own breathing light, never a flicker).
+   It checks `Active` (the secrets stand down with the boss; rewards in flight are still paid). It pays
+   through `Director.Found(SecretId)` - a vault through `Open(at)` - and any chest through
+   `Director.PayChest`. Anything it draws that flies goes on `DrawLayers.Air` with `ZAsRelative = false`.
+3. **The verb**: strike is a `Breakable` child (or a `StrikeListener`); follow a `SecretMover` with a
+   path from `SecretMover.LayPath` in `LayOut`; gather a `SecretGather` (`AlongTrail`); lure a
+   `SecretLure`; circle is the Fenced Bloom's angle accumulator; linger and touch are a distance and a
+   timer in the node's own `_Process`.
+4. **What a placed site asks of the ground**: `LayOut(placer)` for anything else seeded (draw it from
+   that placer, and its footprints are reserved for you); `SolidFootprints` and your own body on the
+   terrain layer if it stops feet; `FarTell` as one `static readonly SecretFarTell` (it caches its
+   textures).
+5. **Art**: `tools/art/secret_<chapter>.py`, standalone like `tools/art/secret_cave.py`, writing to
+   `assets/bonelight/world/<chapter>/`, audited against the palette, runnable on Python 3.13 with 2.7
+   syntax. Then `--import`, and commit the `.import` and `.uid` sidecars.
+6. **Sound**: `secret_seen`, `secret_found` and `meta_unlock` are the director's. A sound of the
+   secret's own goes through `SfxCatalog` (the Geode Heart's `secret_shatter`).
+7. **Check**: `dotnet build`; the validator; a photograph beside the spawn (`_UiShot --scene=res://scenes/node_2d_game.tscn
+   --stage=N --secret=<id> --goto=secret --hold`, and `--secret-stage=N` for a breakable's stages); and
+   the headless walk - `--secret-probe` runs `VaultProbe` on any chapter with a built vault (it walks to
+   `Director.Vault` and works a `Breakable` named `Crystal`; a vault with another verb adds its branch
+   there). Before a vault ships: `_BalanceHarness --seek-apotheosis --all-unlocked --immortal`.
+
+### 13.3 The Geode Heart, driven
+
+`--secret=geode_heart` stands it a quarter-chunk east of the spawn; `--goto=secret --hold` stands the
+wizard 170 px south of its foot; `--secret-stage=1|2|3|4` poses it (4 breaks it: the shatter, the light,
+the toast). `--secret-probe --stage=2 --fresh-save --terrain-seed=N` walks a fixed seed from the start to
+the real placement and checks, in order: placed five to seven chunks out; never a target; its foot solid
+in the grid; unseen on the way in (a step outside the 450 px) and seen at its foot, with the mark on the save; the far tell
+denser within a chunk than beyond it, the cracked clusters only near; a hit beyond its reach counting for
+nothing; hits within it cracking it through every stage to broken; the witnesses in the ring frozen;
+then the vault opened, found and its deed recorded, Frost Shard owned and in the level-up pool and not
+in the loadout, and no chest. With `--all-unlocked` instead of `--fresh-save` it checks a later run: a
+chest from the budget and nothing granted.

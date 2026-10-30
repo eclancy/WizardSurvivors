@@ -69,7 +69,8 @@ public enum SecretPlacement
 }
 
 /// <summary>One stage secret: what it is called, where it lives, how it is worked and what it pays.</summary>
-public sealed class SecretDefinition
+/// <remarks>A record so a chapter can build on A1's written-down vault with <c>with</c> (<see cref="SecretCatalog"/>'s Vault).</remarks>
+public sealed record SecretDefinition
 {
 	public required string Id { get; init; }
 	/// <summary>A StageCatalog id - the chapter it belongs to.</summary>

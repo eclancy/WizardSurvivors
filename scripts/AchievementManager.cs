@@ -96,8 +96,8 @@ public static class AchievementManager
 			PayCurrency(data, definition, summary);
 
 			// A deed completed in the run (a side event, a secret) was announced there, by its own beat,
-			// and normally recorded there too (CompleteNow), so it only arrives here when its in-run path
-			// did not record it - a secret found before piece A4 wires SecretDirector to CompleteNow, say.
+			// and recorded there too (CompleteNow - SecretDirector.Found calls it since piece A4), so it only
+			// arrives here when its in-run path did not record it - a secret found on an older build, say.
 			// It is recorded now and its unlock granted; it gets a card only for a thing it granted.
 			if (definition.CompletesInRun && granted.Count == 0 && definition.CurrencyReward <= 0)
 				continue;

@@ -84,18 +84,24 @@ public sealed class SecretFarTell
 			bool cracked = near.Length > 0 && d < NearRadius && nearRoll < NearShare * (1f - (d - InnerRadius) / nearSpan);
 			Texture2D texture = cracked ? near[nearIndex] : far[farIndex];
 			// Stood on its foot, so the chunk holder's y-sort puts the wizard in front of it south of it.
-			parent.AddChild(new Sprite2D
+			var sprite = new Sprite2D
 			{
-				Name = "SecretFarTell",
+				Name = cracked ? "SecretFarTellNear" : "SecretFarTell",
 				Texture = texture,
 				Centered = true,
 				Position = at.Round(),
 				Offset = new Vector2(0f, -texture.GetHeight() * 0.5f + FootFromBottom),
 				Scale = new Vector2(scale, scale),
 				FlipH = flip,
-			});
+			};
+			sprite.AddToGroup(cracked ? GroupNear : Group);
+			parent.AddChild(sprite);
 		}
 	}
+
+	/// <summary>Every far tell's sprite is in one of these, so a probe can count the gradient.</summary>
+	public const string Group = "secret_far_tell";
+	public const string GroupNear = "secret_far_tell_near";
 
 	private bool Reaches(Rect2 rect, Vector2 site)
 	{
