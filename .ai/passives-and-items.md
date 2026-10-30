@@ -327,7 +327,7 @@ without a percentage as the subject of the sentence - "slowed enemies are vulner
 
 | item | rarity | what it changes | reads |
 |---|---|---|---|
-| Cracked Prism | Uncommon | +1 projectile, all damage x0.75 | `Player.ApplyChestItemEffect` |
+| Cracked Prism (Split Lens) | Uncommon | +1 projectile, and x0.75 damage to the spells that projectile reaches - no others (0.9.3) | `Player.AmountFor`, `Player.GetSplitLensMultiplier` |
 | Duellist's Chalk | Uncommon | hits on unwounded enemies always crit | `Player.DealDamageToEnemy` |
 | Hoarfrost Nail | Rare (Ice) | slowed or rooted enemies take +25% from everything | `Enemy.IsSlowed` |
 | Wormwood Tithe | Relic (Darkness, Grass) | the gap between spawns drops to 0.72x (about 39% more enemies) and they move 10% faster; +30% XP, +5% bigger XP orbs (was +25% chests - section 8), +3 Luck | `Node2DGame` spawn clock and speed ramp |
@@ -337,6 +337,18 @@ Three things worth keeping in mind about this group:
 - **Cracked Prism is the only item in the game that makes a number go down.** More shots that each
   hit softer is better for wide spells and worse for single heavy ones, which makes it a decision
   rather than a pickup. The roster had no genuine trades before it.
+  **Since 0.9.3 both halves land on the same spells.** Eric, playing 0.9.2: *"there is a relic that adds
+  1 to projectile count but reduced spell damage. it should only reduce damage of spells that are
+  affected by the projectile count."* The +1 is the player-wide Amount (the shop's Twinstar Sigil reads
+  the same field), and only 16 of the 35 spells add Amount to anything - the rest (Hollow Star, Fireball,
+  Cinderbreath, the walls, the fields, Familiar, Spiritual Weapon...) paid 25% for nothing. Which spells
+  read it is `EvolutionStat.Amount` on each one's `EvolutionStatReaders` row, and that one row decides
+  both halves: `Player.AmountFor`, the only way a cast site reaches Amount, pays only a spell whose row
+  has it (and reports, once, a spell that asks without it), and `GetSplitLensMultiplier` charges only
+  the same spells. A milestone that stops a spell reading Amount is named on its row
+  (`ExceptAmountUnder`: Gravewell's Mass Grave, one grave whatever the count), and frees it from the
+  lens while held. `RegressionChecks.ValidateAmountReaders` gives a Player that never enters a tree the
+  lens and holds every spell form to "charged exactly when paid".
 - **Duellist's Chalk keys off the target, not the caster.** It rewards spreading damage onto fresh
   enemies, which is deliberately the opposite instinct to Deathbringer's execute - two items that
   pull a build in opposite directions are worth more than two that agree.

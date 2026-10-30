@@ -544,6 +544,10 @@ public static class ChestItemCatalog
 	public const string ScribesPenknifeDescription =
 		"Cut 1 held spell out of your spell book: its slot is free again, and it is not offered again this run. Your wizard's own spell cannot be cut.";
 
+	// The Split Lens's number comes from Player, where it is charged (GetSplitLensMultiplier).
+	public static readonly string SplitLensDescription =
+		$"+1 projectile to spells that fire them, and -{Mathf.RoundToInt((1f - Player.SplitLensDamageMultiplier) * 100f)}% damage to those spells only.";
+
 	public static string GetDescription(string itemId)
 	{
 		return itemId switch
@@ -582,7 +586,9 @@ public static class ChestItemCatalog
 			FrozenTear => "+40% ice duration, +15% slow strength.",
 			Thunderstone => "+50% lightning chain range, chains trigger 1 hit sooner.",
 			CrystalPrism => "+30% damage from spells that carry only one element.",
-			CrackedPrism => "+1 projectile, -25% spell damage.",
+			// Both halves land on the same spells (0.9.3: "it should only reduce damage of spells that are
+			// affected by the projectile count") - the ones the shop's Twinstar Sigil reaches, in its words.
+			CrackedPrism => SplitLensDescription,
 			DuellistsChalk => "Always crits an enemy at full health.",
 			HoarfrostNail => "+25% damage to slowed or rooted enemies.",
 			// "+25% more chests" became bigger orbs when chests stopped coming on a clock.

@@ -10,11 +10,18 @@
 ;
 ; Effect 7 (AreaSize) widens the pull reach in pixels; Effect 13 (ZoneDuration) lengthens the pull
 ; in seconds. Both are read in Player.FireHollowStar.
+;
+; 0.9.3 (Eric's playtest of 0.9.2: "reduce the cooldown on hollow star, it's very powerful" - read as
+; fire LESS often): cooldown 4.5 -> 6.0 s (5.1 at level 8, was 3.6). The damage line 18 / +5 / +6 / +8
+; -> 8 / +2 / +3 / +8 (10 at level 4, 13 at 6, 21 at 8): what the collapse deals at its core, falling
+; to about a third at its edge (HollowStar.ShareAt), so a knotted enemy takes 10 at level 4 where it
+; took 23. In the 8-minute bot the spell kills all it catches, so its damage a second follows
+; the hit, not the cooldown - the longer cooldown only lets more gather. .ai/spell-roster.md section 2e.
 
 [sub_resource type="Resource" id="Resource_hollow_lvl2"]
 script = ExtResource("2")
 Level = 2
-DamageBonus = 5
+DamageBonus = 2
 
 [sub_resource type="Resource" id="Resource_hollow_lvl3"]
 script = ExtResource("2")
@@ -25,7 +32,7 @@ EffectValue = 25.0
 [sub_resource type="Resource" id="Resource_hollow_lvl5"]
 script = ExtResource("2")
 Level = 5
-DamageBonus = 6
+DamageBonus = 3
 CooldownBonus = -0.4
 
 [sub_resource type="Resource" id="Resource_hollow_lvl6"]
@@ -46,12 +53,12 @@ Id = "hollow_star"
 Name = "Hollow Star"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 18
-BaseCooldown = 4.5
+BaseDamage = 8
+BaseCooldown = 6.0
 BaseProjectileCount = 1
 BaseRange = 360.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_hollow_lvl2"), SubResource("Resource_hollow_lvl3"), SubResource("Resource_hollow_lvl5"), SubResource("Resource_hollow_lvl6"), SubResource("Resource_hollow_lvl8")])
-Description = "Opens a dark well in the thick of the swarm that drags everything nearby into one knot, then collapses on it."
+Description = "Opens a dark well in the swarm, never on you, that drags everything nearby into one knot, then collapses on it - hardest at its core."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Darkness": 1

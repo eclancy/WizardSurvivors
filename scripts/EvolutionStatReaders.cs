@@ -25,6 +25,12 @@ public enum EvolutionStat
 	// Effect and EffectValue. Which effects a spell reads is a list of its own (SpellStatReaders.Effects);
 	// this flag only names the field in a report and in KnownUnbuilt.
 	Effect = 1 << 14,
+	// Not a card's field: the player-wide Amount - the Arcane Codex's Twinstar Sigil and the Split Lens
+	// relic - added to the spell's own count through Player.AmountFor. It decides both halves of the lens's
+	// trade (0.9.3, Eric: "it should only reduce damage of spells that are affected by the projectile
+	// count"): AmountFor pays the +1 only to a spell whose row has it, and GetSpellDamageMultiplier charges
+	// the -25% only to the same spells (SpellStatReaders.ReadsAmount).
+	Amount = 1 << 15,
 }
 
 /// <summary>What one spell's script reads of the options its milestones grant, and where.</summary>
@@ -44,6 +50,34 @@ public sealed class SpellStatReaders
 	public IReadOnlyList<SpellEffect> Effects => effects;
 
 	public bool ReadsEffect(SpellEffect effect) => Array.IndexOf(effects, effect) >= 0;
+
+	private string[] amountDroppedBy = Array.Empty<string>();
+
+	/// <summary>Milestones under which the spell no longer adds Amount to anything (Gravewell's Mass Grave).</summary>
+	public IReadOnlyList<string> AmountDroppedBy => amountDroppedBy;
+
+	/// <summary>Names the milestones whose cast path stops reading Amount. Used once, in the table below.</summary>
+	public SpellStatReaders ExceptAmountUnder(params string[] evolutionIds)
+	{
+		amountDroppedBy = evolutionIds ?? Array.Empty<string>();
+		return this;
+	}
+
+	/// <summary>
+	/// Whether this spell, holding the milestones it holds now, adds the player-wide Amount to its count:
+	/// its row has EvolutionStat.Amount and no milestone it holds drops it.
+	/// </summary>
+	public bool ReadsAmount(SpellData spell)
+	{
+		if ((Stats & EvolutionStat.Amount) == 0)
+			return false;
+		foreach (string id in amountDroppedBy)
+		{
+			if (spell != null && spell.HasEvolution(id))
+				return false;
+		}
+		return true;
+	}
 }
 
 /// <summary>A number a card promises that its spell never built, kept visible until it is.</summary>
@@ -75,6 +109,12 @@ public readonly record struct UnbuiltPromise(string OptionId, EvolutionStat Stat
 ///     where an element path's rider (and a per-spell CritDamage) applies.
 ///   - Effects: the SpellEffect values the spell asks its SpellData for (GetEffectValueAtLevel,
 ///     HasEffectFlag), plus CritDamage for every spell that passes its source.
+///   - Amount: the spell's cast adds the player-wide Amount to its count, through Player.AmountFor and
+///     nowhere else. No card sets it; it is what the Split Lens relic's -25% damage is charged on, so a
+///     spell the lens cannot give a projectile is never made to pay for one. AmountFor gives a spell
+///     without it nothing and reports it, so a cast path that starts reading Amount shows up the first
+///     time it fires; a path that stops reading it takes the flag off its row (or, for one milestone,
+///     names that milestone in ExceptAmountUnder). RegressionChecks.ValidateAmountReaders checks the rest.
 /// </remarks>
 public static class EvolutionStatReaders
 {
@@ -93,9 +133,10 @@ public static class EvolutionStatReaders
 	};
 
 	// ChainLightning.cs, which Shadow Bolt's scene runs too.
-	// Area is the jump (ChainLightning.SpawnBranches), since 2026-10-26.
+	// Area is the jump (ChainLightning.SpawnBranches), since 2026-10-26. Amount deepens the arc
+	// (ChainLightning.ProjectileCountBonus, handed over by Player.FireChainLightningSpell and FireBoltSpell).
 	private const EvolutionStat Chain = Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.ChainArcs
-		| EvolutionStat.ChainBranches | EvolutionStat.PoisonTick | EvolutionStat.Scale | EvolutionStat.Rider;
+		| EvolutionStat.ChainBranches | EvolutionStat.PoisonTick | EvolutionStat.Scale | EvolutionStat.Rider | EvolutionStat.Amount;
 	private static readonly SpellEffect[] ChainEffects =
 	{
 		SpellEffect.CritChance, SpellEffect.SlowPower, SpellEffect.Vulnerability, SpellEffect.Chain, SpellEffect.DotDamage,
@@ -107,8 +148,8 @@ public static class EvolutionStatReaders
 	private static readonly Dictionary<string, SpellStatReaders> BySpell = new(StringComparer.OrdinalIgnoreCase)
 	{
 		["magic_missile"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
-				| EvolutionStat.Scale | EvolutionStat.Rider,
-			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess (Area also sizes the Arcane Orb and the Overcharge burst; Threaded Needle, Overcharge and Arcane Orb by id, through StaticCharges)",
+				| EvolutionStat.Scale | EvolutionStat.Rider | EvolutionStat.Amount,
+			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess (Amount is more missiles; Area also sizes the Arcane Orb and the Overcharge burst; Threaded Needle, Overcharge and Arcane Orb by id, through StaticCharges)",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.ExplosionOnHit, SpellEffect.SplitOnHit,
 			SpellEffect.Pierce, SpellEffect.CritChance, SpellEffect.CritDamage),
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
@@ -148,20 +189,23 @@ public static class EvolutionStatReaders
 		["gale_blade"] = R(Bolt, "ElementalBolt (Returning; Eddy, Hooked Throw, Live Wire, Thunderhead and Squall by id)", BoltEffects),
 		["riptide"] = R(Bolt, "ElementalBolt, RiptideWave and Player.FireBoltSpell (Knockback is Breaker's; Groundswell and Trident by id)", BoltEffects),
 		["molten_shard"] = R(Bolt, "ElementalBolt, MoltenSlag and Player.FireBoltSpell (projectiles are Forge Swarm's forged shards; Slag Trail, Splitting Shard, Magma Core and Caldera by id)", BoltEffects),
-		["hunters_draw"] = R(Bolt, "ElementalBolt, ArrowRain and Player.LooseHuntersVolley (Knockback is Heavy Draw's, on a full draw; Running Shot, Barbed, Rain of Arrows and Hunter's Mark by id)", BoltEffects),
+		// The one bolt that reads Amount (more arrows a volley); the other three never have.
+		["hunters_draw"] = R(Bolt | EvolutionStat.Amount, "ElementalBolt, ArrowRain and Player.LooseHuntersVolley (Amount is more arrows a volley; Knockback is Heavy Draw's, on a full draw; Running Shot, Barbed, Rain of Arrows and Hunter's Mark by id)", BoltEffects),
 		["aegis_ward"] = R(Core,
 			"the aegis_ward branch of Player._PhysicsProcess: damage is the shield, cooldown the recharge; Player.CrystalShellBurst on a break"),
 		["void_lance"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale,
 			"VoidLance.RefreshComputedStats and CollapseAtTerminus (hit at its drawn scale; Area is the collapse; its hits pass their source since 2026-10-28, but no card of its carries a rider; Abyssal Scar, Void Glaive, Dread and Witching Hour by id, through VoidScars and Player.FireVoidLanceSpell)",
 			SpellEffect.ZoneDuration),
-		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
-			"OrbitingBlade.RefreshComputedStats and PullTowardRing (the gust then scales the orbit it computes); persistent, so its cooldown only refreshes it and it is never re-scaled; Twin Gyres' inner ring, Wind Shear's crescents and Typhoon Core by id",
+		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider
+				| EvolutionStat.Amount,
+			"OrbitingBlade.RefreshComputedStats and PullTowardRing (Amount is more blades; the gust then scales the orbit it computes); persistent, so its cooldown only refreshes it and it is never re-scaled; Twin Gyres' inner ring, Wind Shear's crescents and Typhoon Core by id",
 			SpellEffect.VortexPull, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove; Sun Dogs, Solar Prominence, Daybreak's ward and Corona's beams by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
-		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale; Crushing Grip's coils and Fling by id, Soul Drain's wisps on its Lifesteal)",
+		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider
+				| EvolutionStat.Amount,
+			"BlackTentacles.cs (Amount is more tentacles, its TentacleBonus; the rift is drawn at the radius it slows, so no visual scale; Crushing Grip's coils and Fling by id, Soul Drain's wisps on its Lifesteal)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.SlowPower, SpellEffect.SlowDuration,
 			SpellEffect.RootDuration, SpellEffect.Lifesteal, SpellEffect.VortexPull, SpellEffect.CritDamage),
 		["thorn_vine"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
@@ -171,14 +215,17 @@ public static class EvolutionStatReaders
 		["cone_of_cold"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ConeBlast.cs and Player.FireConeBlast (which drops the visual scale; Arctic Blast's half-moon and Zero Point's relayed second cone by id)",
 			SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.CritDamage),
-		["obsidian_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"GroundSpike.cs and Player.FireGroundSpike (the cracks, chips and splinters are drawn out of the radius it hits, so no visual scale; Splinter Field, Deep Strata's throw, Tectonic Uprising's vents and Basalt Lance by id)",
+		["obsidian_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider
+				| EvolutionStat.Amount,
+			"GroundSpike.cs and Player.FireGroundSpike (Amount is more spikes; the cracks, chips and splinters are drawn out of the radius it hits, so no visual scale; Splinter Field, Deep Strata's throw, Tectonic Uprising's vents and Basalt Lance by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
-		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
+		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider
+				| EvolutionStat.Amount,
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
 			SpellEffect.Burn, SpellEffect.AreaSize, SpellEffect.CritDamage),
-		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star and a shooting star's line, never the rain; Shooting Stars, Skipping Stars, Starburst and Constellation by id)",
+		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider
+				| EvolutionStat.Amount,
+			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count plus Amount; Area sizes each star and a shooting star's line, never the rain; Shooting Stars, Skipping Stars, Starburst and Constellation by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		// The Familiar is read by FORM too (the dog, the crow, the cat): one script, but what reaches a strike
 		// differs by creature. The spell's own row is the template's, which no run plays.
@@ -199,24 +246,25 @@ public static class EvolutionStatReaders
 		// The facing family (.ai/spell-roster.md). Neither reads Scale: the arc is drawn out of the band
 		// it sweeps, and the rune sheet is drawn at one size.
 		["stormsweep"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
-				| EvolutionStat.Rider,
-			"Stormsweep.Cast and the fire loop (sweeps are the projectile count; Range is the arc's length, Area its length and band, Speed its tempo)",
+				| EvolutionStat.Rider | EvolutionStat.Amount,
+			"Stormsweep.Cast and the fire loop (sweeps are the projectile count plus Amount; Range is the arc's length, Area its length and band, Speed its tempo)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["sleet_runes"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Pierce | EvolutionStat.Speed
-				| EvolutionStat.Rider,
-			"SleetRunes.Cast and the fire loop (runes are the projectile count; Range is how far one flies, Speed scales its speed)",
+				| EvolutionStat.Rider | EvolutionStat.Amount,
+			"SleetRunes.Cast and the fire loop (runes are the projectile count plus Amount; Range is how far one flies, Speed scales its speed)",
 			SpellEffect.ProjectileSpeed, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["toxic_spore_burst"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
-				| EvolutionStat.PoisonTick | EvolutionStat.Rider,
-			"SporeMushroom.For and Player.FireSporeMushrooms (drops the visual scale)",
+				| EvolutionStat.PoisonTick | EvolutionStat.Rider | EvolutionStat.Amount,
+			"SporeMushroom.For and Player.FireSporeMushrooms (Amount is more mushrooms; drops the visual scale)",
 			SpellEffect.AreaSize, SpellEffect.DotDamage, SpellEffect.CritDamage),
 
 		// The thirteen that left the default archetype (SpellEvolutionCatalog, "The default archetype,
 		// spell by spell"). None reads Scale: each draws itself out of the radius it hits.
+		// Amount is more graves a cast - except under Mass Grave, which digs one great grave whatever the count.
 		["gravewell"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
-				| EvolutionStat.Rider,
-			"GravewellTrap.For and Player.FireGravewellTrap (Bone Spikes, Quickset, Grave Chill, Mass Grave and Grave Line by id, through ThrownShards and GravePath)",
-			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage),
+				| EvolutionStat.Rider | EvolutionStat.Amount,
+			"GravewellTrap.For and Player.FireGravewellTrap (Amount is more graves, but not under Mass Grave; Bone Spikes, Quickset, Grave Chill, Mass Grave and Grave Line by id, through ThrownShards and GravePath)",
+			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage).ExceptAmountUnder(GravewellTrap.MassGraveId),
 		["hollow_star"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
 			"Player.FireHollowStar and OpenHollowStar, HollowStar.Collapse (Projectiles are wells - Twin Stars' pair; Crush, Twin Stars' drift, Black Sun and Nova Seed by id in HollowStar)",
@@ -233,16 +281,17 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Rider,
 			"Player.FireIronPalisade and RaiseIronPalisade (Projectiles are walls; Spiked Rail, Caltrops, Iron Ring and Rolling Wall by id in IronPalisade)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
-		["kindled_ward"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
-			"Player.FireKindledWard (it has no reach to cast within; Flare, Wisp Trail and Kindling Flock by id, in KindledWard and WardWisps)",
+		["kindled_ward"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider
+				| EvolutionStat.Amount,
+			"Player.FireKindledWard (Amount raises how many wards may stand; it has no reach to cast within; Flare, Wisp Trail and Kindling Flock by id, in KindledWard and WardWisps)",
 			SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["glacial_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
-				| EvolutionStat.Rider,
-			"IceSpike.RefreshComputedStats and Player.FireIceSpikes (Shatter, Spike Run, Rimefoot, Glacier Crown and Frozen Spire by id, through ThrownShards, FrostPatch and GlacierCrown)",
+				| EvolutionStat.Rider | EvolutionStat.Amount,
+			"IceSpike.RefreshComputedStats and Player.FireIceSpikes (Amount is more spikes; Shatter, Spike Run, Rimefoot, Glacier Crown and Frozen Spire by id, through ThrownShards, FrostPatch and GlacierCrown)",
 			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage),
 		["scorching_ray"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
-				| EvolutionStat.Speed | EvolutionStat.Rider,
-			"ScorchingRayBeam.RefreshComputedStats and Player.FireScorchingRay (Area is the burst; Flashpoint, Handoff, Burn Through, Prism and Sunlance by id)",
+				| EvolutionStat.Speed | EvolutionStat.Rider | EvolutionStat.Amount,
+			"ScorchingRayBeam.RefreshComputedStats and Player.FireScorchingRay (Amount is more rays; Area is the burst; Flashpoint, Handoff, Burn Through, Prism and Sunlance by id)",
 			SpellEffect.CritChance, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["cinderbreath"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
@@ -270,6 +319,12 @@ public static class EvolutionStatReaders
 			return true;
 		return TryGet(spell.Id, out readers);
 	}
+
+	/// <summary>
+	/// Whether this spell as it is (its form, its milestones) adds the player-wide Amount to its count: what
+	/// Player.AmountFor pays out by and what the Split Lens charges by. False for a spell with no row.
+	/// </summary>
+	public static bool ReadsAmount(SpellData spell) => TryGet(spell, out SpellStatReaders readers) && readers.ReadsAmount(spell);
 
 	/// <summary>Whether a form has a row of its own (RegressionChecks.ValidateSpellVariants).</summary>
 	public static bool HasRow(string id) => !string.IsNullOrEmpty(id) && BySpell.ContainsKey(id);
