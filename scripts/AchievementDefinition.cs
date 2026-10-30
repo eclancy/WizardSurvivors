@@ -235,6 +235,10 @@ public static class AchievementDefinitions
 			Description = "Defeat Wizard Dude in the Sketchbook.",
 			RewardText = "400 Arcane Energy", CurrencyReward = 400,
 			Category = AchievementCategory.Exploration,
+			// Its boss, like every other chapter clear's, so StageRewards finds what the Sketchbook pays
+			// by the same rule (.ai/world-map.md, section 9). Outside the campaign, so InCampaignOrder
+			// keeps it last among the clears, which is where it already stood.
+			BossId = "kid_wizard",
 			Measure = c => c.Lifetime.HasDefeatedBoss("kid_wizard") ? 1f : 0f,
 			Target = 1,
 		},

@@ -36,6 +36,8 @@ public static class RegressionChecks
 		ValidateCycloneGust(warnings);
 		ValidateFear(warnings);
 		ValidateSecretCatalog(warnings);
+		ValidateStageRewards(warnings);
+		ValidateWorldMap(warnings);
 		ValidateBossRush(warnings);
 		ValidateHazardPlacement(warnings);
 		ValidateFamiliar(warnings);
@@ -324,6 +326,186 @@ public static class RegressionChecks
 		foreach (var (stageId, count) in keepsakesByStage)
 			if (count > 1)
 				warnings.Add($"Secrets: {stageId} has {count} keepsakes; a chapter has one.");
+	}
+
+	// WHAT EACH CHAPTER HOLDS (StageRewards, .ai/world-map.md section 9) is what the world map's card
+	// shows as silhouettes. It is derived from four catalogs, and each of them can grow a chapter's
+	// unlock that the derivation does not see: a discovery at a site no side event stands on, a reveal
+	// chapter that is not a chapter, a deed for a boss with no chapter. Each is checked against the list.
+	// Then the prose net: an unlock whose hint (or whose deed's description) NAMES a chapter must be on
+	// that chapter's card. That is the check that would catch a new deed tied to a place in words but
+	// not in data - the Coursing without its RevealStageId, say - which every other rule here would miss.
+	private static void ValidateStageRewards(List<string> warnings)
+	{
+		IReadOnlyList<StageReward> all = StageRewards.All;
+		bool Has(string stageId, string id) => all.Any(r =>
+			r.StageId.Equals(stageId, StringComparison.OrdinalIgnoreCase) && r.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+		foreach (UnlockDefinition found in UnlockCatalog.All.Where(d => d.Source == UnlockSource.Discovery))
+		{
+			List<StageDefinition> sites = StageCatalog.All
+				.Where(s => string.Equals(global::SideEventDirector.ForStage(s.Id)?.SiteId, found.SourceId, StringComparison.OrdinalIgnoreCase))
+				.ToList();
+			if (sites.Count != 1)
+				warnings.Add($"Stage rewards: '{found.Id}' is found at site '{found.SourceId}', which {(sites.Count == 0 ? "no chapter's side event stands on" : $"{sites.Count} chapters' side events stand on")}, so no single chapter's card can show it.");
+			else if (!Has(sites[0].Id, found.Id))
+				warnings.Add($"Stage rewards: '{found.Id}' is found in {sites[0].DisplayName} but its card does not list it.");
+		}
+
+		foreach (UnlockDefinition revealed in UnlockCatalog.All.Where(d => !string.IsNullOrWhiteSpace(d.RevealStageId)))
+		{
+			StageDefinition stage = StageCatalog.GetById(revealed.RevealStageId);
+			if (stage == null)
+				warnings.Add($"Stage rewards: '{revealed.Id}' is revealed by '{revealed.RevealStageId}', which is not a chapter.");
+			else if (!Has(stage.Id, revealed.Id))
+				warnings.Add($"Stage rewards: '{revealed.Id}' is tied to {stage.DisplayName} but its card does not list it.");
+		}
+
+		foreach (AchievementDefinition deed in AchievementDefinitions.All.Where(d => !string.IsNullOrWhiteSpace(d.BossId)))
+		{
+			BossDefinition boss = BossCatalog.GetById(deed.BossId);
+			int index = boss != null ? BossCatalog.StageIndexOf(boss) : -1;
+			if (index < 0)
+			{
+				warnings.Add($"Stage rewards: the deed '{deed.Id}' is for boss '{deed.BossId}', who has no chapter.");
+				continue;
+			}
+			StageDefinition stage = StageCatalog.GetByIndex(index);
+			foreach (string id in RewardIdsOf(deed))
+			{
+				if (!Has(stage.Id, id))
+					warnings.Add($"Stage rewards: {stage.DisplayName}'s warden pays '{id}' ('{deed.Id}') but its card does not list it.");
+			}
+		}
+
+		foreach (SecretDefinition secret in SecretCatalog.All)
+		{
+			if (StageCatalog.GetById(secret.StageId) != null && !Has(secret.StageId, secret.Id))
+				warnings.Add($"Stage rewards: the secret '{secret.Id}' is in {secret.StageId} but its card does not list it.");
+		}
+
+		// The prose net.
+		var texts = new List<(string Text, IEnumerable<string> Ids)>();
+		foreach (UnlockDefinition unlock in UnlockCatalog.All.Where(d => d.Source != UnlockSource.Starter))
+			texts.Add((unlock.LockedHint, new[] { unlock.Id }));
+		foreach (AchievementDefinition deed in AchievementDefinitions.All)
+		{
+			List<string> ids = RewardIdsOf(deed).ToList();
+			if (ids.Count > 0)
+				texts.Add((deed.Description, ids));
+		}
+		foreach (var (text, ids) in texts)
+		{
+			if (string.IsNullOrWhiteSpace(text))
+				continue;
+			foreach (StageDefinition stage in StageCatalog.All)
+			{
+				string name = stage.DisplayName.StartsWith("The ", StringComparison.Ordinal) ? stage.DisplayName.Substring(4) : stage.DisplayName;
+				if (text.IndexOf(name, StringComparison.OrdinalIgnoreCase) < 0)
+					continue;
+				foreach (string id in ids)
+				{
+					if (!Has(stage.Id, id))
+						warnings.Add($"Stage rewards: '{id}' is described as {stage.DisplayName}'s (\"{text}\") but is not on its card - tie it to the chapter in data (a boss deed, a side-event site, or RevealStageId).");
+				}
+			}
+		}
+
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (StageReward reward in all)
+		{
+			if (!seen.Add(reward.ToString()))
+				warnings.Add($"Stage rewards: {reward} is listed twice.");
+		}
+		foreach (StageDefinition stage in StageCatalog.All.Where(s => s.IsPlayable))
+		{
+			if (!all.Any(r => r.StageId.Equals(stage.Id, StringComparison.OrdinalIgnoreCase)))
+				warnings.Add($"Stage rewards: {stage.DisplayName} holds nothing, so its card has no row - give its boss a deed.");
+		}
+	}
+
+	private static IEnumerable<string> RewardIdsOf(AchievementDefinition deed)
+	{
+		if (!string.IsNullOrWhiteSpace(deed.SpellUnlockId))
+			yield return deed.SpellUnlockId;
+		if (!string.IsNullOrWhiteSpace(deed.BoonUnlockId))
+			yield return deed.BoonUnlockId;
+		if (!string.IsNullOrWhiteSpace(deed.CharacterUnlockId))
+			yield return deed.CharacterUnlockId;
+		// Arcane Energy is listed under the deed's own id, but only for a chapter's own deed: a
+		// lifetime-total deed that pays Energy belongs to no chapter and names none.
+		if (deed.CurrencyReward > 0 && !string.IsNullOrWhiteSpace(deed.BossId))
+			yield return deed.Id;
+	}
+
+	// THE WORLD MAP'S GEOMETRY is generated (tools/art/world_map.py -> worldmap.json), so a chapter
+	// added to StageCatalog is on no map until somebody places it - and the screen would quietly leave
+	// it out. Every chapter and the Boss Rush must have a stop; the road must visit the campaign in its
+	// order, the seat after the last chapter, and the chapters outside the campaign after everything;
+	// the Sketchbook lies off the world picture (.ai/world-map.md, section 4); and every picture the
+	// screen draws must exist.
+	private static void ValidateWorldMap(List<string> warnings)
+	{
+		WorldMapLayout map = WorldMapLayout.Load(out string problem);
+		if (map == null)
+		{
+			warnings.Add($"World map: {problem}");
+			return;
+		}
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			if (map.Get(stage.Id) == null)
+				warnings.Add($"World map: {stage.DisplayName} ({stage.Id}) has no place on the map - add it to PLACES in tools/art/world_map.py and draw its landmark.");
+		}
+		WorldMapStop rush = map.Get(WorldMapLayout.BossRushId);
+		if (rush == null)
+			warnings.Add("World map: the Boss Rush has no place on the map.");
+
+		float last = -1f;
+		foreach (StageDefinition stage in StageCatalog.Campaign)
+		{
+			WorldMapStop stop = map.Get(stage.Id);
+			if (stop == null)
+				continue;
+			if (stop.ArcLength <= last)
+				warnings.Add($"World map: the road reaches {stage.DisplayName} out of campaign order.");
+			last = Math.Max(last, stop.ArcLength);
+			if (!stop.OnMap || stop.Focus.X < 0 || stop.Focus.Y < 0 || stop.Focus.X > map.Size.X || stop.Focus.Y > map.Size.Y)
+				warnings.Add($"World map: {stage.DisplayName} is a campaign chapter but stands off the world picture.");
+		}
+		if (rush != null && rush.ArcLength <= last)
+			warnings.Add("World map: the road reaches the Boss Rush's seat before the last chapter.");
+		float beyond = Math.Max(last, rush?.ArcLength ?? last);
+		foreach (StageDefinition stage in StageCatalog.All.Where(s => !StageCatalog.IsInCampaign(s)))
+		{
+			WorldMapStop stop = map.Get(stage.Id);
+			if (stop == null)
+				continue;
+			if (stop.ArcLength <= beyond)
+				warnings.Add($"World map: {stage.DisplayName} is outside the campaign but the road reaches it before the campaign's end.");
+			if (stop.OnMap)
+				warnings.Add($"World map: {stage.DisplayName} is outside the campaign and must lie off the world picture.");
+		}
+
+		var pictures = new List<string> { "world.png", map.PageImage, "ring-open.png", "ring-locked.png", "ring-current.png",
+			"shadow.png", "secret.png", "keepsake.png", "arrow-left.png", "arrow-right.png" };
+		foreach (WorldMapCompass.MarkKind kind in Enum.GetValues(typeof(WorldMapCompass.MarkKind)))
+			pictures.Add("mark-" + kind.ToString().ToLowerInvariant() + ".png");
+		foreach (WorldMapStop stop in map.Stops)
+		{
+			if (!string.IsNullOrEmpty(stop.ShroudImage))
+				pictures.Add(stop.ShroudImage);
+		}
+		foreach (string picture in pictures)
+		{
+			if (!ResourceLoader.Exists(WorldMapLayout.Directory + picture))
+				warnings.Add($"World map: {WorldMapLayout.Directory + picture} is missing or not imported.");
+		}
+		foreach (var (texture, _) in map.PageDrawings)
+		{
+			if (!ResourceLoader.Exists(texture))
+				warnings.Add($"World map: the page's drawing {texture} is missing.");
+		}
 	}
 
 	// Cyclone Slash's running whirlwind (issue #68) reads its one Ascension by id: Typhoon Core is the
