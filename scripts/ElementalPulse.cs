@@ -285,7 +285,39 @@ public partial class ElementalPulse : Area2D
 	private readonly SolarFlareVisual[] sunDogBursts = new SolarFlareVisual[2];
 	private float sunDogClock;
 
+	// ON THE SCREEN, AND GLIDING HOME (2026-10-30). Eric: "solar dogs + daybreak avatar means that solar dogs
+	// are off the screen on a phone", and "they should be animated to return to you when you start moving if
+	// they are currently drifted away. they shouldn't pop closer." Daybreak doubles the flare (90 to 180 px at
+	// level 8) and a still wizard grows it 60% more, so the dogs hung up to 461 px out on the line through his
+	// middle - and a phone shows 423 px either side of him. They now hang on the screen's LONG axis (either side
+	// of him on a PC, above and below on a phone), never further out than SunDogScreenShare of the half view
+	// along it, and the distance they hang at is eased (SunDogReturnRate): when he steps and the charge drops,
+	// they glide back in over about half a second instead of jumping. The hit is struck where they are drawn,
+	// at the eased distance.
+	public const float SunDogScreenShare = 0.72f;
+	private const float SunDogReturnRate = 5f;
+	private float sunDogDistance = -1f;
+	private Vector2 sunDogAxis = Vector2.Right;
+
 	private bool HasSunDogs => SpellData != null && SpellData.HasEvolution(SunDogsId);
+
+	// The camera's view in world px decides the axis and the cap. Without a camera (a harness), the line
+	// through his middle and no cap, as before.
+	private float SunDogTargetDistance()
+	{
+		float target = range * (1f + StillRadiusGrowth * StillCharge) * SunDogOffset;
+		Camera2D camera = GetViewport()?.GetCamera2D();
+		Vector2 view = GetViewport()?.GetVisibleRect().Size ?? Vector2.Zero;
+		if (camera == null || view.X <= 0f || camera.Zoom.X <= 0f || camera.Zoom.Y <= 0f)
+		{
+			sunDogAxis = Vector2.Right;
+			return target;
+		}
+		Vector2 world = new Vector2(view.X / camera.Zoom.X, view.Y / camera.Zoom.Y);
+		bool tall = world.Y > world.X;
+		sunDogAxis = tall ? Vector2.Down : Vector2.Right;
+		return MathF.Min(target, (tall ? world.Y : world.X) * 0.5f * SunDogScreenShare);
+	}
 
 	private void TickSunDogs(float delta)
 	{
@@ -293,10 +325,15 @@ public partial class ElementalPulse : Area2D
 		{
 			if (sunDogGlow != null && IsInstanceValid(sunDogGlow) && sunDogGlow.Visible)
 				sunDogGlow.Visible = false;
+			sunDogDistance = -1f;
 			return;
 		}
 		EnsureSunDogs();
 		sunDogClock += delta;
+		float target = SunDogTargetDistance();
+		sunDogDistance = sunDogDistance < 0f
+			? target
+			: Mathf.Lerp(sunDogDistance, target, 1f - MathF.Exp(-SunDogReturnRate * delta));
 		sunDogGlow.Visible = true;
 		sunDogGlow.QueueRedraw();
 	}
@@ -321,13 +358,14 @@ public partial class ElementalPulse : Area2D
 		if (!HasSunDogs)
 			return;
 		EnsureSunDogs();
-		float distance = reach * SunDogOffset;
+		// Where they hang now (eased, on the screen's long axis), so each strikes where it is drawn.
+		float distance = sunDogDistance >= 0f ? sunDogDistance : SunDogTargetDistance();
 		float dogReach = reach * SunDogReach;
 		float r2 = dogReach * dogReach;
 		int dogDamage = Math.Max(1, Mathf.RoundToInt(pulseDamage * SunDogDamageShare));
 		for (int side = 0; side < 2; side++)
 		{
-			var offset = new Vector2(side == 0 ? -distance : distance, 0f);
+			Vector2 offset = sunDogAxis * (side == 0 ? -distance : distance);
 			Vector2 centre = GlobalPosition + offset;
 			foreach (Enemy e in EnemyRegistry.Snapshot)
 			{
@@ -359,11 +397,11 @@ public partial class ElementalPulse : Area2D
 	private void DrawSunDogs()
 	{
 		const float grid = WhipLimb.Grid;
-		float distance = range * (1f + StillRadiusGrowth * StillCharge) * SunDogOffset;
+		float distance = sunDogDistance >= 0f ? sunDogDistance : SunDogTargetDistance();
 		Vector2 here = sunDogGlow.GlobalPosition;
 		for (int side = 0; side < 2; side++)
 		{
-			var at = new Vector2(side == 0 ? -distance : distance, 0f);
+			Vector2 at = sunDogAxis * (side == 0 ? -distance : distance);
 			float throb = 0.5f + 0.5f * MathF.Sin(sunDogClock * 3.1f + side * 1.7f);
 			float r = Mathf.Lerp(5f, 6.5f, throb);
 			float turn = sunDogClock * 0.8f + side * 0.6f;
