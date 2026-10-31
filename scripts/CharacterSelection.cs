@@ -75,7 +75,7 @@ public partial class CharacterSelection : Control
 
 	// What a card may show (.ai/side-events.md, "Secret wizards"). A LOCKED wizard is his
 	// silhouette and how he is found, with the name kept back: the name is what freeing him gives
-	// you ("Tituba is free - a new wizard"), and the rescued are people, not a class you can read
+	// you ("Wizard freed - Tituba"), and the rescued are people, not a class you can read
 	// off a coat. A SECRET wizard is a sealed card and nothing else, until UnlockCatalog's reveal
 	// condition holds - then he is an ordinary lock.
 	private enum CardState { Unlocked, Locked, Secret }
