@@ -110,6 +110,13 @@ public class SaveData
 	// drops most of what an achievement asks about, so it cannot serve this purpose.
 	public LifetimeStats Lifetime { get; set; } = new();
 	public bool HasSeenGameplayOnboarding { get; set; } = false;
+	/// <summary>
+	/// The story-mode prologue has been shown (Prologue, .ai/prologue.md): Start Run plays it first
+	/// until this is true. No schema bump - it only adds, and a missing key reads as false, so an
+	/// existing save sees the prologue once, on its next Start Run, which is intended. Written only
+	/// when writes are on, so no tool scene or --no-save-writes run ever sets it.
+	/// </summary>
+	public bool HasSeenPrologue { get; set; } = false;
 	public bool EnableGameplayOnboardingTips { get; set; } = true;
 	public bool HasToggledOnboardingTipsAtLeastOnce { get; set; } = false;
 	public bool PlaytestModeEnabled { get; set; } = false;
@@ -826,6 +833,7 @@ public class SaveData
 			["RunTelemetryHistory"] = telemetryHistory,
 			["Lifetime"] = Lifetime.ToGodotDictionary(),
 			["HasSeenGameplayOnboarding"] = HasSeenGameplayOnboarding,
+			["HasSeenPrologue"] = HasSeenPrologue,
 			["EnableGameplayOnboardingTips"] = EnableGameplayOnboardingTips,
 			["HasToggledOnboardingTipsAtLeastOnce"] = HasToggledOnboardingTipsAtLeastOnce,
 			["PlaytestModeEnabled"] = PlaytestModeEnabled,
@@ -1035,6 +1043,9 @@ public class SaveData
 
 		if (root.ContainsKey("HasSeenGameplayOnboarding"))
 			result.HasSeenGameplayOnboarding = root["HasSeenGameplayOnboarding"].AsBool();
+
+		if (root.ContainsKey("HasSeenPrologue"))
+			result.HasSeenPrologue = root["HasSeenPrologue"].AsBool();
 
 		if (root.ContainsKey("EnableGameplayOnboardingTips"))
 			result.EnableGameplayOnboardingTips = root["EnableGameplayOnboardingTips"].AsBool();

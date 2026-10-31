@@ -155,6 +155,7 @@ public partial class MainMenu : Control
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
 		// Before EnsureOptionsScroll wraps the list, like every row added here.
 		damageNumbersToggle = EnsureDamageNumbersToggle();
+		EnsureWatchPrologueButton();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
 		EnsurePlaytestToolkitUi();
@@ -724,7 +725,38 @@ public partial class MainMenu : Control
 
 	private void OnStartRunPressed()
 	{
+		// Story mode opens on its prologue the first time (Prologue, .ai/prologue.md), which then
+		// goes on to the character select itself. Boss Rush is a card further in and never sees it.
+		if (Prologue.IsUnseen(GetNodeOrNull<SaveManager>("/root/SaveManager")))
+		{
+			Prologue.Play(this, Prologue.After.Story);
+			return;
+		}
 		GetTree().ChangeSceneToFile("res://scenes/CharacterSelection.tscn");
+	}
+
+	// Watch the Prologue, in Options: the story again, on demand, and back to this menu after.
+	private Button EnsureWatchPrologueButton()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return null;
+
+		var button = new Button
+		{
+			Name = "WatchPrologueButton",
+			Text = "Watch the Prologue",
+			CustomMinimumSize = new Vector2(220, 50)
+		};
+		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
+		BonelightSkin.StyleButton(button);
+		button.Pressed += () => Prologue.Play(this, Prologue.After.Menu);
+		optionsVBox.AddChild(button);
+		// Under the display toggles, above the playtest toolkit: with the things a player sets, not
+		// with the ones a tester does.
+		Node after = optionsVBox.GetNodeOrNull("DamageNumbersToggle") ?? optionsVBox.GetNodeOrNull("MuteToggle");
+		optionsVBox.MoveChild(button, after != null ? after.GetIndex() + 1 : Math.Max(0, optionsVBox.GetChildCount() - 2));
+		return button;
 	}
 
 	// The shop is one button again, Powers, over the purse it spends. From 2026-10-28 to 2026-10-30 it
