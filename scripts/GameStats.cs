@@ -111,6 +111,24 @@ public partial class GameStats : Node
 	private static readonly Dictionary<string, int> spellPickCounts = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, int> spellUpgradeCounts = new(StringComparer.OrdinalIgnoreCase);
 
+	// THE HEALING LEDGER (.ai/difficulty-curve.md, "Healing"): every Player.Heal call by where it came
+	// from, as the amount OFFERED - before the health bar caps it - so a run held at full health by
+	// --immortal still counts what would have healed it. Off in the game: only _BalanceHarness switches
+	// it on, because naming the caller walks the stack.
+	public static bool TrackHealing { get; set; }
+	private static readonly Dictionary<string, int> healingBySource = new(StringComparer.OrdinalIgnoreCase);
+	private static int healingOffered = 0;
+	public static IReadOnlyDictionary<string, int> HealingBySource => healingBySource;
+	public static int RunHealingOffered => healingOffered;
+
+	public static void RecordHealing(string source, int amount)
+	{
+		if (amount <= 0)
+			return;
+		healingOffered += amount;
+		healingBySource[source] = healingBySource.TryGetValue(source, out int had) ? had + amount : amount;
+	}
+
 	public int EnemiesKilled { get; set; } = 0;
 	public RunResult LastRunResult { get; private set; }
 
@@ -125,6 +143,8 @@ public partial class GameStats : Node
 		totalDamageTaken = 0;
 		hitsTaken = 0;
 		totalHpLost = 0;
+		healingOffered = 0;
+		healingBySource.Clear();
 		levelUpsGained = 0;
 		rerollsUsed = 0;
 		swapsUsed = 0;

@@ -2842,6 +2842,8 @@ public partial class Player : CharacterBody2D
 	public void Heal(int amount)
 	{
 		int adjustedAmount = Math.Max(0, Mathf.RoundToInt(amount * (1.0f + chestHealingBonusPercent)));
+		if (GameStats.TrackHealing)
+			GameStats.RecordHealing(HealCallerName(), adjustedAmount);
 		int headroom = Math.Max(0, MaxHP - CurrentHP);
 		int applied = Math.Min(headroom, adjustedAmount);
 		CurrentHP += applied;
@@ -2853,6 +2855,39 @@ public partial class Player : CharacterBody2D
 		if (wasted > 0 && ownedChestItems.Contains(ChestItemCatalog.VialOfVitality))
 			AddOverhealShield(wasted);
 
+	}
+
+	// The first frame above Heal that is not the engine's interop: "HealthPickup._OnBodyEntered",
+	// "Player.TakeMarginalia". Harness-only (GameStats.TrackHealing) - a stack walk per heal is no cost
+	// a game should pay.
+	private static string HealCallerName()
+	{
+		var trace = new System.Diagnostics.StackTrace(2, false);
+		foreach (System.Diagnostics.StackFrame frame in trace.GetFrames())
+		{
+			System.Reflection.MethodBase method = frame.GetMethod();
+			Type type = method?.DeclaringType;
+			if (type == null || (type.Namespace ?? string.Empty).StartsWith("Godot", StringComparison.Ordinal))
+				continue;
+			// Lambdas and iterators sit in compiler-made nested types; name their outer class.
+			while (type.DeclaringType != null && type.Name.Contains('<'))
+				type = type.DeclaringType;
+			string name = method.Name.Contains('<') ? method.Name.Split('>')[0].TrimStart('<') : method.Name;
+			return $"{type.Name}.{name}";
+		}
+		return "unknown";
+	}
+
+	/// <summary>Each source of health per second right now, for the harness's healing ledger.</summary>
+	public IEnumerable<(string Source, float PerSecond)> RegenBreakdown()
+	{
+		yield return ("regen: base", BaseHealthRegenPerSecond);
+		yield return ("regen: Emberheart, boons, found levels", recoveryPerSecond);
+		yield return ("regen: Grass tier", GetGrassRegenPerSecond());
+		yield return ("regen: passive spells", GetPassiveSpellRegenPerSecond());
+		yield return ("regen: relics", chestRegenPerSecond);
+		yield return ("regen: the Familiar's grant (Purr)", familiarGrants.RegenPerSecond);
+		yield return ("regen: Taproot stance", GetStanceRegenPerSecond());
 	}
 
 	// Overheal ADDS to the pool, up to OverhealShieldCap - unlike AddShield, which refreshes the pool

@@ -371,6 +371,7 @@ public partial class _BalanceHarness : Node
 		ProcessMode = ProcessModeEnum.Always;
 		StatusEffectLayer.MeasureCost = true;
 		StatusEffectLayer.ResetPerf();
+		GameStats.TrackHealing = true;
 
 		GD.Print($"HARNESS minutes={Minutes} timescale={TimeScale} character={CharacterIndex} seed={Seed}");
 
@@ -527,6 +528,7 @@ public partial class _BalanceHarness : Node
 		MazeNavigation.BuildOnOpenStages = true;
 		StatusEffectLayer.Disabled = false;
 		StatusEffectLayer.MeasureCost = false;
+		GameStats.TrackHealing = false;
 		foreach (string a in MoveActions)
 			Input.ActionRelease(a);
 	}
@@ -1111,7 +1113,28 @@ public partial class _BalanceHarness : Node
 	private const float NeedBucketSeconds = 5f;
 	private readonly List<(float Lost, float Regen, float At)> needBuckets = new();
 	private float needBucketTime, needBucketRegen;
-	private int needLastHpLost, needBaseHp, needLives = -1;
+	private int needLastHpLost, needLastHealed, needBaseHp, needLives = -1;
+	private readonly SortedDictionary<string, float> regenBySource = new();
+
+	// The healing ledger, for the report: regen by source (integrated in TickHealthLedger) and every
+	// Heal call by caller (GameStats.HealingBySource), per minute of play.
+	private IEnumerable<string> HealingLedgerLines()
+	{
+		float minutes = Math.Max(0.01f, elapsed / 60f);
+		yield return $"  healing      : offered, per minute of play ({GameStats.RunHealingOffered / minutes:0.0} from heals,"
+			+ $" {regenBySource.Values.Sum() / minutes:0.0} from regen; {GameStats.RunHpLost / minutes:0.0} HP lost a minute)";
+		foreach (var pair in regenBySource.Where(p => p.Value > 0.01f))
+			yield return $"    {pair.Key,-44} {pair.Value / minutes,7:0.0}/min";
+		foreach (var pair in GameStats.HealingBySource.OrderByDescending(p => p.Value))
+			yield return $"    {"heal: " + pair.Key,-44} {pair.Value / minutes,7:0.0}/min";
+	}
+
+	private string HealingSummary()
+	{
+		float minutes = Math.Max(0.01f, elapsed / 60f);
+		return $" healPerMin={GameStats.RunHealingOffered / minutes:0.0} regenPerMin={regenBySource.Values.Sum() / minutes:0.0}"
+			+ $" lostPerMin={GameStats.RunHpLost / minutes:0.0} baseHp={needBaseHp}";
+	}
 	private float bossArrivedAt = -1f, bossDownAt = -1f, bossFractionAtEnd = -1f;
 	private float hopelessAt = -1f;
 	private float overrunSince = -1f, overrunAt = -1f;
@@ -1124,6 +1147,8 @@ public partial class _BalanceHarness : Node
 			needLives = player.ExtraLivesRemaining;
 		needBucketTime += delta;
 		needBucketRegen += player.RegenPerSecondNow * delta;
+		foreach (var (source, perSecond) in player.RegenBreakdown())
+			regenBySource[source] = (regenBySource.TryGetValue(source, out float had) ? had : 0f) + perSecond * delta;
 		if (needBucketTime >= NeedBucketSeconds)
 			FlushHealthBucket();
 		if (bossArrivedAt < 0f && Node2DGame.Current is Node2DGame g && g.BossFightActive)
@@ -1137,7 +1162,12 @@ public partial class _BalanceHarness : Node
 	{
 		int lost = GameStats.RunHpLost - needLastHpLost;
 		needLastHpLost = GameStats.RunHpLost;
-		needBuckets.Add((lost, needBucketRegen, elapsed));
+		// Every heal offered in the bucket - pickups, lifesteal, relics, Marginalia - on top of the regen.
+		// Under --immortal the bar is always full, so the regen tick itself never calls Heal and is not
+		// counted twice.
+		int healed = GameStats.RunHealingOffered - needLastHealed;
+		needLastHealed = GameStats.RunHealingOffered;
+		needBuckets.Add((lost, needBucketRegen + healed, elapsed));
 		needBucketTime = 0f;
 		needBucketRegen = 0f;
 		if (StopNeed > 0f && Survivor && Immortal && hopelessAt < 0f && DiesAt(StopNeed) >= 0f)
@@ -2619,7 +2649,7 @@ public partial class _BalanceHarness : Node
 			+ $" folds={paceLedger.Sum(r => r.Folds)} round={paceLedger.Sum(r => r.SentRound)}{ShadowSummary()}"
 			+ $" meta={metaLabel} boss={BossSummary()} overrun={(overrunAt < 0f ? "-" : $"{overrunAt / 60f:0.0}")}"
 			+ $" at15={(levelReachedAt.Count == 0 ? 0 : levelReachedAt.Where(p => p.Value <= 900f).Select(p => p.Key).DefaultIfEmpty(1).Max())}"
-			+ $"{HealthLedgerSummary()}"
+			+ $"{HealthLedgerSummary()}{HealingSummary()}"
 			+ $" ascOffered={(ascensionFirstOfferedAt.Count == 0 ? "-" : $"{ascensionFirstOfferedAt.Values.Min() / 60f:0.0}")}"
 			+ $" ascensions={ascensionsTaken.Count} at=[{string.Join(",", ascensionsTaken.Select(a => $"{a.At / 60f:0.0}"))}]"
 			+ $" apotheosis={(apotheosisTakenAt < 0f ? "-" : $"{apotheosisTakenAt / 60f:0.0}")}"
@@ -3056,6 +3086,7 @@ public partial class _BalanceHarness : Node
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 		};
 		lines.AddRange(DropLedger());
+		lines.AddRange(HealingLedgerLines());
 		if (PickEvery > 1)
 			lines.Add($"  weak picks   : took one level-up in {PickEvery}; skipped {weakSkips} of {weakLevelUpsSeen}");
 		lines.AddRange(PaceLedgerLines());
