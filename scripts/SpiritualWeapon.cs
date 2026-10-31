@@ -110,6 +110,17 @@ public partial class SpiritualWeapon : Node2D
 	public const string EarthshakerId = "spiritual_weapon_hammer_earthshaker";
 	public const string HallowedGroundId = "spiritual_weapon_hammer_hallowed_ground";
 	public const string TitansMaulId = "spiritual_weapon_hammer_titans_maul";
+	// MJOLNIR (2026-10-31): the hammer's colossal Ascension is the thunder-god's, under Titan's Maul's id (saves,
+	// the browser and SeenAscensionIds carry over). Eric: "is there room for a Mjolnir reference ... so we can have
+	// a lightning tag crossover?" It keeps the maul's size and its stop, takes +1 Lightning, and every full slam
+	// (not the Aftershock's echo) calls the lightning down: a stroke out of the sky onto where it landed
+	// (ThunderStrike, Gale Blade's, on the pixel-art grid), and one onto each of the MjolnirStrikes nearest
+	// enemies just past the slam's edge - out to MjolnirReach of its radius - for MjolnirShare of the slam,
+	// staggering each MjolnirStagger seconds. The slam holds the knot; the lightning takes the ones round it.
+	public const int MjolnirStrikes = 3;
+	public const float MjolnirReach = 2.2f;
+	public const float MjolnirShare = 0.5f;
+	public const float MjolnirStagger = 0.25f;
 	public const string HammerfallId = "spiritual_weapon_hammer_hammerfall";
 
 	public const string TwinBladesId = "spiritual_weapon_sword_twin_blades";
@@ -423,7 +434,7 @@ public partial class SpiritualWeapon : Node2D
 	private float freezeSeconds;
 	private float knockback = AxeKnockback;
 	private float zoneSeconds;
-	private bool headsman, aftershock, hallowed, whirling, deflect, twin, siphon, flurry, alongBlade;
+	private bool headsman, aftershock, hallowed, whirling, deflect, twin, siphon, flurry, alongBlade, mjolnir;
 	private Color tint = Colors.White;
 	private ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
 	private ElementColors.Ramp light = ElementColors.GetRamp(Element.Light);
@@ -558,6 +569,7 @@ public partial class SpiritualWeapon : Node2D
 		twin = form == Form.Sword && spell.HasEvolution(TwinBladesId);
 		flurry = spell.HasEvolution(ThousandCutsId);
 		alongBlade = spell.HasEvolution(GreatswordId);
+		mjolnir = spell.HasEvolution(TitansMaulId);
 		colossal = spell.HasEvolution(GreatswordId) || spell.HasEvolution(GreataxeId) || spell.HasEvolution(TitansMaulId);
 		pace = form == Form.Sword ? PaceFor(interval) : 1f;
 		StatPeakPace = MathF.Max(StatPeakPace, pace);
@@ -1482,6 +1494,59 @@ public partial class SpiritualWeapon : Node2D
 			QueueEcho(at, radius * AftershockReach, Math.Max(1, Mathf.RoundToInt(dealt * AftershockShare)));
 		if (!echo && hallowed)
 			AddZone(at, radius, zoneSeconds);
+		if (!echo && mjolnir)
+			CallThunder(at, dealt, radius, arena);
+	}
+
+	// Mjolnir: a stroke onto where the hammer landed, and onto the nearest few just past the slam's edge.
+	// Nearest first in fixed slots, as Solar Prominence picks its targets; nothing allocated.
+	private readonly Enemy[] thunderTargets = new Enemy[MjolnirStrikes];
+	private readonly float[] thunderDistances = new float[MjolnirStrikes];
+
+	private void CallThunder(Vector2 at, int dealt, float radius, Node2D arena)
+	{
+		ThunderStrike.Spawn(arena, at, radius * 0.5f);
+		float inner = radius + RiptideWave.BodyAllowance;
+		float outer = radius * MjolnirReach + RiptideWave.BodyAllowance;
+		int found = 0;
+		EnemyRegistry.CollectNear(at, outer, hitBuffer);
+		foreach (Enemy e in hitBuffer)
+		{
+			if (!Alive(e))
+				continue;
+			float d = at.DistanceTo(e.GlobalPosition);
+			if (d <= inner || d > outer)
+				continue;
+			int slot;
+			if (found < MjolnirStrikes)
+				slot = found++;
+			else if (d < thunderDistances[MjolnirStrikes - 1])
+				slot = MjolnirStrikes - 1;
+			else
+				continue;
+			while (slot > 0 && thunderDistances[slot - 1] > d)
+			{
+				thunderTargets[slot] = thunderTargets[slot - 1];
+				thunderDistances[slot] = thunderDistances[slot - 1];
+				slot--;
+			}
+			thunderTargets[slot] = e;
+			thunderDistances[slot] = d;
+		}
+		hitBuffer.Clear();
+		int bolt = Math.Max(1, Mathf.RoundToInt(dealt * MjolnirShare));
+		for (int i = 0; i < found; i++)
+		{
+			Enemy e = thunderTargets[i];
+			thunderTargets[i] = null;
+			if (!Alive(e))
+				continue;
+			Vector2 where = e.GlobalPosition;
+			Strike(e, bolt);
+			if (IsInstanceValid(e) && !e.IsDying)
+				e.ApplyShock(MjolnirStagger);
+			ThunderStrike.Spawn(arena, where, 26f);
+		}
 	}
 
 	private void Strike(Enemy e, int amount)

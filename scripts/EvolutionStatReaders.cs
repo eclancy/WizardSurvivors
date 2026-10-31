@@ -169,7 +169,7 @@ public static class EvolutionStatReaders
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["spiritual_weapon_hammer"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale
 				| EvolutionStat.Slow | EvolutionStat.Rider,
-			"SpiritualWeapon.Arm, HammerSlam and TickZones (Area and Scale are the slam; Slow on its slow; ZoneDuration is Hallowed Ground's; Aftershock by id)",
+			"SpiritualWeapon.Arm, HammerSlam and TickZones (Area and Scale are the slam; Slow on its slow; ZoneDuration is Hallowed Ground's; Aftershock and Mjolnir's lightning, CallThunder, by id)",
 			SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["spiritual_weapon_sword"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Scale | EvolutionStat.Rider,
 			"SpiritualWeapon.Arm, SwordBlow, ParryBolts and Siphon (Scale is the greatsword's blade and guard; Deflection's interceptions, Twin Blades' dagger, Thousand Cuts and the greatsword's stroke by id)",

@@ -4840,12 +4840,19 @@ def _(sp, c):
 
 @card("spiritual_weapon_hammer_titans_maul")
 def _(sp, c):
-    """Titan's Maul: the colossal form - the maul, its shock, and the ice of what it stops dead."""
+    """Mjolnir (the id is Titan's Maul's, 2026-10-31): the thunder-god's hammer - a short-hafted steel
+    maul rune-cut in lightning - under a storm cloud, the stroke it calls coming down past it."""
     reset(sp)
-    sp.subject = weapon("maul", box=27.0)
+    sp.subject = weapon("maul", box=25.0)
     U(sp, v_shock(2))
-    O(sp, lambda cv, x: m_freeze(cv, (C0, C0 + 2.0), 11.0))
-    sp.why = "colossal maul; stops them"
+
+    def stroke(cv, x):
+        l = E["lightning"]
+        m_cloud(cv, 6.0)
+        zig(cv, (22, 9), (24, 17), l[2], jag=1.4, steps=3)
+        zig(cv, (23, 9), (25, 17), l[1], jag=1.4, steps=3, core=l[0])
+    O(sp, stroke)
+    sp.why = "the thunder-god's hammer; calls the lightning down"
 
 
 @card("spiritual_weapon_hammer_hammerfall")

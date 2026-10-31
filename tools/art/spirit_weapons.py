@@ -70,6 +70,10 @@ OCC = bl.OCC
 ARC = bl.ELEMENTS["arcane"]     # core, hot, mid, edge
 GOLD = bl.MATERIALS["gold"]     # hi, lit, base, shade, deep
 VIOLET = bl.MATERIALS["violet"]
+# Mjolnir's (2026-10-31): steel in five tones, leather from amber's three darkest, runes in Lightning's ramp.
+STEEL = bl.MATERIALS["steel"]
+LEATHER = bl.MATERIALS["amber"][2:5]
+LIGHTNING = bl.ELEMENTS["lightning"]
 
 # The key light in screen space: from the upper left (art-direction.md section 2).
 KEY = (-1.0 / math.sqrt(2.0), -1.0 / math.sqrt(2.0))
@@ -303,6 +307,60 @@ def maul():
     return parts, 47.0
 
 
+def mjolnir():
+    """Mjolnir, the hammer's Ascension since 2026-10-31 (Eric: "the sprite should be entirely different and
+    more detailed, so it doesn't look like just a giant version of the smaller hammer", and a Mjolnir
+    reference for a Lightning crossover). Not the spirit hammer grown: a made thing of steel, not of
+    conjured light. A broad, deep block of a head - wider across than the haft is long, its corners cut -
+    plated at both striking faces, grooved a hand in from each, and rune-cut down its cheek in Lightning's
+    ramp: a ring with a bolt through it and a rune stroke either side. Under it a short, thick haft wound
+    in leather the whole way, an iron pommel, and the wrist loop hanging off the pommel. The grip and the
+    head keep the boss cell's points (28 behind and ahead of the centre), which SpiritualWeapon reads."""
+    parts = []
+    # The haft: short and thick, leather wound over steel; only its last stretch shows under the head.
+    parts.append(Part(lambda u, v: sd_capsule(u, v, -36.0, 11.0, 3.6), "steel", 1, (-39.6, 14.6, -3.6, 3.6)))
+    wraps = [(-33.5 + 4.2 * i, -31.3 + 4.2 * i) for i in range(9)]
+    _grip(parts, wraps, 4.1, mat="leather", layer=2)
+    parts.append(Part(lambda u, v: sd_capsule(u, v, 4.4, 5.8, 4.4), "steel", 3, (0.0, 10.2, -4.4, 4.4)))
+    # The pommel, and the loop of cord through it.
+    parts.append(Part(lambda u, v: sd_box(u, v, -37.6, 0.0, 2.6, 4.8, 1.4), "steel", 3, (-40.2, -35.0, -4.8, 4.8)))
+    loop = lambda u, v: abs(math.hypot(u + 42.0, v - 2.5) - 3.4) - 1.1
+    parts.append(Part(loop, "leather", 2, (-46.6, -37.4, -2.1, 7.1)))
+
+    # The head: u 9 to 43, v -22 to 22, its corners cut.
+    def rune(u, v):
+        r = math.hypot(u - 26.0, v)
+        if 5.6 < r < 7.0:
+            return True
+        # A bolt through the ring: a zigzag of three strokes, one art px wide.
+        bolt = [(17.0, -2.4), (24.6, 2.0), (27.4, -2.0), (35.0, 2.4)]
+        if r < 8.4 and polyline_dist(u, v, bolt) < 0.7:
+            return True
+        # A rune stroke either side: a stave with two short twigs (the old letters on its cheek).
+        for sv in (-1.0, 1.0):
+            cv = sv * 12.4
+            if abs(v - cv) < 0.65 and 15.0 < u < 37.0:
+                return True
+            if abs((u - 31.0) - (v - cv) * 1.2 * sv) < 0.75 and 31.0 < u < 35.0:
+                return True
+            if abs((u - 18.0) + (v - cv) * 1.2 * sv) < 0.75 and 18.0 < u < 22.0:
+                return True
+        return False
+    parts.append(Part(lambda u, v: sd_box(u, v, 26.0, 0.0, 17.0, 22.0, 5.0), "steel", 4, (9.0, 43.0, -22.0, 22.0),
+                      rune=rune, depth=lambda u, v: 22.0 - abs(v)))
+    # The striking faces: plates a stop brighter, with a rim of lightning where the strike lands.
+    for sv in (-1.0, 1.0):
+        parts.append(Part(lambda u, v, sv=sv: sd_box(u, v, 26.0, sv * 20.2, 15.4, 1.9, 1.6), "plate", 5,
+                          (10.6, 41.4, sv * 20.2 - 1.9, sv * 20.2 + 1.9),
+                          edge=lambda u, v, sv=sv: abs(v - sv * 22.0) < 0.9))
+        # The groove a hand in from each face.
+        parts.append(Part(lambda u, v, sv=sv: sd_box(u, v, 26.0, sv * 16.8, 14.6, 0.55), "groove", 5,
+                          (11.4, 40.6, sv * 16.8 - 0.6, sv * 16.8 + 0.6)))
+    # Where the haft goes through the head: a steel boss on its lower edge.
+    parts.append(Part(lambda u, v: sd_box(u, v, 9.4, 0.0, 2.2, 6.0, 1.0), "steel", 6, (7.2, 11.6, -6.0, 6.0)))
+    return parts, 47.5
+
+
 def greatsword():
     """Celestial Greatsword: a jewelled pommel, a violet grip bound in gold wire, a winged guard with a
     gem, a gilded ricasso, and a long blade of light lettered with runes along its fuller."""
@@ -339,7 +397,9 @@ MODELS = {
     "hammer": lambda mirror: hammer(),
     "sword": lambda mirror: sword(),
     "greataxe": lambda mirror: greataxe(),
-    "maul": lambda mirror: maul(),
+    # The hammer's Ascension is Mjolnir since 2026-10-31; the sheet keeps its name (spirit-maul.png), which
+    # SpiritualWeapon loads. maul() above is the old giant hammer, kept for the record of what it replaced.
+    "maul": lambda mirror: mjolnir(),
     "greatsword": lambda mirror: greatsword(),
     "dagger": lambda mirror: dagger(),
 }
@@ -363,6 +423,28 @@ def _top(parts, u, v):
 
 
 def _shade(part, d, facing, u, v, big):
+    # Mjolnir's materials: steel and leather lit from the upper left, its runes and its faces' rims in
+    # Lightning's ramp rather than Arcane's (it is the thunder-god's, not a weapon of the spell's light).
+    if part.mat in ("steel", "plate", "groove", "leather"):
+        if part.rune is not None and part.rune(u, v):
+            return LIGHTNING[0] if facing > -0.2 else LIGHTNING[1]
+        if part.edge is not None and part.edge(u, v):
+            return LIGHTNING[1] if facing > -0.4 else LIGHTNING[2]
+        if part.mat == "groove":
+            return STEEL[4]
+        if part.mat == "leather":
+            # The wrap's turns: the top of each lit, its underside in shadow.
+            return LEATHER[0] if facing > 0.7 else LEATHER[1] if facing > -0.45 else LEATHER[2]
+        if d < 1.0:
+            i = 0 if facing > 0.6 else 1 if facing > 0.2 else 2 if facing > -0.35 else 3 if facing > -0.75 else 4
+            return STEEL[max(0, i - 1)] if part.mat == "plate" else STEEL[i]
+        i = 1 if facing > 0.35 else 2 if facing > -0.4 else 3
+        if part.mat == "plate":
+            i = max(0, i - 1)
+        # The cheek darkens into the middle of the block, so it reads as a mass and not a plate.
+        if part.depth is not None and part.depth(u, v) > 13.0 and i < 3:
+            i += 1
+        return STEEL[i]
     if part.rune is not None and part.rune(u, v):
         return ARC[0]
     if part.mat in ("gold", "violet"):
