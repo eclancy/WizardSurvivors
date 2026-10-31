@@ -3086,6 +3086,7 @@ public partial class _UiShot : Node
 	private readonly System.Collections.Generic.List<float> coverShares = new();
 	private readonly System.Collections.Generic.List<float> coverPlayerShares = new();
 	private float coverPeak = -1f;
+	private int coverFlashes;
 	private Image coverPeakImage;
 	private bool coverListed;
 	private RandomNumberGenerator coverRng;
@@ -3248,9 +3249,27 @@ public partial class _UiShot : Node
 		}
 		float share = covered / (float)(w * h);
 		float playerShare = boxTotal > 0 ? boxCovered / (float)boxTotal : 0f;
-		coverShares.Add(share);
-		coverPlayerShares.Add(playerShare);
 		GD.Print($"COVER frame={burstTaken} share={share:0.000} player={playerShare:0.000} box={box}");
+		// A frame where most of the screen changes is either a spell that floods it or a measuring fault;
+		// both halves are kept so it can be told which. Over 0.9 it has always been the fault: the wizard's
+		// hurt flash, an overlay that keeps animating while the tree is paused, landing on the second
+		// render and tinting every pixel (Event Horizon's runs, 2026-10-30). No spell comes near it - the
+		// old Tidal Wall's three walls peaked at 0.47 - so such a frame is left out of the summary.
+		if (share > 0.5f)
+		{
+			coverA.SavePng($"user://{ShotName}-f{burstTaken}a.png");
+			b.SavePng($"user://{ShotName}-f{burstTaken}b.png");
+		}
+		if (share > 0.9f)
+		{
+			coverFlashes++;
+			share = playerShare = -1f;
+		}
+		else
+		{
+			coverShares.Add(share);
+			coverPlayerShares.Add(playerShare);
+		}
 		if (share > coverPeak)
 		{
 			coverPeak = share;
@@ -3260,6 +3279,14 @@ public partial class _UiShot : Node
 		burstTaken++;
 		if (burstTaken >= burstCount)
 		{
+			if (coverShares.Count == 0)
+			{
+				GD.PrintErr("_UiShot: --cover measured no frame");
+				GetTree().Quit(1);
+				return;
+			}
+			if (coverFlashes > 0)
+				GD.Print($"COVER left out {coverFlashes} frame(s) over 0.9 (the hurt flash on the second render)");
 			float mean = coverShares.Average(), pMean = coverPlayerShares.Average();
 			var sorted = coverShares.OrderBy(s => s).ToList();
 			float p90 = sorted[(int)System.Math.Min(sorted.Count - 1, System.Math.Floor(sorted.Count * 0.9))];
