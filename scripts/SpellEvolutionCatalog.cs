@@ -263,7 +263,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = MagicMissile.ArcaneOrbId,
 			DisplayName = "Arcane Orb",
-			Description = $"Every missile is loosed as a great slow orb of arcane light that rolls straight through the pack, striking everything under it {1f / MagicMissile.OrbTickSeconds:0} times a second, and bursts where its flight ends for {MagicMissile.OrbBurstShare * 100f:0}% of a missile. +{(MagicMissile.OrbDamage - 1f) * 100f:0}% damage, {(MagicMissile.OrbCooldown - 1f) * 100f:0}% longer cooldown.",
+			Description = $"Every missile is loosed as a great slow orb of arcane light that rolls straight through the pack, striking everything under it {1f / MagicMissile.OrbTickSeconds:0} times a second, and bursts where its flight ends for {MagicMissile.OrbBurstShare * 100f:0}% of a missile. Threaded, it turns on a fresh enemy each time its path runs clear, {MagicMissile.ThreadStrikes} times. +{(MagicMissile.OrbDamage - 1f) * 100f:0}% damage, {(MagicMissile.OrbCooldown - 1f) * 100f:0}% longer cooldown.",
 			MilestoneLevel = 8,
 			CooldownMultiplier = MagicMissile.OrbCooldown,
 			DamageMultiplier = MagicMissile.OrbDamage,

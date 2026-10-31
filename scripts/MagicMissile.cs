@@ -296,6 +296,7 @@ public partial class MagicMissile : Area2D
 		lifetime += dt;
 		if (orb)
 		{
+			thread?.Tick(GlobalPosition, true);
 			TickOrb(dt);
 			return;
 		}
@@ -471,6 +472,8 @@ public partial class MagicMissile : Area2D
 				continue;
 			player.DealDamageToEnemy(enemy, damage, CritBonus, source: SpellData);
 			first ??= enemy;
+			if (threaded && struckCount < struck.Length && !HasStruck(enemy))
+				struck[struckCount++] = enemy;
 		}
 		scratch.Clear();
 		if (first != null && !orbTouched)
@@ -478,6 +481,45 @@ public partial class MagicMissile : Area2D
 			orbTouched = true;
 			TrySplitOnHit(first);
 		}
+		// Threaded Needle on an orb (2026-10-30, "every ascension should respect the mutations"): the orb
+		// struck through its grind and never through Strike, so the needle's turns never happened. Now,
+		// once the orb has ground through something and its path runs clear, it turns on the nearest enemy
+		// it has not ground and rolls on that way - straight, never homing, so it cannot settle on its
+		// quarry beside the wizard - up to ThreadStrikes times inside its one roll, stitching its thread.
+		if (threaded && orbTouched && first == null && threadsUsed < ThreadStrikes && OrbRethread(at))
+			threadsUsed++;
+	}
+
+	private bool OrbRethread(Vector2 at)
+	{
+		Enemy next = null;
+		float best = ThreadReach * ThreadReach;
+		EnemyRegistry.CollectNear(at, ThreadReach, scratch);
+		foreach (Enemy candidate in scratch)
+		{
+			if (!IsInstanceValid(candidate) || candidate.IsDying || HasStruck(candidate))
+				continue;
+			float d = at.DistanceSquaredTo(candidate.GlobalPosition);
+			if (d < best)
+			{
+				best = d;
+				next = candidate;
+			}
+		}
+		scratch.Clear();
+		if (next == null)
+			return false;
+		Vector2 turn = (next.GlobalPosition - at).Normalized();
+		if (turn == Vector2.Zero)
+			return false;
+		direction = turn;
+		if (thread == null)
+		{
+			thread = new ThreadOfStardust();
+			AddChild(thread);
+		}
+		thread.Stitch(at);
+		return true;
 	}
 
 	// Where the orb's flight ends it bursts, once, over a reach two and a half times its own; Unstable
@@ -502,6 +544,15 @@ public partial class MagicMissile : Area2D
 		}
 		if (GetParent() is Node2D arena)
 			ImpactDebrisLayer.Spawn(arena, GlobalPosition, reach, ArcaneRamp, Colors.White);
+		// A threaded orb's thread fades where it was stitched, as a dart's does (End).
+		if (thread != null)
+		{
+			endingSeconds = ThreadFadeSeconds;
+			speed = 0f;
+			thread.Stitch(GlobalPosition);
+			QueueRedraw();
+			return;
+		}
 		QueueFree();
 	}
 

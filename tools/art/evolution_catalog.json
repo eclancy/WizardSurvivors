@@ -3985,7 +3985,7 @@
       "milestone": 8,
       "id": "magic_missile_singularity_core",
       "name": "Arcane Orb",
-      "description": "Every missile is loosed as a great slow orb of arcane light that rolls straight through the pack, striking everything under it 5 times a second, and bursts where its flight ends for 200% of a missile. \u002B50% damage, 50% longer cooldown.",
+      "description": "Every missile is loosed as a great slow orb of arcane light that rolls straight through the pack, striking everything under it 5 times a second, and bursts where its flight ends for 200% of a missile. Threaded, it turns on a fresh enemy each time its path runs clear, 3 times. \u002B50% damage, 50% longer cooldown.",
       "synergy": "Arcane / Zone",
       "visual_tag": "ArcaneOrb",
       "gains": {},
