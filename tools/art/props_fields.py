@@ -74,7 +74,9 @@ def sheaf(c, foot_x, foot_y, top_x, top_y, front, salt):
 def stook(i):
     w, h = 26, 24
     c = raster.Canvas(w, h, None)
-    c.disc(13, h - 1.5, 11, 1.6, OCC)                   # the contact shadow, on the last rows
+    # The contact shadow, on the last rows. Centred on h - 2, not h - 1.5: there it reached row h,
+    # one below the picture, and was sliced flat along its foot (tools/art/clip_check.py).
+    c.disc(13, h - 2, 11, 1.6, OCC)
     peak = (13, 5) if i == 0 else (12, 4)
     # back sheaves first, then the front ones over them, all leaning in to the peak
     back = [(6, 21), (20, 21), (13, 20)] if i == 0 else [(5, 21), (19, 20), (11, 20), (16, 21)]

@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bonelight as bl
 import raster
 import tile_atlas
+import trees
 
 OCC = bl.OCC
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -476,7 +477,7 @@ def lilypad(flower):
                 for v in range(5):
                     a = notch + math.pi + (v - 2) * 0.9
                     for j in range(2, rad - 2):
-                        c.set(int(round(x + math.cos(a) * j)), int(round(y + math.sin(a) * j * 0.9)), VE[4])
+                        c.set(int(trees.round2(x + math.cos(a) * j)), int(trees.round2(y + math.sin(a) * j * 0.9)), VE[4])
                 c.set(x - rad // 2, y - rad // 2, VE[1])
             # the pad's shadow on the water under its lower-right rim
             for j in range(-rad // 2, rad // 2):
@@ -504,7 +505,7 @@ def reeds(c, r):
     for x, y, h, lean, k in sorted(stems, key=lambda s: s[1]):
         for j in range(h):
             t = j / float(h)
-            sx = x + int(round(lean * t * t))
+            sx = x + int(trees.round2(lean * t * t))
             c.set(sx, y - j, VE[3] if j % 5 else VE[2])
         hx, hy = x + lean, y - h
         if k % 3 != 2:
@@ -768,7 +769,7 @@ def withy(c, x0, x1, y, phase):
     """One woven rail: a two-pixel withy that dips behind every post and rises between them."""
     for x in range(x0, x1 + 1):
         t = ((x - x0 + phase) % POST_EVERY) / float(POST_EVERY)
-        wob = int(round(math.sin(t * TAU) * 1.2))
+        wob = int(trees.round2(math.sin(t * TAU) * 1.2))
         c.set(x, y + wob, GO[3] if x % 4 else GO[2])
         c.set(x, y + wob + 1, GO[4])
         c.set(x, y + wob + 2, OCC if x % 3 else None)
@@ -990,7 +991,7 @@ def garden():
             c.set(x, y, tone)
     for k in range(220):
         a = k * TAU / 220
-        c.set(int(round(cx + math.cos(a) * (bw + 1))), int(round(cy + math.sin(a) * (bh + 1))),
+        c.set(int(trees.round2(cx + math.cos(a) * (bw + 1))), int(trees.round2(cy + math.sin(a) * (bh + 1))),
               GO[3] if math.sin(a) < 0 else OCC)
     # the moonflower's light, as cold motes on the soil round it - not a pool, which read as a puddle
     ice = bl.ELEMENTS["ice"]
@@ -1087,8 +1088,9 @@ def main():
     frames = []
     for name, draw, variants in SETS:
         for v in range(variants):
-            c = raster.Canvas(SIZE, SIZE, None)
+            c = trees.Bleed(SIZE, SIZE)
             draw(c, Rand(hash_name(name) * 31 + v * 7919 + 1))
+            c = settle(c, "%s_%d" % (name, v))
             bad = c.audit()
             if bad:
                 ok = False
@@ -1143,6 +1145,30 @@ def main():
     print("%d detail tiles in %d sets, %d landmark sprites%s"
           % (len(frames), len(SETS), len(LANDMARKS), "" if ok else " - WITH PALETTE ERRORS"))
     return 0 if ok else 1
+
+
+def settle(c, tid):
+    """The cell a detail tile is saved as: its art moved, whole, until it has a clear pixel to every
+    edge of the cell.
+
+    A decal is laid one to a cell beside whatever its neighbours hold, so anything that reaches a
+    cell's edge is cut there - a straight edge through a reed or a tuft, the fault reported on the
+    bushes in 0.9.2 (tools/art/clip_check.py found the reeds, a cotton-grass tuft and a heather bush
+    doing it). `spot` already picks a place clear of the edges, but a tall reed bed or a wide bush
+    can outgrow its margin. Where it lies in its cell is free, so it is shifted rather than shrunk;
+    a tile that fitted is saved exactly as drawn."""
+    ab = c.art_box()
+    dx = dy = 0
+    if ab is not None:
+        if ab[2] - ab[0] > SIZE - 2 or ab[3] - ab[1] > SIZE - 2:
+            raise ValueError("detail tile %s is wider or taller than its cell: %r" % (tid, ab))
+        dx = max(0, 1 - ab[0]) - max(0, ab[2] - (SIZE - 1))
+        dy = max(0, 1 - ab[1]) - max(0, ab[3] - (SIZE - 1))
+    out = raster.Canvas(SIZE, SIZE, None)
+    b = trees.BLEED
+    out.img = c.img.crop((b - dx, b - dy, b - dx + SIZE, b - dy + SIZE))
+    out.px = out.img.load()
+    return out
 
 
 def text_of(s):
