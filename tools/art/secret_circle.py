@@ -78,7 +78,9 @@ def crater(opened):
     # The burn round it: scorched heather thinning outward, so the bowl sits in a black scar.
     for y in range(CH):
         for x in range(CW):
-            d = math.hypot((x - CCX) / (RX + 7.0), (y - CCY) / (RY + 6.0))
+            # Below the bowl the scar is held two rows off the frame's foot: at RY + 6 it reached row
+            # 60 of 60 and was sliced flat along the bottom of the frame (tools/art/clip_check.py).
+            d = math.hypot((x - CCX) / (RX + 7.0), (y - CCY) / (RY + 6.0 if y <= CCY else CH - 2.0 - CCY))
             if d > 1.0:
                 continue
             if (1.0 - d) * 2.2 + 0.15 * math.sin(x * 0.7 + y * 0.4) > th(x, y):
@@ -119,6 +121,8 @@ def crater(opened):
         r = 1.15 + hashed(k, 9) * 0.25
         x = int(CCX + math.cos(a) * RX * r)
         y = int(CCY + math.sin(a) * RY * r)
+        if not (1 <= x <= CW - 3 and 1 <= y <= CH - 3):
+            continue                       # a clod thrown past the frame would be cut in half by it
         c.set(x, y, LN[3])
         c.set(x + 1, y, LN[4])
         c.set(x, y + 1, OCC)
@@ -231,6 +235,16 @@ def star_glass(k):
 
 # --- out ----------------------------------------------------------------------------------------------
 
+def bordered(c):
+    """The canvas with a clear pixel added on every side. The burn, the tufts and the glass are drawn to
+    the edge of their canvas, which on screen is a decal ending on the line its box ends on; FallenStar
+    and SecretFarTell centre them, so a border all round leaves them where they were."""
+    out = raster.Canvas(c.w + 2, c.h + 2, None)
+    out.img.paste(c.img, (1, 1))
+    out.px = out.img.load()
+    return out
+
+
 def audit(name, c):
     bad = c.audit()
     if bad:
@@ -267,9 +281,9 @@ def main():
     sheets.append(img)
 
     row = []
-    singles = [("scorch-%d" % (k + 1), scorch(k)) for k in range(3)]
-    singles += [("scorch-tuft-%d" % (k + 1), scorch(k + 3, 14, 9)) for k in range(2)]
-    singles += [("star-glass-%d" % (k + 1), star_glass(k)) for k in range(2)]
+    singles = [("scorch-%d" % (k + 1), bordered(scorch(k))) for k in range(3)]
+    singles += [("scorch-tuft-%d" % (k + 1), bordered(scorch(k + 3, 14, 9))) for k in range(2)]
+    singles += [("star-glass-%d" % (k + 1), bordered(star_glass(k))) for k in range(2)]
     for name, c in singles:
         ok = audit(name, c) and ok
         one = c.scaled(SCALE)
