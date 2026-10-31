@@ -97,6 +97,17 @@ public static class BoltEvolutions
 	public const string TridentId = "riptide_infinite_horizon";
 	/// <summary>Degrees between neighbouring waves of the fan.</summary>
 	public const float TridentSpreadDegrees = 24f;
+	/// <remarks>
+	/// THE FAN, SCALED BACK (the Ascension audit, 2026-10-30, .ai/spell-roster.md 2i). Three waves each 40%
+	/// bigger every 0.625 s stood two fans on the screen at once: 34% of a PC screen at the peak and a
+	/// quarter on average, the wizard under the waves 61% of the time - the one Ascension past the audit's
+	/// line once Tidal Wall rose. Each wave is now the size a wave is (Breaker's 30% still grows it) and the
+	/// fan comes TridentCooldown of the cooldown rather than half, so one fan is out at a time; the hit
+	/// carries the difference.
+	/// </remarks>
+	public const float TridentScale = 1.0f;
+	public const float TridentCooldown = 0.7f;
+	public const float TridentDamage = 1.9f;
 
 	// --- Hunter's Draw: charge while moving, loose a volley when you stop ---
 

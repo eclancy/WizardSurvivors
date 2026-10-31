@@ -2745,9 +2745,11 @@ public static class SpellEvolutionCatalog
 			o => { Renamed(o, "Tidal Wall", "TidalWall", sea); o.DamageMultiplier = BoltEvolutions.TidalWallDamage; o.ScaleMultiplier = BoltEvolutions.TidalWallScale; o.CooldownMultiplier = BoltEvolutions.TidalWallCooldown; o.PierceBonus = 40; }));
 		// Not "Spring Tide", as 2e first proposed: that is Tituba's Apotheosis's name.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"Three waves fan out from your hand at once, the middle one on your aim and the others {BoltEvolutions.TridentSpreadDegrees:0} degrees to either side. -50% cooldown, and each wave 40% bigger, 40% harder and tearing through 4 more.",
+			$"Three waves fan out from your hand at once, the middle one on your aim and the others {BoltEvolutions.TridentSpreadDegrees:0} degrees to either side. -{(1f - BoltEvolutions.TridentCooldown) * 100f:0}% cooldown, and each wave {(BoltEvolutions.TridentDamage - 1f) * 100f:0}% harder and tearing through 4 more.",
 			"Ascension / Water", "Ascension: a wedge of sea in front of you every cast.",
-			o => { Renamed(o, "Trident", "Trident", sea); o.DamageMultiplier = 1.4f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 2; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+			// Scaled back in the Ascension audit (2026-10-30): waves 40% bigger at half the cooldown stood two
+			// fans on the screen at once (BoltEvolutions.TridentScale).
+			o => { Renamed(o, "Trident", "Trident", sea); o.DamageMultiplier = BoltEvolutions.TridentDamage; o.CooldownMultiplier = BoltEvolutions.TridentCooldown; o.ProjectileCountBonus = 2; o.PierceBonus = 4; o.ScaleMultiplier = BoltEvolutions.TridentScale; }));
 	}
 
 	// Molten Shard: a homing shard at a random enemy in range that burns away a share of its health
