@@ -104,6 +104,8 @@ public partial class DeepWardenBoss : BossEnemy
 		Slam.Shape = TelegraphShape.Cone;
 		Slam.Radius = SweepRadius;
 		Slam.HalfAngleDegrees = SweepHalfAngle;
+		// The Archivist's beam, and its "!" (ArchivistBoss.BuildSlam).
+		Slam.GlyphOverride = TelegraphGlyph.Alert;
 		// A beam has to be visible for its whole life or it is not a beam, so the wind-up becomes
 		// nearly the entire cycle. The short gap is the discharge, and it is the frame the hit
 		// actually lands on.
@@ -117,6 +119,7 @@ public partial class DeepWardenBoss : BossEnemy
 	{
 		mode = Mode.Burrow;
 		Slam.Shape = TelegraphShape.Ring;
+		Slam.GlyphOverride = null;
 		Slam.Radius = SlamRadius;
 		Slam.WindUpSeconds = SlamTelegraphSeconds;
 		Slam.IntervalSeconds = SlamIntervalSeconds * 0.8f;

@@ -933,6 +933,7 @@ icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall
 | Twin Stars' tether | **Failed**: two `DrawPolyline`s | `SpellStrokes`: an occlusion filament round a one-pixel core of the ramp's mid |
 | Nova Seed's shards | **Failed**: `DrawLine`s | `SpellStrokes`: a dark sliver with a hot spine cooling behind a white point |
 | Collapse debris (`ImpactDebris`) | Shared; passes | Fades by dither in this canvas |
+| The heat - the collapse's falloff (0.9.3) | New | In the same shader: the floor between the lip and the collapse radius glows by ordered dither, opaque cells of the ramp, densest and hottest (hot, then mid, then edge) against the core and thinning to nothing at the collapse's edge, in slowly turning bands. It smoulders as the well opens, builds through the pull, and flares as the core shuts (with the hole gone, a disc hottest at its centre). It says where the collapse hits hardest (`HollowStar.ShareAt`: the whole hit at the centre, about a third at the edge) and is never outlined |
 
 ### Starfall
 
@@ -1267,6 +1268,13 @@ Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot 
 Hallowed Ground + Titan's Maul, Aftershock + Hammerfall, Riposte + Celestial Greatsword and Twin Blades +
 Thousand Cuts (every card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched
 Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
+
+**2026-10-30** (`.ai/spell-roster.md` 2f, "the feel pass after 0.9.2"): one new sheet,
+`spirit-dagger.png` - Twin Blades' dagger, the sword's make on the 32 cell, 32 headings, grip 8.5 art px
+behind the centre and head 7.5 ahead (`tools/art/spirit_weapons.py --only=dagger`). The hover is whole art
+pixels (three up and down, one side to side, a heading cell of rock), so nothing new is drawn smooth. The
+Twin Blades and Deflection (Riposte's id) icons were redrawn: a sword and a smaller dagger, and a bolt
+broken on the blade with its pieces thrown aside rather than struck back.
 
 ### Molten Shard
 

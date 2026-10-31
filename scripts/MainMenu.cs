@@ -14,10 +14,6 @@ public partial class MainMenu : Control
 	private Button spellIndexButton = null!;
 	private Button unlocksButton = null!;
 	private Button arcaneUpgradesButton = null!;
-	// The shop is two menus (2026-10-28, Eric: "let's separate powers (passive buffs we can buy) in a
-	// different menu from the other unlockables we can buy"). arcaneUpgradesButton keeps its node name
-	// - the harnesses press it - and opens Powers; this one opens the spells and boons for sale.
-	private Button spellsBoonsButton = null!;
 	private Button optionsButton = null!;
 	private Button reportBugButton;
 	private Button backFromArcaneButton = null!;
@@ -106,13 +102,12 @@ public partial class MainMenu : Control
 		public int BaseCost;
 		public int CostPerLevel;
 		public int MaxLevel;
-		public bool IsSpellUnlock;
 		// Curation is the one upgrade whose ceiling is not a constant: it rises as the spellbook
 		// grows, so a fresh save is offered none of it and a finished one can prune hard.
 		public bool HasPoolScaledMaxLevel;
-		public string SpellId = string.Empty;
-		// A boon sold once (UnlockCatalog.PurchasableBoons). It is an unlock card like a spell's - drawn
-		// the same, bought once - so IsSpellUnlock is true for it too, and this says which kind.
+		// A boon sold once (UnlockCatalog.PurchasableBoons), the one thing in the shop that is not a
+		// levelled upgrade. Spells were sold the same way until schema 19; every spell is an
+		// achievement's now (.ai/achievements-and-secrets.md 2.4).
 		public string BoonId = string.Empty;
 		public bool IsBoon => !string.IsNullOrEmpty(BoonId);
 	}
@@ -130,8 +125,9 @@ public partial class MainMenu : Control
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn/ArcaneUpgradesButton");
-		// Before ApplyMenuSkin, which styles the shop's two buttons as one tier.
-		spellsBoonsButton = BuildSpellsBoonsButton();
+		// The shop's one button (OnArcaneUpgradesPressed). Relabelled, not renamed: the harnesses
+		// press it by its node name.
+		arcaneUpgradesButton.Text = "Powers";
 		unlocksButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton");
 		spellIndexButton = GetNode<Button>("SpellIndexButton");
 		optionsButton = GetNode<Button>("OptionsButton");
@@ -166,8 +162,8 @@ public partial class MainMenu : Control
 		ApplyMenuSkin();
 		ApplyOptionsSolidBackground();
 
-		// Spellbook first: BuildUpgradeDefinitions names its shop rows from these entries, and the
-		// shop's spell pages take their icons, tags and descriptions from them.
+		// The shop needs its definitions before its cards; the boons' pages read BoonCatalog, not these
+		// entries (the shop's spell pages did, until it stopped selling spells).
 		BuildSpellbookEntries();
 		BuildUpgradeDefinitions();
 		BuildShop();
@@ -178,7 +174,6 @@ public partial class MainMenu : Control
 		spellIndexButton.Pressed += OnSpellbookPressed;
 		unlocksButton.Pressed += OnAchievementsPressed;
 		arcaneUpgradesButton.Pressed += OnArcaneUpgradesPressed;
-		spellsBoonsButton.Pressed += OnSpellsBoonsPressed;
 		optionsButton.Pressed += OnOptionsPressed;
 		backFromArcaneButton.Pressed += ShowMainPanel;
 		backFromSpellbookButton.Pressed += ShowMainPanel;
@@ -257,7 +252,7 @@ public partial class MainMenu : Control
 		// (Arcane Upgrades) and what you earn (Unlocks). The Spell Index used to stand between them
 		// as a peer, and it is not one - it changes nothing, it is the catalogue you look things up
 		// in - so it went down to the utilities with Options and Report a bug.
-		foreach (Button secondary in new[] { arcaneUpgradesButton, spellsBoonsButton, unlocksButton })
+		foreach (Button secondary in new[] { arcaneUpgradesButton, unlocksButton })
 		{
 			StyleMenuTier(secondary, MenuTier.Secondary);
 			ResponsiveLayout.SetFont(secondary, ResponsiveLayout.TextRole.Label);
@@ -537,8 +532,13 @@ public partial class MainMenu : Control
 		RefreshAchievementCards();
 	}
 
-	// Unlocks (once Deeds): the achievement list. Every entry pays something - a spell, a boon,
-	// Arcane Energy - and its reward line says which, so the name says what the list is for.
+	// Achievements (once Unlocks, once Deeds; .ai/achievements-and-secrets.md section 4): every
+	// achievement in the game, listed or revealed as the player plays. Every entry pays something - a
+	// spell, a boon, a wizard, Arcane Energy - and its reward line says which. The page itself is
+	// AchievementsPage, which the pause tab builds too; this is its frame: heading, subtitle, summary,
+	// the four tabs, the list and Back.
+	private HBoxContainer achievementTabs;
+
 	private void EnsureUnlocksUi()
 	{
 		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
@@ -565,7 +565,7 @@ public partial class MainMenu : Control
 		var title = new Label
 		{
 			Name = "AchievementsTitle",
-			// The button that opens it says Unlocks, and so does the pause tab.
+			// The button that opens it says Achievements, and so does the pause tab: one constant.
 			Text = CodexRows.UnlocksTitle,
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
@@ -575,6 +575,17 @@ public partial class MainMenu : Control
 		vbox.AddChild(BuildPanelSubtitle(CodexRows.UnlocksSubtitle, CodexRows.Stone.InkSoft));
 
 		vbox.AddChild(new VBoxContainer { Name = "AchievementSummary", MouseFilter = Control.MouseFilterEnum.Ignore });
+
+		// Above the list and outside its scroll, so a tab is never scrolled away and choosing one
+		// rebuilds the rows under it without freeing the button the selection is on.
+		// In the list's gutter (CodexRows.WithGutter's 2 and 18), so the strip's ends line up with the
+		// rows' edges rather than running on over the scroll bar - on a phone the four tabs fill the width.
+		achievementTabs = AchievementsPage.BuildTabs(AchievementsPage.MenuFilter, OnAchievementFilterChosen);
+		var tabMargin = new MarginContainer { Name = "AchievementTabsMargin", MouseFilter = Control.MouseFilterEnum.Ignore };
+		tabMargin.AddThemeConstantOverride("margin_left", 2);
+		tabMargin.AddThemeConstantOverride("margin_right", 18);
+		tabMargin.AddChild(achievementTabs);
+		vbox.AddChild(tabMargin);
 
 		vbox.AddChild(CodexRows.BuildScroll("AchievementScroll", CodexRows.BuildList("AchievementList")));
 
@@ -587,6 +598,11 @@ public partial class MainMenu : Control
 		};
 		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Title);
 		vbox.AddChild(backButton);
+
+		// The title menu's button that opens this panel is the scene's, and the scene still says
+		// "Unlocks"; it says the panel's name instead, from the same constant.
+		if (GetNodeOrNull<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton") is Button opener)
+			opener.Text = CodexRows.UnlocksTitle;
 	}
 
 	// One centred line under a panel heading that says what the panel is for. Label role, never
@@ -646,13 +662,13 @@ public partial class MainMenu : Control
 		return line;
 	}
 
-	// Under the two shop buttons, inside their column, so it reads as their own caption
+	// Under the shop button, inside its column, so it reads as the button's own caption
 	// rather than as a readout floating on the art. Gold like the shop's purse, outlined like the
 	// preset line in the opposite corner: it sits on the title art, not on a panel, and the MENU_BOX
 	// pocket the art keeps dark under the buttons is what it is measured against (ui_contrast.py).
 	private void EnsureMenuEnergyReadout()
 	{
-		// The shop's column, which holds the two shop buttons' row (BuildSpellsBoonsButton) and this.
+		// The shop's column, which holds the shop button (Powers) and this.
 		Control column = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn");
 		if (column == null || column.GetNodeOrNull("MenuPurse") != null)
 			return;
@@ -711,46 +727,17 @@ public partial class MainMenu : Control
 		GetTree().ChangeSceneToFile("res://scenes/CharacterSelection.tscn");
 	}
 
-	// The two shop buttons side by side over the purse they both spend, in the shop's column: Powers
-	// (the scene's Arcane Upgrades button, relabelled) and Spells & Boons. The column takes two shares
-	// of the row to Unlocks' one, so each shop button keeps the width the row gave one before.
-	private Button BuildSpellsBoonsButton()
+	// The shop is one button again, Powers, over the purse it spends. From 2026-10-28 to 2026-10-30 it
+	// stood beside a second, Spells & Boons; then the shop stopped selling spells
+	// (.ai/achievements-and-secrets.md 2.4), the three boons left on that shelf were folded into
+	// Powers as its last section (decision 5), and the button went. The row is two buttons again,
+	// half each, as it was before the split: Powers and Achievements (the scene's UnlocksButton,
+	// relabelled by EnsureUnlocksUi).
+	private void OnArcaneUpgradesPressed()
 	{
-		Control column = arcaneUpgradesButton.GetParent() as Control;
-		var pair = new HBoxContainer { Name = "ShopButtons" };
-		pair.AddThemeConstantOverride("separation", 10);
-		column.AddChild(pair);
-		column.MoveChild(pair, 0);
-		arcaneUpgradesButton.Reparent(pair);
-		arcaneUpgradesButton.Text = "Powers";
-		arcaneUpgradesButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		var button = new Button
-		{
-			Name = "SpellsBoonsButton",
-			Text = "Spells & Boons",
-			CustomMinimumSize = arcaneUpgradesButton.CustomMinimumSize,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-		};
-		pair.AddChild(button);
-		column.SizeFlagsStretchRatio = 2f;
-		return button;
-	}
-
-	private void OnArcaneUpgradesPressed() => OpenShop(ShopMode.Powers);
-
-	private void OnSpellsBoonsPressed() => OpenShop(ShopMode.Unlocks);
-
-	private void OpenShop(ShopMode mode)
-	{
-		shopMode = mode;
-		// The heading moves into the shop's band when the band is built (EnsureShopHeader), so it is
-		// found by name rather than by its scene path.
-		Label title = arcaneUpgradesPanel.FindChild("ArcaneUpgradesTitle", true, false) as Label;
-		if (title != null)
-			title.Text = mode == ShopMode.Powers ? "Powers" : "Spells & Boons";
 		RefreshArcaneEnergy();
-		// Rebuilt on every visit rather than refreshed, so the sections come in the order that is
-		// right NOW (the spells for sale lead until the last is bought - MainMenu.Shop.cs).
+		// Rebuilt on every visit rather than refreshed, so what each section's note says is true NOW
+		// (the boons' changes once the last is bought - MainMenu.Shop.cs).
 		BuildShop();
 		ShowPanel(arcaneUpgradesPanel);
 		OpenShopAtTop();
@@ -766,6 +753,27 @@ public partial class MainMenu : Control
 	{
 		RefreshAchievementCards();
 		ShowPanel(achievementsPanel);
+		ScrollAchievementsToTop();
+		// The panel opens on the tab chosen last, with the selection on it: the root's navigator
+		// would land on the first tab by tree order, which is not the one showing after a visit to
+		// another. A pointer user sees no ring (MenuFocusHighlight hides it under the mouse), and the
+		// tabs sit outside the list's scroll, so focusing one scrolls nothing.
+		AchievementsPage.TabFor(achievementTabs, AchievementsPage.MenuFilter)?.GrabFocus();
+	}
+
+	// A tab rebuilds the list under it and keeps the selection on itself (.ai/achievements-and-secrets.md
+	// 4.8): the tab is outside the list, so the rebuild never frees the control that has the focus.
+	private void OnAchievementFilterChosen(AchievementsPage.Filter filter)
+	{
+		AchievementsPage.MenuFilter = filter;
+		RefreshAchievementCards();
+		ScrollAchievementsToTop();
+	}
+
+	private void ScrollAchievementsToTop()
+	{
+		if (achievementsPanel?.FindChild("AchievementScroll", true, false) is ScrollContainer scroll)
+			scroll.ScrollVertical = 0;
 	}
 
 	// The two lists choose one column or two as they are built, so a canvas that changes shape
@@ -1734,25 +1742,13 @@ public partial class MainMenu : Control
 			"One more spell may be set aside from the level-up pool", 80, 40, 1);
 		upgradeDefinitions[GlobalStatsManager.CurationUpgradeId].HasPoolScaledMaxLevel = true;
 
-		// Driven by UnlockCatalog rather than a hand-kept list. The old list named 22 spells that
-		// were every one of them already unlocked by default, so the entire shop (then the Arcane
-		// Codex) read as bought-out on a fresh save.
-		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableSpells)
-			RegisterSpellUnlock(definition.Id, $"Unlock {SpellDisplayNameFor(definition.Id)}", definition.PurchaseCost);
-		// And the boons the catalog prices. No screen sold them, so Quicksilver Bead, Deepwater Pearl and
-		// Saltbound Chain - Purchase entries since schema 9 - were cards no new save could ever be dealt
-		// (2026-10-26).
+		// The boons the catalog prices, driven by UnlockCatalog rather than a hand-kept list. No screen
+		// sold them until 2026-10-26, so Quicksilver Bead, Deepwater Pearl and Saltbound Chain -
+		// Purchase entries since schema 9 - were cards no new save could ever be dealt.
+		// No spells: the shop sold nine until schema 19, and every one is an achievement's now
+		// (.ai/achievements-and-secrets.md 2.4). A copy anybody bought stays in UnlockedSpellIds.
 		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableBoons)
 			RegisterBoonUnlock(definition.Id, definition.PurchaseCost);
-	}
-
-	// Shop rows are named from the spellbook so a spell has one display name, not two. Passives have
-	// no .tres, which is why this reads the entry list rather than loading resources.
-	private string SpellDisplayNameFor(string spellId)
-	{
-		SpellbookEntry entry = spellbookEntries.FirstOrDefault(
-			e => e.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
-		return entry != null ? entry.DisplayName : spellId;
 	}
 
 	private void BuildSpellbookEntries()
@@ -1930,7 +1926,8 @@ public partial class MainMenu : Control
 	}
 
 	// A page not found yet says how to find it. The name stays hidden - that is the discovery - but
-	// the hint is the one useful thing on the row, so it is the row's body, not a footnote.
+	// the hint is the one useful thing on the row, so it is the row's body, not a footnote. A spell in
+	// a vault is named by its chapter only, led by the secret's warm glint (CodexRows.SpellHintGlyph).
 	private Control BuildMissingSpellbookRow(SpellbookEntry entry, int count)
 	{
 		return CodexRows.BuildRow(new CodexRows.Entry
@@ -1939,7 +1936,7 @@ public partial class MainMenu : Control
 			Icon = entry.Icon ?? DefaultSpellIcon,
 			IconSilhouette = true,
 			Meta = UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell),
-			MetaGlyph = StatIcons.Load("lock"),
+			MetaGlyph = CodexRows.SpellHintGlyph(entry.Id),
 			Quiet = true,
 			FocusStop = true,
 		}, CodexRows.Vellum);
@@ -2057,89 +2054,27 @@ public partial class MainMenu : Control
 
 	private void RefreshSpellbookCards() => BuildSpellbookCards();
 
-	// Unlocks: what is still to do, closest first, then what is done, quietly. It was a four-column
-	// grid in definition order, with done and not-done entries interleaved and told apart by colour.
+	// The page under the tabs (AchievementsPage, which the pause tab builds too), and the summary over
+	// them, which counts the whole page whichever tab is showing. The Secrets section that ended this
+	// list is the Secrets tab now (.ai/achievements-and-secrets.md 4.10).
 	private void BuildAchievementCards()
 	{
 		ClearChildren(achievementList);
 		ClearChildren(achievementSummary);
 		codexColumnsBuilt = CodexRows.ColumnsFor(this);
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		AchievementsPage.LayoutTabs(achievementTabs, narrow);
+		AchievementsPage.MarkTab(achievementTabs, AchievementsPage.MenuFilter);
 
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-		AchievementContext context = AchievementContext.ForSave(data);
-		var open = new List<(AchievementDefinition, AchievementProgress)>();
-		var done = new List<AchievementDefinition>();
-		foreach (AchievementDefinition deed in AchievementDefinitions.Listed)
-		{
-			if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
-				done.Add(deed);
-			else
-				open.Add((deed, deed.GetProgress(context)));
-		}
-
-		int total = open.Count + done.Count;
-		achievementSummary.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSummary(done.Count, total), CodexRows.Stone,
-			total > 0 ? done.Count / (float)total : 0f));
-
-		Texture2D SpellIcon(string id) => spellbookEntries.FirstOrDefault(
-			e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Icon;
-
-		int columns = codexColumnsBuilt;
-		if (open.Count > 0)
-			CodexRows.AddSection(achievementList, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
-				CodexRows.OrderInProgress(open).Select(p => CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone)));
-		if (done.Count > 0)
-			CodexRows.AddSection(achievementList, "Done", $"{done.Count}", CodexRows.Stone, columns,
-				done.Select(d => CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone)));
-		AddSecretsSection(data, columns);
-	}
-
-	// The stage secrets (issue #20, .ai/stage-secrets.md 7.6): what has been found, chapter by chapter.
-	// A found secret is named with what it was, and a keepsake with what it paid; one not yet found is
-	// not named at all - a list of named blanks is a checklist, which is a different game - so a
-	// chapter with more to find says only how many. A section here rather than a page of its own: the
-	// plan's own page needs a button on the title art, and the Unlocks list is already the record of
-	// what a save has done.
-	private void AddSecretsSection(SaveData data, int columns)
-	{
-		var rows = new List<Control>();
-		int foundTotal = 0;
-		foreach (IGrouping<string, SecretDefinition> chapter in SecretCatalog.All.GroupBy(s => s.StageId))
-		{
-			var found = chapter.Where(s => data?.HasFoundSecret(s.Id) == true).ToList();
-			int count = chapter.Count();
-			foundTotal += found.Count;
-			string chapterName = StageCatalog.GetById(chapter.Key)?.DisplayName ?? chapter.Key;
-			foreach (SecretDefinition secret in found)
-			{
-				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
-				{
-					Title = secret.DisplayName,
-					Body = secret.FoundLine,
-					Meta = secret.MetaReward == SecretMetaReward.PageOnly ? chapterName : $"{chapterName}  ·  {SecretCatalog.DescribeMeta(secret)}",
-					MetaIsReward = secret.MetaReward != SecretMetaReward.PageOnly,
-					Tag = "Found",
-					TagGlyph = StatIcons.Load("done"),
-					TagIsDone = true,
-					FocusStop = true,
-				}, CodexRows.Stone));
-			}
-			if (found.Count < count)
-			{
-				int left = count - found.Count;
-				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
-				{
-					Title = chapterName,
-					Body = left == 1 ? "There is something here you have not found." : $"There are {left} things here you have not found.",
-					Progress = found.Count / (float)count,
-					ProgressText = $"{found.Count} of {count} found",
-					Quiet = true,
-					FocusStop = true,
-				}, CodexRows.Stone));
-			}
-		}
-		if (rows.Count > 0)
-			CodexRows.AddSection(achievementList, "Secrets", $"{foundTotal} of {SecretCatalog.All.Count} found", CodexRows.Stone, columns, rows);
+		AchievementsPage.Result page = AchievementsPage.Build(achievementList, AchievementContext.ForSave(data),
+			AchievementsPage.PageMode.Menu, AchievementsPage.MenuFilter, string.Empty);
+		AchievementsPage.LinkTabsToList(achievementTabs, achievementList, AchievementsPage.MenuFilter);
+		// The bar under the count only where there is height for it: on a 720-tall PC canvas the heading,
+		// the subtitle, the count and the tabs already stand over the list, and every unit they take is a
+		// row the list cannot show. The phone's portrait canvas has the height to spare.
+		achievementSummary.AddChild(CodexRows.BuildSummary(AchievementsPage.SummaryLine(page, narrow), CodexRows.Stone,
+			narrow && page.Total > 0 ? page.Earned / (float)page.Total : (float?)null));
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();
@@ -2157,21 +2092,6 @@ public partial class MainMenu : Control
 		};
 	}
 
-	private void RegisterSpellUnlock(string spellId, string displayName, int cost)
-	{
-		upgradeDefinitions[$"spell:{spellId}"] = new UpgradeDefinition
-		{
-			Id = $"spell:{spellId}",
-			DisplayName = displayName,
-			EffectText = "Adds this spell to future level-up offers.",
-			BaseCost = cost,
-			CostPerLevel = 0,
-			MaxLevel = 1,
-			IsSpellUnlock = true,
-			SpellId = spellId
-		};
-	}
-
 	private void RegisterBoonUnlock(string boonId, int cost)
 	{
 		BoonDefinition boon = BoonCatalog.GetById(boonId);
@@ -2183,7 +2103,6 @@ public partial class MainMenu : Control
 			BaseCost = cost,
 			CostPerLevel = 0,
 			MaxLevel = 1,
-			IsSpellUnlock = true,
 			BoonId = boonId
 		};
 	}
@@ -2192,8 +2111,6 @@ public partial class MainMenu : Control
 	{
 		if (def.IsBoon)
 			return GlobalStatsManager.IsBoonUnlocked(saveManager.Data, def.BoonId) ? 1 : 0;
-		if (def.IsSpellUnlock)
-			return GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager.Data, def.SpellId) ? 1 : 0;
 
 		return GlobalStatsManager.GetUpgradeLevel(saveManager.Data, def.Id);
 	}

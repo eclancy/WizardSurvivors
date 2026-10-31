@@ -273,6 +273,11 @@ public static partial class StageBestiary
 		Sketchbook.Build(),
 		FallowFields.Build(),
 		BrokenCircle.Build(),
+		// The castle (.ai/endgame-castle.md): the bridge's garrison and the Court's household. The Cursed
+		// Dungeon keeps its own roster when it moves in, and the Throne has no trickle cast of its own -
+		// its minions are the Court's and the bridge's, sent by ThroneRules (6.3).
+		Bridge.Build(),
+		Court.Build(),
 	};
 
 	public static ChapterBestiary? ForStageId(string stageId)

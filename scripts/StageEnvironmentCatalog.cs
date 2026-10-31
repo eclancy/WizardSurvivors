@@ -19,6 +19,12 @@ public enum StageEnvironmentKind
 	Fields,
 	/// <summary>The Broken Circle (stage_10): heather, granite and standing stone. Its own ground is Phase 2.</summary>
 	Heath,
+	/// <summary>The Last Bridge (stage_11): a diagonal deck over the abyss. Its own ground is piece C1 (.ai/endgame-castle.md 3).</summary>
+	Bridge,
+	/// <summary>The Court (stage_12): his halls, one fixed building. Its own ground is piece C3 (.ai/endgame-castle.md 5).</summary>
+	Court,
+	/// <summary>The Throne (stage_13): one closed hall. Its own ground is piece C4 (.ai/endgame-castle.md 6).</summary>
+	Throne,
 }
 
 public sealed class StageEnvironmentProfile
@@ -130,6 +136,20 @@ public sealed class StageEnvironmentProfile
 
 	/// <summary>Whether the rare flower-pen landmark may appear: green chapters only.</summary>
 	public bool HasLandmarks { get; init; }
+
+	/// <summary>
+	/// Which wall art a wall cell is drawn with: the tiles.json terrain id of the chapter's wall set
+	/// (LevelTilePainter.WallArtSet). The grid's wall cells are always the `wall` terrain - collision,
+	/// navigation and the flags read that - and this names only how they look. "wall" is the Cursed
+	/// Dungeon's jail set (tools/art/jail_walls.py); a chapter that names a set nobody has drawn yet
+	/// paints the jail set until it exists, so a chapter can name its walls before its art lands
+	/// (.ai/endgame-castle.md 1.9). A new set is a module of its own (court_walls.py, ruin_walls.py),
+	/// never an edit to jail_walls.py.
+	/// </summary>
+	public string WallSet { get; init; } = DefaultWallSet;
+
+	/// <summary>The jail walls: what every wall is drawn with until its chapter has its own.</summary>
+	public const string DefaultWallSet = "wall";
 }
 
 public static class StageEnvironmentCatalog
@@ -264,8 +284,13 @@ public static class StageEnvironmentCatalog
 			IntroTint = new Color(0.98f, 0.90f, 0.80f, 1.0f),
 			// Spike plates only: old traps set in the stones fit ruins, but an iron floor grate breathing
 			// fire under the open sky does not (Eric, 2026-10-28: "there shouldn't be fire vents outside").
+			// On the broken walls they stand where the Dungeon's do, in hallway rows (Node2DGame.HazardPlanFor).
 			HazardSpikes = true,
+			// The flower pen fits where the ruin opens into a court (thirty tiles of floor inside a broken
+			// wall), and a walled garden among old walls is the right place for one.
 			HasLandmarks = true,
+			// Its own broken walls (tools/art/ruin_walls.py), drawn on the Ruin topology's wall cells.
+			WallSet = "ruin_wall",
 		}
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(
@@ -417,7 +442,19 @@ public static class StageEnvironmentCatalog
 			},
 			48f)
 		{
-			HasLandmarks = true,
+			// THE CAVERNS (.ai/endgame-castle.md 7.3, piece V2): its own rock (tools/art/cave_walls.py) on
+			// the caverns' walls, and a stone pool's water in the chambers. A cold, close haze with damp
+			// drifting through it, nothing warm: the only light is the one you brought.
+			HazeTint = new Color(0.08f, 0.12f, 0.20f, 0.12f),
+			GlowTint = new Color(0.12f, 0.20f, 0.30f, 0.05f),
+			WeatherTint = new Color(0.16f, 0.24f, 0.34f, 0.026f),
+			WeatherOffset = new Vector2(-60f, 90f),
+			IntroTint = new Color(0.86f, 0.92f, 1.0f, 1.0f),
+			WaterStyle = "pool",
+			WallSet = "cave_wall",
+			// No flower pen. It needs 24 x 18 tiles clear of walls, which a cavern almost never has, and
+			// where one fitted it would fill a chamber with a fence; nothing grows down here anyway.
+			HasLandmarks = false,
 		}
 		,
 		// THE FALLOW FIELDS (stage_9, .ai/campaign.md section 5): stubble, ploughed earth and hedge
@@ -496,6 +533,115 @@ public static class StageEnvironmentCatalog
 			WeatherOffset = new Vector2(-100f, -70f),
 			IntroTint = new Color(0.92f, 0.90f, 0.98f, 1.0f),
 			WaterStyle = "pool",
+		}
+		,
+		// THE CASTLE (.ai/endgame-castle.md). Three STAND-IN blocks, one per chapter, each its own piece's
+		// to replace (C1 the bridge, C3 the Court, C4 the Throne) - kept a blank line apart so two of them
+		// never edit adjacent lines. Until then each borrows the nearest look the game already has, and
+		// sets no hazard: the castle's traps are its own (murder-holes, ovens, chandeliers) and are placed
+		// by its ChapterRules, not scattered here.
+
+		// THE LAST BRIDGE (stage_11, piece C1, .ai/endgame-castle.md 3): a deck of laid setts
+		// (terrain_bridge.py) over the abyss - the sea far below, near-black, with mist moving on it
+		// (water.py's `abyss`, the drop either side of the band). A cold sea wind: a blue-grey wash and mist
+		// drifting across from the north-west, the way the wind comes off the water. No placed traps: the
+		// bridge's hazards are the front, the murder-holes and the gaps, all BridgeRules'. Its furniture -
+		// parapets, gatehouse towers, the castle wall - is BridgeRules' too, so the shared decor counts are 0.
+		[StageEnvironmentKind.Bridge] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Bridge,
+			"bridge",
+			"Bridge",
+			"res://assets/bonelight/tiles/deck_fill.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			0.35f,
+			0.0f,
+			new Color(0.82f, 0.86f, 0.94f, 1.0f),
+			new Color(1f, 1f, 1f, 0f),
+			0.0f,
+			// Nothing grows on a bridge, and its furniture (parapet, gatehouses) is BridgeRules'.
+			0,
+			0,
+			0,
+			new[] { "res://assets/bonelight/tiles/deck_fill.png" },
+			48f,
+			// No scattered props either (the palette names no theme): anything standing on the deck would
+			// stand on in the drop once the front had passed it.
+			propCount: 0)
+		{
+			HazeTint = new Color(0.12f, 0.16f, 0.24f, 0.10f),
+			GlowTint = new Color(0.20f, 0.24f, 0.34f, 0.05f),
+			WeatherTint = new Color(0.70f, 0.78f, 0.90f, 0.03f),
+			WeatherOffset = new Vector2(-140f, -100f),
+			IntroTint = new Color(0.90f, 0.94f, 1.0f, 1.0f),
+			WaterStyle = "abyss",
+		}
+		,
+
+		// THE COURT (stage_12, C3, .ai/endgame-castle.md 5): his halls. The castle's flags under laid marble,
+		// oak boards and each wing's carpet runner (terrain_court.py), panelled walls hung with his cold fire
+		// and the banners of a house with no arms (court_walls.py, the `court_wall` set), and every piece of
+		// furniture placed by CourtRules from the layout - so no scattered props (propCount 0, and the
+		// palette names no themes) and no scattered traps: the Kitchens' ovens are the Court's one hazard and
+		// CourtRooms places them (5.9). A cold haze a shade warmer than the Dungeon's under it: a house, not
+		// a gaol, but nobody has lit a fire in it.
+		[StageEnvironmentKind.Court] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Court,
+			"court",
+			"Court",
+			"res://assets/bonelight/tiles/floor_stonetile_0.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			0.40f,
+			0.10f,
+			new Color(0.66f, 0.64f, 0.70f, 1.0f),
+			new Color(0.30f, 0.32f, 0.38f, 0.0f),
+			0.0f,
+			0,
+			0,
+			0,
+			new[] { "res://assets/bonelight/tiles/floor_stonetile_0.png" },
+			48f,
+			propCount: 0)
+		{
+			HazeTint = new Color(0.15f, 0.14f, 0.21f, 0.10f),
+			GlowTint = new Color(0.28f, 0.22f, 0.34f, 0.05f),
+			WeatherTint = new Color(0.06f, 0.08f, 0.12f, 0.024f),
+			WeatherOffset = new Vector2(60f, 30f),
+			IntroTint = new Color(0.94f, 0.92f, 0.96f, 1.0f),
+			WallSet = "court_wall",
+		}
+		,
+
+		// THE THRONE (stage_13), stand-in: the Emberdeep's laid dark tile, unlit. C4 gives it the hall and
+		// his light - the `darkness` ramp as emission, the one place in the game it is spent
+		// (.ai/endgame-castle.md 6.1) - and its own walls, already named here.
+		[StageEnvironmentKind.Throne] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Throne,
+			"throne",
+			"Throne",
+			"res://assets/bonelight/tiles/floor_darktile_0.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			0.30f,
+			0.0f,
+			new Color(0.62f, 0.58f, 0.70f, 1.0f),
+			new Color(1f, 1f, 1f, 0f),
+			0.0f,
+			0,
+			0,
+			0,
+			new[] { "res://assets/bonelight/tiles/floor_darktile_0.png" },
+			48f,
+			propCount: 8)
+		{
+			HazeTint = new Color(0.10f, 0.08f, 0.16f, 0.12f),
+			GlowTint = new Color(0.20f, 0.12f, 0.30f, 0.05f),
+			IntroTint = new Color(0.90f, 0.86f, 0.98f, 1.0f),
+			WallSet = "throne_wall",
 		}
 	};
 

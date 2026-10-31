@@ -15,20 +15,24 @@ using WizardSurvivors.scripts;
 // on the pen that moves. Then the flower turns to face the player as he walks round, which is the
 // whole tutorial; and the lap is drawn as it is walked, a mote of light lit on the fence for every
 // stretch covered, unlit again if he walks back. When it opens the flower holds a steady glow.
-public partial class FencedBloom : Node2D
+//
+// Hooked onto every pen by its catalog entry's Install (SecretCatalog.EnchantedForest, through
+// SecretDirector.HookLandmarks); a SecretSite, so the seen mark is the director's and keyed by the pen.
+public partial class FencedBloom : SecretSite
 {
-	public SecretDirector Director { get; set; }
 	public Landmark Site { get; set; }
+
+	/// <summary>One per pen: the lap round each is its own.</summary>
+	public override string Key => Site?.Key ?? SecretId;
+
+	/// <summary>Seen once the flower is: the pen's middle.</summary>
+	public override Vector2 TellPosition => Site != null ? Site.Centre : GlobalPosition;
 
 	// From the fence posts out to here counts as walking round it (the plan's "about 200 px out").
 	private const float LapBand = 200f;
 	private const float HealShare = 0.5f;
 	private const float SanctuaryPerSecond = 0.5f;
-	private const float GlintPeriod = 2.4f;
 	private const int LapMotes = 28;
-
-	private static readonly Color GoldHi = new Color(1.0f, 0.941f, 0.753f);  // #FFF0C0, the contract's gold.hi
-	private static readonly Color GoldLit = new Color(0.847f, 0.690f, 0.290f);
 
 	private SecretDirector.SiteState state;
 	private Sprite2D flower;
@@ -131,25 +135,28 @@ public partial class FencedBloom : Node2D
 		return MathF.Sqrt(dx * dx + dy * dy);
 	}
 
+	// PIXEL ART (2026-10-30, the secrets' pass onto the spells' contract): every pixel below is an opaque
+	// stop of the gold row on the world's 2-unit grid (SecretSite.DrawGlint and DrawLight find the grid
+	// from this node's global origin). It was translucent discs and rects at fractional alpha - a soft
+	// gold wash round the open flower, a quarter-alpha square round each mote.
 	public override void _Draw()
 	{
 		Vector2 head = ToLocal(flowerHead);
 		if (state.Done)
 		{
-			// Open: a steady glow round the flower and a bright core. Small - it is a flower, not a spell.
-			DrawCircle(head, 26f, new Color(GoldHi, 0.12f));
-			DrawCircle(head, 12f, new Color(GoldHi, 0.22f));
-			DrawRect(new Rect2(head - new Vector2(2f, 2f), new Vector2(4f, 4f)), GoldHi);
+			// Open: a steady glow round the flower and a bright core - a small light, held at the top of its
+			// breath. Small - it is a flower, not a spell.
+			DrawLight(this, head, 14f, 0.7f);
 			return;
 		}
 
 		// The breathing glint: a 2 x 2 art-pixel core (4 x 4 on screen, the contract's x2) and a
 		// one-pixel halo, rising and falling on a slow breath - a flicker would read as fire.
-		float breath = 0.5f - 0.5f * MathF.Cos(clock * Mathf.Tau / GlintPeriod);
-		DrawRect(new Rect2(head - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color(GoldHi, 0.18f + 0.22f * breath));
-		DrawRect(new Rect2(head - new Vector2(2f, 2f), new Vector2(4f, 4f)), new Color(GoldHi, 0.45f + 0.55f * breath));
+		DrawGlint(this, head, clock);
 
-		// The lap so far, lit on the fence: one mote per stretch, from the bearing it was started on.
+		// The lap so far, lit on the fence: one mote per stretch, from the bearing it was started on. Each a
+		// glint held still at the top of a breath, a little dimmed, so the lit lap reads as the flower's
+		// light laid round the fence and not as a second flower.
 		float progress = MathF.Abs(state.Progress);
 		if (progress <= 0.001f)
 			return;
@@ -158,9 +165,7 @@ public partial class FencedBloom : Node2D
 		for (int k = 0; k < lit; k++)
 		{
 			float angle = lastAngle - sign * (k + 0.5f) * Mathf.Tau / LapMotes;
-			Vector2 point = ToLocal(OnFence(angle));
-			DrawRect(new Rect2(point - new Vector2(2f, 2f), new Vector2(4f, 4f)), new Color(GoldHi, 0.85f));
-			DrawRect(new Rect2(point - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color(GoldLit, 0.25f));
+			DrawGlint(this, ToLocal(OnFence(angle)), GlintPeriod * 0.5f, 0.7f);
 		}
 	}
 

@@ -18,7 +18,8 @@ Eric, 2026-10-29:
 > the fight starts and can essentially make a build, then fights a series of bosses and minions until
 > the final boss comes out."
 
-**Status: design, decided 2026-10-30, not built.** Eric reviewed the first draft and chose: **move
+**Status: design, decided 2026-10-30. C0, the plumbing, is built** (branch `wip/castle-plumbing`;
+section 11 says what it is and how a chapter agent plugs into it). Nothing else is. Eric reviewed the first draft and chose: **move
 the Cursed Dungeon in** (the first draft proposed a new chapter, the Undercroft, instead), and
 **build everything else as recommended** - the diagonal bridge that collapses behind the player,
 the roast fowl, the fixed Court, the Muster, earlier bosses in pairs, Boss Rush unchanged, and the
@@ -881,10 +882,10 @@ its own contract, and an ordinary run is untouched by it:
 | Enchanted Forest | open, endless | grass, moss, meadow | ponds, trunks, the pen's fence | - | survive, boss | hold the grove |
 | The Fallow Fields | open | stubble, furrow, hedge bank | millponds, fences | - | survive, boss | defend the well |
 | The Broken Circle | open | heather, peat, granite | tarns, standing stones | - | survive, boss | relight the moot |
-| Sunken Cave | open | **the Ruins' palette** - it has none of its own (`LevelGenerator.PaletteFor` falls back) | - | - | survive, boss | - |
+| Sunken Cave | **caverns**, endless (V2, built) | its own: `cave_floor`, silt, scree; `cave_wall` rock | rock, pools in chambers | - | survive, boss | - |
 | Cursed Dungeon | **maze**, endless | flags | jail walls, water | pits, spikes and vents in the corridors | survive, boss | the key |
 | Blighted Swamp | open | mud, moss | much water | - | survive, boss | the lanterns |
-| Mystic Ruins | open | graystone, cobble | - | pits, spikes | survive, boss | - |
+| Mystic Ruins | **broken walls** on the maze, endless (V1, built) | graystone, cobble; `ruin_wall` | broken walls, pillars | spikes in hallway rows (the pits went) | survive, boss | - |
 | Frozen Waste | open | graystone, ice | water | - | survive, boss | the thaw |
 | Scorched Sands | open | sand, scree | - | rocky pits | survive, boss | the caravan |
 | The Emberdeep | open | basalt | - | lava, pits | survive, boss | - |
@@ -918,6 +919,11 @@ are cheap.
 
 **Decided: 1 and 2 first.** With the move they are no longer only variety: they restore walled ground
 to the middle of the campaign (1.7), so they should land **before or with** the Dungeon's move.
+
+**Built (2026-10-30, `wip/variety-walls`): both.** What each became, where the proposal above changed in
+the building (the Cave's graph at a 16-tile pitch rather than the Dungeon's 8, chambers as well as halls;
+the Ruins' pits removed), the proof that the caverns have no sealed pockets, the two bosses' placement
+fixes and the probe and harness numbers are in `.ai/terrain.md` section 11.
 
 ---
 
@@ -1067,3 +1073,171 @@ whether the end lands. Eyes, on both devices.
 4. **A third phase for the Gaoler** (4.3), only if he measures long rather than hard at 12,500.
 5. **Nothing at fifth place** (1.7); the Cave's caverns and the Ruins' walls carry the middle.
    **Recommended**, with V1 and V2 landing before the move.
+
+---
+
+## 11. What C0 built (2026-10-30, `wip/castle-plumbing`)
+
+Section 1.9, entire, on top of A1 (`main-ff86ni`). Nothing in it is playable: all three chapters are
+`IsPlayable = false`, so no save, screen or run can reach them, and every chapter of the road plays
+exactly as it did. The Cursed Dungeon has not moved (C2).
+
+### 11.1 Where it lives
+
+| piece | where | what is there now |
+|---|---|---|
+| the chapters | `StageCatalog` | `stage_11` the Last Bridge, `stage_12` the Court, `stage_13` the Throne, appended; the texts of 1.4; `CampaignOrder` after `stage_7`, with a comment line between the bridge and the Court where C2 puts `stage_1` |
+| the Throne's gate | `StageCatalog` | `Gate = StageGate.PreviousBossAndWizards` (A1's kind). It counts every wizard, Tituba included; `ValidateGateReachability` walks a new save to it |
+| the bosses | `BossCatalog` `[11]`-`[13]` | `bridge_constable` the Constable (11,800, bonus 360), `court_seneschal` the Seneschal (13,000, 390), `throne_dark_wizard` "The Dark Wizard" (18,000, 450), each on `DeepWardenBoss.tscn` until `BridgeConstableBoss.tscn` / `CourtSeneschalBoss.tscn` / `ThroneDarkWizardBoss.tscn` exist |
+| their deeds | `AchievementDefinitions` | `bridge_crossed` *Across the Water* (350), `court_emptied` *No One Left* (400), `throne_taken_back` *Taken Back* (1,000): Arcane Energy only, Road deeds, unlisted until their chapter is playable. A boss with no paying deed is a validator fault, so they had to exist with the bosses |
+| Boss Rush | `BossRushCatalog.Arena` | `StageCatalog.GateChapter` (the Emberdeep). `Roster` and `IsOpen` are C2's and untouched |
+| the casts | `StageBestiary.Bridge.cs`, `StageBestiary.Court.cs` | 3.5 and 5.7, every slot `Planned` at `scenes/Bridge*.tscn` / `scenes/Court*.tscn` on the Emberdeep's creature for the role. Tables: the bridge the Emberdeep's band for band (mean 1.28), the Court the Dungeon's shape a step up (1.37, "between the Bridge's and the Court's", 4.1). `bestiary_kit.PREFIXES` has `bridge-` and `court-` |
+| the look | `StageEnvironmentCatalog` | `StageEnvironmentKind.Bridge`, `Court`, `Throne`, one stand-in profile each (no hazards); `StageEnvironmentProfile.WallSet` (below) |
+| the ground | `LevelGenerator`, `GroundDetail` | a stand-in palette and detail block each; the bridge names `Band`, the Court and the Throne `Authored` |
+| the topologies | `LevelGenerator.cs`, `LevelGenerator.Band.cs`, `LevelGenerator.Authored.cs` | the partial-file pattern (11.3); `Band` and `Authored` are stubs, so all three chapters generate as open field |
+| the walls | `LevelTilePainter.WallArtSet` | a chapter's wall art by name; the Court names `court_wall`, the Throne `throne_wall`, both painting the jail set until drawn |
+| the rules | `scripts/ChapterRules.cs`, `scripts/ChapterRulesCatalog.cs`, `Node2DGame` | the seven hooks (11.2); a null line per castle chapter |
+| the music | `MusicCatalog` | `Bridge`, `Court`, `Throne`, `PlannedChapter(id, Emberdeep)`, rows `[11]`-`[13]`, exactly as `.ai/audio-manifest.md` asks; all three are rendered, so each chapter plays its own |
+| side events | `SideEventDirector.ForStage` | `"stage_11" => null`, `"stage_12" => null`, `"stage_13" => null`, a comment apart |
+| traps | `RegressionChecks` | the Court and the Throne are indoor chapters and all three built ones, so a chapter may set vents or spikes in its own profile without editing the validator |
+
+### 11.2 The seven hooks
+
+`ChapterRules` is an abstract `Node`. A chapter subclasses it in a file of its own; `Node2DGame` creates one
+per run from `ChapterRulesCatalog.ForStage`, sets `Game` and `Stage`, and adds it as a child **before**
+anything is placed (terrain, side event, secrets all ask hook 3). Its `_Ready` therefore runs with nothing
+built; `RunStarted` is the one that runs once the stage exists. Every hook defaults to "no opinion", and a
+chapter with no line in the catalog gets no rules object at all. Each call site in `Node2DGame` is marked
+`Hook N`. `Node2DGame.Rules` hands the rules to whatever belongs to the chapter (its boss, its rooms).
+
+| # | hook | asked in | for |
+|---|---|---|---|
+| 1 | `RunStarted()` | the end of `_Ready`, terrain's first chunks loaded, HUD built | placing the chapter's set pieces (the front, the gatehouses, the rooms, the Muster) |
+| 2 | `TryPickSpawnPoint(playerPos, out point)` | `GetRandomSpawnPositionAroundPlayer`, i.e. every candidate of the trickle, elites, the miniboss, recycling, and a formation member that misses | the bridge's 65/15/20 split. The point is still vetted (walls, water, a long walk round, hook 3, separation) |
+| 3 | `IsPlacementBlocked(point)` | `IsImpassablePosition` | ground closed to everything placed: enemies, chests, event sites, secrets, the boss, the way home. Asked very often: keep it cheap |
+| 4 | `BossSpawnPoint(boss)` | `SpawnBoss` | the Constable at the gate, the Seneschal in his room |
+| 5 | `VictoryPortalPoint(fellAt)` | `OpenVictoryPortal` | the castle gate, the throne room doors. The arcane portal still opens at the point and walking in still wins |
+| 6 | `PinnedPaceSeconds` | `PaceSeconds` | the Throne's end state from the first second. The survival clock and the boss's arrival read `timeElapsed`, not this |
+| 7 | `CreateObjective()` | once, after `RunStarted` | the line under the run timer: `Node2DGame` anchors the control across the HUD at `ObjectiveTop`-`ObjectiveBottom` (84-112, the side event's slot), insets it with `SafeArea.ApplyTo` and frees it with the run. `ChapterRules.ObjectiveLabel(text)` makes a text one in the side event's style |
+
+A chapter that needs an eighth hook adds it to `ChapterRules` with a no-op default and one call in
+`Node2DGame`, in one commit that says why - never a branch on the stage id in `Node2DGame`.
+
+### 11.3 How a chapter agent plugs in
+
+**Its topology** (C1 `Band`, C3 `Authored`, V1 `Ruin`, V2 `Caverns`; the enum values exist already). Fill
+in the one partial method in `LevelGenerator.<Name>.cs` (C1 and C3 edit their stub; V1 and V2 create theirs):
+
+```csharp
+static partial void BuildRuinTopology(ref TopologyBuild build)
+{
+	build.Generate = (grid, chunk) => { /* fill grid; [0, 0] is world tile (chunk.X0, chunk.Y0) */ };
+	build.Walled = true;              // walls: no cleanup pass, maze routing, maze spawn rules
+	build.OwnsSpawnClearing = false;  // true if the start must not be stamped open
+}
+```
+
+Then set `Topology = StageTopology.<Name>` in the chapter's own palette block (the castle's are set
+already). That is all: until `Generate` is set the chapter is generated as Open; once it is,
+`LevelGenerator.Describe` reports the topology and `LevelLayout.Walled`, `Node2DGame` plays walled ground
+by the maze's rules, the validator's to-do item goes, and `ValidateTerrainSeams` holds the topology to the
+seam rule by itself. The rules of a generator are in the comment above `TopologyBuild`: every cell a pure
+function of (seed, world tile), the padded grid filled completely, floor as `BaseSentinel`, walls as
+`WallTerrain`. `FillOpenGround(grid, chunk)` lays the palette's open ground first; `GenerateMaze(grid,
+x0, y0, seed, rates)` is the Dungeon's lattice at a `MazeRates` of the topology's own (`MazeRates.Dungeon`
+is the old constants, unchanged), which is the cheap way to V1's broken walls and V2's caverns
+(section 7.2). Build-time code only assigns: anything loaded (a layout JSON) is loaded inside `Generate`,
+because partial files do not order their static initialisers.
+
+**Its walls.** Draw them under a terrain id of their own in a new module (`court_walls.py` ->
+`court_wall`, run through `tiles.py`), every role the jail set has. The chapter's profile names the set
+(`WallSet`); the painter uses it whole once the manifest has it, and `ValidateGroundArt` then holds it to
+every role. The grid's wall cells stay `wall`. V1 and V2 add `WallSet = "ruin_wall"` / `"cave_wall"` to
+their own profile blocks.
+
+**Its rules.** Write `<Chapter>Rules : ChapterRules` in its own file and replace its one line in
+`ChapterRulesCatalog.ForStage` (`"stage_11" => () => new BridgeRules(),`). The validator's to-do item for
+the rules goes when the line is filled.
+
+**Its look, ground and detail.** Its own block in `StageEnvironmentCatalog`, `LevelGenerator`'s palettes
+and `GroundDetail`. `Node2DGame.BuildDecorProps` has one empty case for all three castle kinds on
+purpose: their furniture is placed by their rules, so nobody edits that switch.
+
+**Its cast** (C6). `.ai/bestiary.md` section 8's recipe at the paths the roster names; stems
+`bridge-<name>` / `court-<name>`, sheets `Bridge<Name>Frames` / `Court<Name>Frames`. The roster needs no
+edit; the bestiary to-do line shortens as scenes land.
+
+**Its boss** (C5). Create the scene at `BossDefinition.ScenePath`; the chapter switches to it with no
+edit. Tune numbers in its own `BossCatalog` block. `ValidateBossPattern` wants a `case` for a new
+boss class.
+
+**Its music** is wired. **Its flip** is one line, last, once its campaign to-do line is gone.
+
+### 11.4 Decisions C0 made
+
+1. **The world map (the rule for unbuilt chapters).** `.ai/world-map.md` section 2 says every chapter is a
+   stop, an unbuilt one under a thicker fog, and section 6 that `ValidateWorldMap` demands a stop for every
+   chapter. Drawing the castle is C8's and waits on C2's order, so C0 keeps the rule where it matters and
+   relaxes it where it cannot yet be met: **a chapter that is not playable may stand off the map until it
+   is drawn; its missing stop is an item on its campaign to-do line, and the screen leaves it out quietly
+   (no `push_error`) and says "Chapter N of M" over the chapters it shows. A playable chapter with no stop
+   is a fault, as before**, so none can flip with its place undrawn (shown: flipping the bridge early turns
+   both its lines into faults). Once C8 places them, they are stops under the `Unbuilt` fog exactly as the
+   map doc says, and the count is 13.
+2. **No save is ever written an unbuilt chapter.** An unbuilt gate's previous playable chapter is earlier
+   than it will be (the Throne's is the Emberdeep today), so `GlobalStatsManager.RecordMetGates` would have
+   written `stage_13` into every save with the Warden of the Deep beaten and every wizard free, and handed it
+   the Throne past an unbuilt bridge and court the day it flipped. It records playable gates only; a
+   `ValidateCampaign` check holds it (shown to fire without the guard).
+3. **Two `FinalChapter` readers meant the Emberdeep** (`ValidateCampaignMigration`'s "met the old gate"
+   save and the schema-12 John Dee check). They read `GateChapter` now; with the Throne last and unplayable
+   they would have stopped checking without a word. `ValidateCampaign`'s rule is A1's, unchanged.
+4. **Stand-in numbers.** Health is section 3.6 / 5.6 / 6.4's. The victory bonuses (360, 390, 450) are
+   mine, climbing from the Gaoler's castle 375 (4.3); each boss's block is its agent's to retune. The
+   deed names are mine; the Throne's boss is "The Dark Wizard" in the catalog because the boss bar, the
+   world map's card and the results screen need a name - a description, not his name (6.4).
+5. **The Emberdeep's corruption line is unchanged** ("His seat, and the end of the road", 1.4 proposes
+   "His forge, at the end of the road"): it reads wrong only once the bridge exists, so it belongs to the
+   bridge's flip.
+6. **`Ruin` and `Caverns` are declared now**, with `MazeRates`, so V1 and V2 create one file each.
+
+### 11.5 Left open for the chapter pieces
+
+- **The Throne has no roster** (6.3 says it has no trickle cast). Before it flips, C4 gives it one in
+  `StageBestiary.Throne.cs` (the Court's Heavy, Wall and Ranged and the bridge's Gate Knight, which will
+  read as "borrowed" on the bestiary line - C4 decides how that line ends) or its rules suppress the
+  trickle. Today a run of `stage_13` from a tool spawns the Dungeon's cast with an error, and
+  `ValidateBestiary` faults a playable chapter with no roster.
+- **The procession needs more than the seven hooks.** Sending bosses on the Throne's own schedule, in
+  pairs, with the fall of the last one winning, is the Boss Rush's machinery (`Node2DGame.BossRush.cs`),
+  and granting the Muster's levels needs a public way in. Suppressing the clock's boss is already possible
+  (`TimerVictorySeconds = 0` in `RunStarted`). C4 should propose the extra hooks rather than edit
+  `Node2DGame` freely.
+- **Boss Rush's roster is still derived** (C2's `RoadOrder` is not built). The day a castle boss's own
+  scene lands before C2 merges, the rush would gain it after the Warden of the Deep; `ValidateBossRush`
+  already says so ("the roster ends on ..., not the arena's boss"), so a C5 piece that lands first must
+  wait for C2 or say so.
+- **The way home is a point** (hook 5). The arcane portal opens there. If the bridge's gate or the Court's
+  doors must replace the ring rather than stand behind it, that is an eighth hook.
+
+### 11.6 Verified, and not
+
+- `dotnet build`; the validator (`MainMenu.tscn --quit-after 300 -- --no-save-writes`): **0 errors, 6
+  warnings** against the baseline's 0 and 1 - the standing `test_wizard` one, the three chapters' campaign
+  to-do lines, and the bridge's and the Court's bestiary to-do lines (eleven stand-ins each). No migration,
+  gate, world map, rush, music or ground line.
+- Shown to fire by breaking what they guard: the `RecordMetGates` check without its guard; the bridge
+  flipped early (a world map fault and "playable but still has stand-ins").
+- `_BalanceHarness` (`--minutes=3 --timescale=3 --seed=4242 --character=1`), before and after:
+  - `--boss-rush --immortal`: the same line both times, `BOSS RUSH in The Emberdeep: 10 bosses`, the
+    road's ten in the road's order from `forest_treant` at pace 150 s to `emberdeep_warden` at 900 s, the
+    first at 840 HP, the Emberdeep's cast.
+  - `--stage=0`: the Forest and its cast both times; the bot died at 2.2 minutes before and at 3.0 and 1.6
+    in two runs after. `--seed` seeds only the harness's chests (`Node2DGame` randomises its spawns), so
+    that spread is the noise of one build, and nothing on the Forest's path changed (no rules, Open
+    topology, the jail wall set).
+  - smoke runs after: `--stage=1 --immortal` (the maze, now through `LevelLayout.Walled`) as before;
+    `--stage=11 --immortal` plays an open field on the Emberdeep's stand-ins to the `bridge` music set.
+- **Not run:** any castle chapter as the real thing (they are open fields on stand-ins); `_BossProbe
+  --stage=11..13` (the stand-in is the Warden of the Deep); the world map with castle stops (C8). No
+  chapter has rules yet, so no hook has run with an answer - the first real test of each is its chapter's.

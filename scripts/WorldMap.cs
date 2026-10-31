@@ -119,8 +119,11 @@ public partial class WorldMap : Control
 			WorldMapStop placed = layout.Get(rush ? WorldMapLayout.BossRushId : stage.Id);
 			if (placed == null)
 			{
-				// RegressionChecks.ValidateWorldMap names this too; here it only costs the stop.
-				GD.PushError($"WorldMap: '{(rush ? WorldMapLayout.BossRushId : stage.Id)}' has no place on the map (tools/art/world_map.py PLACES).");
+				// RegressionChecks.ValidateWorldMap names this too; here it only costs the stop. A chapter
+				// not built yet may have no place until the map draws it (the castle's, until piece C8):
+				// it is left off quietly, as a to-do and not a fault (.ai/endgame-castle.md 1.9).
+				if (rush || stage.IsPlayable)
+					GD.PushError($"WorldMap: '{(rush ? WorldMapLayout.BossRushId : stage.Id)}' has no place on the map (tools/art/world_map.py PLACES).");
 				continue;
 			}
 			stops.Add(new Stop
@@ -367,8 +370,12 @@ public partial class WorldMap : Control
 		bool open = stop.Look == WorldMapView.StopLook.Open;
 
 		int position = stop.IsBossRush ? -1 : StageCatalog.CampaignPositionOf(stage.Id);
+		// "of" the chapters the map shows: every chapter is a stop once drawn, and a chapter not drawn
+		// yet (the castle's, until piece C8) is not one to count - "Chapter 1 of 13" over ten places
+		// would name three the player cannot find.
+		int chapters = stops.Count(s => !s.IsBossRush && StageCatalog.IsInCampaign(s.Stage));
 		string where = stop.IsBossRush ? "The seat, at the summit"
-			: position >= 0 ? $"Chapter {position + 1} of {StageCatalog.Campaign.Count}"
+			: position >= 0 ? $"Chapter {position + 1} of {chapters}"
 			: "Beyond the map";
 		cardBox.AddChild(MakeText(where, ResponsiveLayout.TextRole.Label, InkPlace, "CardWhere"));
 		var name = MakeText(stop.IsBossRush ? "Boss Rush" : stage.DisplayName, ResponsiveLayout.TextRole.Title, Ink, "CardName");
@@ -388,14 +395,15 @@ public partial class WorldMap : Control
 		else if (!open)
 		{
 			cardBox.AddChild(GlyphLine("lock", stage.LockedHint, InkFlag, "CardState"));
-			if (stage.Gate == StageGate.CampaignComplete && stage.IsPlayable)
+			if (stage.Gate == StageGate.PreviousBossAndWizards && stage.IsPlayable)
 			{
-				// The one gate the player cannot open by beating one thing, and the one place it is
-				// written down with its count (the stage list lost this when it hid closed chapters).
-				int spells = GlobalStatsManager.RemainingSpellCount(save);
-				int wizards = GlobalStatsManager.RemainingWizardCount(save);
-				cardBox.AddChild(MakeText($"Still held: {Plural(spells, "spell")} and {Plural(wizards, "wizard")}",
-					ResponsiveLayout.TextRole.Label, InkSoft, "CardGoal"));
+				// A gate chapter: the one gate the player cannot open by beating one thing, and the one
+				// place it is written down with its count. It counts wizards since schema 19, not spells
+				// (.ai/achievements-and-secrets.md 2.5) - only those freed before this chapter.
+				int wizards = GlobalStatsManager.RemainingGateWizardCount(save, stage);
+				if (wizards > 0)
+					cardBox.AddChild(MakeText($"Still held: {Plural(wizards, "wizard")}",
+						ResponsiveLayout.TextRole.Label, InkSoft, "CardGoal"));
 			}
 		}
 		else

@@ -450,6 +450,7 @@ public partial class _BalanceHarness : Node
 			HealthPickup => "health flask",
 			BuffItem => "speed potion",
 			LevelUpPickup => "level-up pickup",
+			GleaningBell => "gleaning bell",
 			ChestReward => "chest",
 			_ => null,
 		};
@@ -2669,6 +2670,9 @@ public partial class _BalanceHarness : Node
 	// the bot was actually shown, one entry per hand dealt - a reroll or a ban deals a new hand.
 	private IReadOnlyList<LevelUpOption> lastCountedHand;
 	private int handsSeen, handsWithBoon, boonCardsSeen;
+	// Every spell offered as a NEW card, which is the save's level-up pool as the run saw it: on a
+	// --fresh-save run it should be the six starters and nothing else (.ai/achievements-and-secrets.md).
+	private readonly SortedSet<string> newSpellsOffered = new(StringComparer.OrdinalIgnoreCase);
 	private int sampledHands, sampledHandsWithBoon, sampledBoonCards;
 
 	private void CountHand(IReadOnlyList<LevelUpOption> options)
@@ -2678,6 +2682,12 @@ public partial class _BalanceHarness : Node
 		if (ReferenceEquals(options, lastCountedHand) || options.Count == 0)
 			return;
 		lastCountedHand = options;
+
+		foreach (LevelUpOption option in options)
+		{
+			if (!option.IsBoon && option.IsNewUnlock && !string.IsNullOrWhiteSpace(option.SpellId))
+				newSpellsOffered.Add(option.SpellId);
+		}
 
 		int boons = options.Count(o => o.IsBoon);
 		handsSeen++;
@@ -2727,6 +2737,7 @@ public partial class _BalanceHarness : Node
 				.Where(levelReachedAt.ContainsKey).Select(l => $"L{l} {levelReachedAt[l] / 60f:0.0}")),
 			OpensChests ? $"  chests       : {chestsOpened} opened - {string.Join(", ", chestPicks)}" : "",
 			$"  boon hands   : {Rate(handsWithBoon, handsSeen)}; {boonCardsSeen} boon cards",
+			$"  new spells offered: {newSpellsOffered.Count} - {string.Join(", ", newSpellsOffered)}",
 			SampleOffers > 0 && !SeekApotheosis ? $"  boon sampled : {Rate(sampledHandsWithBoon, sampledHands)}; {sampledBoonCards} boon cards ({(sampledHands > 0 ? (float)sampledBoonCards / sampledHands : 0f):0.000} per hand)" : "",
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
 			"  " + StandStillSummary(),

@@ -89,7 +89,20 @@ public static class GroundDetail
 			new("lilypad_flower", Site.WaterFill, Water, 0.05f, 4),
 		},
 		[StageEnvironmentKind.Ruins] = RuinsRules(),
-		[StageEnvironmentKind.Cave] = RuinsRules(),
+
+		// THE SUNKEN CAVE (.ai/endgame-castle.md 7.3, piece V2). It borrowed the Ruins' rules - flowers,
+		// clover and tufts on a cave floor. Nothing grows here and nothing was built: grit and rubble fallen
+		// from the roof, cracks in the stone, the odd bone, shards of the crystal the cave is full of (the ice
+		// set's shards, cold and unlit) in drifts, pale fungus in the silt, and stones along a pool's edge.
+		[StageEnvironmentKind.Cave] = new[]
+		{
+			G("pebbles", 0.009f, 1), G("rubble", 0.008f), G("cracks", 0.012f, 1), G("ice_shards", 0.004f, 7),
+			G("bone_bits", 0.0018f, 1),
+			G("mushrooms", 0.008f, 5, "dark_dirt"), G("pebbles", 0.015f, 1, "dark_dirt"),
+			G("rubble", 0.012f, 1, "rocky_pit"),
+			new("pebbles", Site.Shore, null, 0.06f, 1),
+		},
+
 		[StageEnvironmentKind.Ice] = new[]
 		{
 			G("snow", 0.02f, 6), G("frost", 0.015f, 5), G("ice_shards", 0.005f), G("pebbles", 0.0037f, 1),
@@ -148,6 +161,30 @@ public static class GroundDetail
 			new("reeds", Site.WaterEdge, Water, 0.10f, 4),
 			new("cotton_grass", Site.Shore, null, 0.07f, 4),
 			new("tufts", Site.Shore, null, 0.04f, 1),
+		},
+
+		// THE CASTLE (.ai/endgame-castle.md): STAND-INS, each its own piece's block to replace (C1 the
+		// bridge's detail_bridge.py - cracks, scorch, dropped bolts, pitch stains; C3 the Court's; C4 the
+		// Throne's), a blank line apart. Laid stone, so only what lies on laid stone: no growing thing.
+		// The Last Bridge (C1, tools/art/detail_bridge.py): a deck a garrison has fought over. Cracks in
+		// the setts and loose stones everywhere; scorch where the pitch was fired and pitch where it spilled,
+		// in drifts; the crossbowmen's spent bolts, in sprays. The scree patches are where the setts have
+		// broken up, so the rubble is thickest there. Nothing grows on it, and none of it is bones.
+		[StageEnvironmentKind.Bridge] = new[]
+		{
+			G("cracks", 0.011f, 1), G("pebbles", 0.003f, 1), G("rubble", 0.003f),
+			G("scorch", 0.005f, 6), G("pitch", 0.0035f, 5), G("bolts", 0.0045f, 4),
+			G("rubble", 0.02f, 1, "rocky_pit"), G("pebbles", 0.012f, 1, "rocky_pit"),
+		},
+
+		[StageEnvironmentKind.Court] = new[]
+		{
+			G("cracks", 0.006f, 1), G("pebbles", 0.002f, 1),
+		},
+
+		[StageEnvironmentKind.Throne] = new[]
+		{
+			G("cracks", 0.004f, 1),
 		},
 	};
 

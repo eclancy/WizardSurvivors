@@ -11,8 +11,16 @@ public enum StageGate
 	Open,
 	/// <summary>Opened by defeating the previous chapter's boss.</summary>
 	PreviousBoss,
-	/// <summary>Opened only once every spell and every wizard has been recovered.</summary>
-	CampaignComplete,
+	/// <summary>
+	/// A gate chapter: opened by defeating the previous chapter's boss AND freeing every wizard whose
+	/// rescue comes before this chapter (GlobalStatsManager.GateWizardIds) - written per chapter, so the
+	/// Emberdeep counts the wizards on the road and a later gate (the castle's Throne) counts those freed
+	/// before it (.ai/achievements-and-secrets.md 2.5, .ai/endgame-castle.md 1.6). It replaced
+	/// CampaignComplete, "every spell and every wizard", at schema 19: spells are earned in secrets now,
+	/// a secret is missable, and the old gate could not even be met - Fireball was paid only behind it.
+	/// The boss alone never writes the chapter open (StageCatalog.ChapterOpenedBy skips it).
+	/// </summary>
+	PreviousBossAndWizards,
 }
 
 public sealed class StageDefinition
@@ -144,7 +152,8 @@ public static class StageCatalog
 			FlavorText = "Blackened ground and glowing embers mark the last road, and what waits at its end.",
 			CorruptionText = "His seat, and the end of the road.",
 			EnvironmentKind = StageEnvironmentKind.Volcanic,
-			Gate = StageGate.CampaignComplete,
+			// The Long Coil beaten and every wizard on the road freed (since schema 19).
+			Gate = StageGate.PreviousBossAndWizards,
 		},
 		// THE ONE CHAPTER OUTSIDE THE CAMPAIGN, and the reason the roster is a list rather than
 		// a fixed eight. It is open from the first run and gates nothing, so it can sit after the
@@ -191,6 +200,52 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Heath,
 			Gate = StageGate.PreviousBoss,
 		},
+		// THE CASTLE (.ai/endgame-castle.md): his seat, across the water from the end of the road. Three
+		// chapters after the Emberdeep - the Last Bridge, the Court and the Throne - with the Cursed
+		// Dungeon moved in between the first two by piece C2 (its line in CampaignOrder, not here). New
+		// ids, appended, for the reason the early chapters' were (.ai/campaign.md section 3).
+		//
+		// Not playable until each is built (section 9). A closed chapter is skipped by the order, so the
+		// Warden of the Deep opens nothing until the bridge exists and nobody is stopped by one. Each
+		// entry below is its own chapter's: its builder flips IsPlayable last (one line), and the
+		// validator's campaign to-do line for it must be gone first.
+		new()
+		{
+			Id = "stage_11", Index = 11,
+			DisplayName = "The Last Bridge",
+			TerrainCategory = "Bridge deck",
+			FlavorText = "A long stone bridge across the dark sea to the castle on its rock, and it falls in behind you.",
+			CorruptionText = "His seat is across the water.",
+			EnvironmentKind = StageEnvironmentKind.Bridge,
+			Gate = StageGate.PreviousBoss,
+			IsPlayable = false,
+		},
+		new()
+		{
+			Id = "stage_12", Index = 12,
+			DisplayName = "The Court",
+			TerrainCategory = "Castle halls",
+			FlavorText = "The halls of his house: galleries, a great hall laid for a feast, and rooms behind rooms.",
+			CorruptionText = "A court with no one left in it.",
+			EnvironmentKind = StageEnvironmentKind.Court,
+			Gate = StageGate.PreviousBoss,
+			IsPlayable = false,
+		},
+		new()
+		{
+			Id = "stage_13", Index = 13,
+			DisplayName = "The Throne",
+			TerrainCategory = "Throne hall",
+			FlavorText = "One hall of black stone, its doors shut behind you, and the throne at its end.",
+			CorruptionText = "He is here.",
+			EnvironmentKind = StageEnvironmentKind.Throne,
+			// The second gate chapter (.ai/endgame-castle.md 1.6): the Seneschal beaten AND every wizard
+			// freed. "Every wizard whose rescue comes before this chapter" (GlobalStatsManager.GateWizardIds)
+			// is every wizard here, Tituba included, so "he is reachable only when every wizard is free" is
+			// true exactly where he is.
+			Gate = StageGate.PreviousBossAndWizards,
+			IsPlayable = false,
+		},
 	};
 
 	// THE CAMPAIGN, IN THE ORDER IT IS PLAYED - and the only place that order is written.
@@ -204,8 +259,15 @@ public static class StageCatalog
 	//
 	// The Cursed Dungeon is fifth, after four open chapters (.ai/campaign.md): a maze is a harder
 	// ask than an open field, and as the second chapter it was also the second-toughest spawn table
-	// in the game. The final chapter is last and is gated on CampaignComplete, not on a boss.
-	// Chapters outside the campaign (the Sketchbook) are not listed; they must be Open.
+	// in the game. The Emberdeep is the first gate chapter (PreviousBossAndWizards): its previous boss
+	// AND the wizards freed before it. The castle comes after it (.ai/endgame-castle.md), boss-gated,
+	// and ends on a second gate chapter, the Throne; the last chapter is always a gate. Chapters
+	// outside the campaign (the Sketchbook) are not listed; they must be Open.
+	//
+	// The castle's lines are written now and skipped until each chapter is playable. The Dungeon's
+	// own line moves between the Last Bridge and the Court in piece C2 (.ai/endgame-castle.md 1.3),
+	// which is why the castle's three are kept a line apart below: C2's edit lands on a line of its
+	// own and never on one of theirs.
 	private static readonly string[] CampaignOrder =
 	{
 		"stage_0",  // 1  Enchanted Forest - Elderbark
@@ -217,7 +279,11 @@ public static class StageCatalog
 		"stage_4",  // 7  Mystic Ruins - the Archivist
 		"stage_5",  // 8  Frozen Waste - the Still Warden
 		"stage_6",  // 9  Scorched Sands - the Long Coil
-		"stage_7",  // 10 The Emberdeep - the Warden of the Deep (every spell and wizard first)
+		"stage_7",  // 10 The Emberdeep - the Warden of the Deep (the Long Coil and every wizard on the road first)
+		"stage_11", // 11 The Last Bridge - the Constable (castle, not yet playable)
+		// (the Cursed Dungeon's line comes here when C2 moves it into the castle)
+		"stage_12", // 12 The Court - the Seneschal (castle, not yet playable)
+		"stage_13", // 13 The Throne - the procession, then him (the Seneschal and every wizard first; not yet playable)
 	};
 
 	private static StageDefinition[] campaign;
@@ -260,9 +326,22 @@ public static class StageCatalog
 	public static StageDefinition FinalChapter => Campaign.Count > 0 ? Campaign[Campaign.Count - 1] : null;
 
 	/// <summary>
-	/// The chapter whose boss opens <paramref name="stage"/>: the nearest PLAYABLE chapter before it
-	/// in the campaign. Null for the first chapter, for a chapter outside the campaign, and for one
-	/// that is not boss-gated.
+	/// The first gate chapter in the campaign (<see cref="StageGate.PreviousBossAndWizards"/>): the
+	/// Emberdeep. "The road" is everything before it. Not <see cref="FinalChapter"/>, which stays "last"
+	/// once the castle's chapters come after the gate (.ai/endgame-castle.md 1.9).
+	/// </summary>
+	public static StageDefinition GateChapter => Campaign.FirstOrDefault(s => s.Gate == StageGate.PreviousBossAndWizards);
+
+	/// <summary>Every gate chapter in the campaign, in order: the Emberdeep today, the Throne later.</summary>
+	public static IEnumerable<StageDefinition> GateChapters => Campaign.Where(s => s.Gate == StageGate.PreviousBossAndWizards);
+
+	/// <summary>True for a gate whose previous chapter's boss is part of it.</summary>
+	public static bool IsBossGated(StageGate gate) => gate == StageGate.PreviousBoss || gate == StageGate.PreviousBossAndWizards;
+
+	/// <summary>
+	/// The chapter whose boss opens <paramref name="stage"/> (or, for a gate chapter, is half its gate):
+	/// the nearest PLAYABLE chapter before it in the campaign. Null for the first chapter, for a chapter
+	/// outside the campaign, and for one that is not boss-gated.
 	/// </summary>
 	/// <remarks>
 	/// Playable, because a chapter that is not built yet has no boss anyone can beat. Skipping it is
@@ -271,7 +350,7 @@ public static class StageCatalog
 	/// </remarks>
 	public static StageDefinition PreviousChapter(StageDefinition stage)
 	{
-		if (stage == null || stage.Gate != StageGate.PreviousBoss)
+		if (stage == null || !IsBossGated(stage.Gate))
 			return null;
 		int position = CampaignPositionOf(stage.Id);
 		for (int i = position - 1; i >= 0; i--)
@@ -285,7 +364,8 @@ public static class StageCatalog
 	/// <summary>
 	/// The chapter that beating <paramref name="stageId"/>'s boss opens: the nearest playable,
 	/// boss-gated chapter after it in the campaign. Null when the next chapter is opened some other
-	/// way (the finale) or the stage is outside the campaign.
+	/// way or the stage is outside the campaign - and for a gate chapter, whose boss is only half of
+	/// it: a victory that wrote the gate into the opened list would open it without the wizards.
 	/// </summary>
 	public static StageDefinition ChapterOpenedBy(string stageId)
 	{
@@ -312,8 +392,18 @@ public static class StageCatalog
 
 		switch (stage.Gate)
 		{
-			case StageGate.CampaignComplete:
-				return "Sealed — recover every spell and free every wizard";
+			case StageGate.PreviousBossAndWizards:
+			{
+				// "Sealed - defeat the Long Coil in the Scorched Sands and free every wizard on the road"
+				// (.ai/endgame-castle.md 1.6). Which wizards are still held is the save's to say; the world
+				// map's card counts them under this line.
+				StageDefinition before = PreviousChapter(stage);
+				BossDefinition gateBoss = before != null ? BossCatalog.ForStageIndex(before.Index) : null;
+				string road = stage == GateChapter ? " on the road" : string.Empty;
+				return gateBoss != null
+					? $"Sealed — defeat {MidSentence(gateBoss.DisplayName)} in the {StripArticle(before.DisplayName)} and free every wizard{road}"
+					: $"Sealed — free every wizard{road}";
+			}
 			case StageGate.PreviousBoss:
 				StageDefinition previous = PreviousChapter(stage);
 				if (previous == null)

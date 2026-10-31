@@ -1,0 +1,917 @@
+using Godot;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using WizardSurvivors.scripts;
+
+// THE VAULT WALKS: --secret-probe on a chapter whose spell vault is not a breakable (the Geode Heart's is
+// VaultProbe, in _UiShot.cs). One walk for every vault, and the part each one owes on its own:
+//
+//   the walk (VaultWalk) - placed five to seven chunks out on a fixed seed, never a target, solid or not as
+//   the vault says, not seen before he has been near it and seen at it (with the mark on the save), the
+//   far tell thicker within a chunk than beyond and its near pieces only near; then, once the vault's own
+//   work has opened it, the pay: found, its deed recorded, the spell owned, in the level-up pool and NOT in
+//   the loadout - and on a save that had already found it (--all-unlocked), a chest from the budget and
+//   nothing granted.
+//
+//   the work (a subclass's Work) - the verb, driven the way a player would: the Swallow-Hole's mud and its
+//   lure, the Broken Ward's stones, the Buried Runes' stillness, the Fulgurite's storm.
+//
+// PASS / FAIL lines, exit code = failures, <vault id>-N.png at each beat (under xvfb). The run's own swarm is
+// cleared every frame but for the bodies a probe sets down itself. Writes are off: the save is in memory.
+public partial class _UiShot
+{
+	/// <summary>The probe that works this chapter's vault: a walk of its own, or the Geode Heart's strike walk.</summary>
+	private static Node NewVaultProbe(SecretDirector director, Player hero) => director.Vault switch
+	{
+		SwallowHole => new SwallowHoleWalk { Director = director, Hero = hero },
+		BrokenWard => new BrokenWardWalk { Director = director, Hero = hero },
+		BuriedRunes => new BuriedRunesWalk { Director = director, Hero = hero },
+		Fulgurite => new FulguriteWalk { Director = director, Hero = hero },
+		_ => new VaultProbe { Director = director, Hero = hero },
+	};
+
+	private abstract partial class VaultWalk : Node
+	{
+		public SecretDirector Director;
+		public Player Hero;
+		protected SecretVault Vault;
+		protected SaveData Save;
+		protected bool HadBefore;
+		protected string SpellId = "";
+		private int failures;
+		private int shots;
+		private float wait;
+		private int step;
+		private Vector2 stand;
+		private int chestsBefore;
+		private float clock;
+		private float workClock;
+
+		/// <summary>The bodies the probe set down itself: kept when the rest of the swarm is cleared.</summary>
+		protected readonly HashSet<Enemy> Kept = new();
+		/// <summary>Where he stands, pinned there every frame while true.</summary>
+		protected Vector2? Pin;
+		/// <summary>His health held full every frame while true.</summary>
+		protected bool Immortal = true;
+		/// <summary>Movement keys held by the work; released every frame otherwise.</summary>
+		protected bool Steering;
+
+		/// <summary>Where to stand on arrival, from the vault's position.</summary>
+		protected virtual Vector2 Arrive => new Vector2(0f, 230f);
+		/// <summary>True if the vault's foot is solid in the navigation grid; false if it must not be.</summary>
+		protected abstract bool ExpectSolid { get; }
+		/// <summary>Where that is tested: the vault's position, unless what stands solid is elsewhere (a ring of stones).</summary>
+		protected virtual Vector2 SolidPoint => Vault.GlobalPosition;
+		/// <summary>The vault's own work, a frame at a time: true once it has been opened (or the walk failed).</summary>
+		protected abstract bool Work(float delta, float seconds);
+		/// <summary>The longest the work may take, in seconds of game time.</summary>
+		protected virtual float WorkLimit => 60f;
+
+		protected void Check(string what, bool ok)
+		{
+			if (!ok)
+				failures++;
+			GD.Print($"VAULTWALK {(ok ? "PASS" : "FAIL")} {what}");
+		}
+
+		protected void Shot(string what)
+		{
+			shots++;
+			if (DisplayServer.GetName() == "headless")
+				return;
+			Image image = GetViewport().GetTexture().GetImage();
+			string path = OS.GetUserDataDir() + $"/{Vault?.SecretId ?? "vault"}-{shots}.png";
+			image.SavePng(path);
+			GD.Print($"VAULTWALK shot {path} - {what}");
+		}
+
+		protected void Wait(float seconds) => wait = seconds;
+
+		protected void Finish()
+		{
+			GD.Print($"VAULTWALK {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+			GetTree().Quit(failures);
+			step = -1;
+		}
+
+		protected bool InPool() => Hero.GetDealableCandidates()
+			.Any(o => o.SpellId.Equals(SpellId, StringComparison.OrdinalIgnoreCase));
+
+		protected Enemy Body(Vector2 at, bool elite = false, float health = 4000f)
+		{
+			Enemy e = Director.Game.SpawnEventEnemy(BestiaryRole.Bulk, at, health, elite);
+			if (e != null)
+			{
+				e.GlobalPosition = at;
+				Kept.Add(e);
+			}
+			return e;
+		}
+
+		/// <summary>Puts his FEET at <paramref name="foot"/> (the mud and the hazards measure the boots).</summary>
+		protected void StandFeetAt(Vector2 foot)
+		{
+			Hero.GlobalPosition = foot - (Hero.FootPosition - Hero.GlobalPosition);
+		}
+
+		/// <summary>
+		/// Walks him with the movement keys until his FEET are within <paramref name="within"/> of
+		/// <paramref name="foot"/>: true once there (the keys let go). The way a player arrives at something -
+		/// a teleport can be undone by the feet's physics pass before the thing he arrived at looks for him.
+		/// </summary>
+		protected bool SteerTo(Vector2 foot, float within)
+		{
+			Steering = true;
+			Pin = null;
+			Vector2 d = foot - Hero.FootPosition;
+			if (d.Length() <= within)
+			{
+				foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+					Input.ActionRelease(action);
+				Pin = Hero.GlobalPosition;
+				Steering = false;
+				return true;
+			}
+			Vector2 n = d.Normalized();
+			Press("move_right", "move_left", n.X);
+			Press("move_down", "move_up", n.Y);
+			return false;
+		}
+
+		private static void Press(string positive, string negative, float axis)
+		{
+			if (axis > 0.05f)
+			{
+				Input.ActionRelease(negative);
+				Input.ActionPress(positive, Math.Min(1f, axis));
+			}
+			else if (axis < -0.05f)
+			{
+				Input.ActionRelease(positive);
+				Input.ActionPress(negative, Math.Min(1f, -axis));
+			}
+			else
+			{
+				Input.ActionRelease(positive);
+				Input.ActionRelease(negative);
+			}
+		}
+
+		private void Hold()
+		{
+			if (!Steering)
+				foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+					Input.ActionRelease(action);
+			foreach (Enemy e in EnemyRegistry.Snapshot)
+				if (e != null && IsInstanceValid(e) && !Kept.Contains(e))
+					e.QueueFree();
+			Kept.RemoveWhere(e => e == null || !IsInstanceValid(e));
+			if (Immortal)
+			{
+				Hero.MaxHP = Math.Max(Hero.MaxHP, 20);
+				Hero.CurrentHP = Hero.MaxHP;
+			}
+			if (Pin is Vector2 at)
+				Hero.GlobalPosition = at;
+		}
+
+		public override void _Ready() => ProcessMode = ProcessModeEnum.Always;
+
+		// A level-up from a kill pauses the tree; the tool stops dismissing them once its shutter has fired,
+		// and a walk outlasts the shutter, so the walk takes the first card itself and does nothing else.
+		private static bool DismissLevelUp(Node root)
+		{
+			if (root is LevelUpMenu menu && menu.Visible)
+			{
+				IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions();
+				if (options != null && options.Count > 0)
+					menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, options[0].AutoChoice());
+				return true;
+			}
+			foreach (Node child in root.GetChildren())
+				if (DismissLevelUp(child))
+					return true;
+			return false;
+		}
+
+		public override void _Process(double delta)
+		{
+			if (step < 0)
+				return;
+			if (GetTree().Paused)
+			{
+				DismissLevelUp(GetTree().Root);
+				return;
+			}
+			float dt = (float)delta;
+			clock += dt;
+			Hold();
+			if (wait > 0f)
+			{
+				wait -= dt;
+				return;
+			}
+			switch (step)
+			{
+				case 0:
+				{
+					Vault = Director.Vault as SecretVault;
+					Save = Director.GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+					Check($"the chapter's vault was placed ({Director.Vault?.SecretId})", Vault != null && Save != null);
+					if (Vault == null || Save == null)
+					{
+						Finish();
+						return;
+					}
+					SpellId = SecretCatalog.Get(Vault.SecretId)?.SpellUnlockId ?? "";
+					HadBefore = Save.HasFoundSecret(Vault.SecretId);
+					float chunks = Vault.GlobalPosition.DistanceTo(Director.Game.StageOrigin) / 1536f;
+					GD.Print($"VAULTWALK {Vault.SecretId} at {Vault.GlobalPosition}, {chunks:0.0} chunks out; pays {SpellId}; save had it found before: {HadBefore}");
+					Check($"it is five to seven chunks out ({chunks:0.00})", chunks >= SecretDirector.VaultMinChunks - 0.3f && chunks <= SecretDirector.VaultMaxChunks + 1.1f);
+					Check("it is never a target: not in \"enemies\", nor anything in it",
+						!Vault.IsInGroup("enemies") && !Vault.FindChildren("*", "", true, false).Any(n => n.IsInGroup("enemies")));
+					bool solid = Director.Game.Terrain?.IsFenceAtWorld(SolidPoint) == true;
+					Check(ExpectSolid ? "its foot is solid in the navigation grid" : "it is not solid ground: the horde can walk in", solid == ExpectSolid);
+					Check("not seen before he has been near it", !Director.IsGlimpsed(Vault.SecretId));
+					if (!HadBefore)
+						Check($"{SpellId} is not in the level-up pool before it is found", !InPool());
+					stand = Vault.GlobalPosition + Arrive;
+					step = 1;
+					return;
+				}
+				case 1:
+				{
+					// A third of a chunk a step, every few frames, so the ground streams in round him.
+					Vector2 to = stand - Hero.GlobalPosition;
+					float left = to.Length();
+					float toTell = Hero.GlobalPosition.DistanceTo(Vault.TellPosition);
+					if (toTell > SecretDirector.SeenRadius + 50f && toTell <= SecretDirector.SeenRadius + 562f)
+						Check($"not seen at {toTell:0} px from its tell", !Director.IsGlimpsed(Vault.SecretId));
+					Hero.GlobalPosition += left <= 512f ? to : to / left * 512f;
+					Wait(0.1f);
+					if (left <= 512f)
+					{
+						step = 2;
+						Wait(1.5f);
+					}
+					return;
+				}
+				case 2:
+				{
+					Check($"seen at it ({Hero.GlobalPosition.DistanceTo(Vault.TellPosition):0} px from its tell)", Director.IsGlimpsed(Vault.SecretId));
+					Check("and the seen mark is on the save", Save.HasGlimpsedSecret(Vault.SecretId));
+					int inner = 0, outer = 0, near = 0, nearFar = 0;
+					foreach (Node n in GetTree().GetNodesInGroup(SecretFarTell.Group))
+					{
+						if (n is not Node2D s) continue;
+						float d = s.GlobalPosition.DistanceTo(Vault.GlobalPosition);
+						if (d <= 1536f) inner++;
+						else if (d <= 3072f) outer++;
+					}
+					foreach (Node n in GetTree().GetNodesInGroup(SecretFarTell.GroupNear))
+					{
+						if (n is not Node2D s) continue;
+						if (s.GlobalPosition.DistanceTo(Vault.GlobalPosition) <= 1536f) near++;
+						else nearFar++;
+					}
+					GD.Print($"VAULTWALK far tell: {inner} within a chunk (+{near} near pieces), {outer} from one to two chunks out (+{nearFar} near pieces)");
+					// Per area: the inner disc (less the footprint) is about a third of the outer annulus's.
+					Check("the far tell thickens toward it (density within a chunk > from one to two)",
+						inner + near > 0 && (inner + near) / 1f > (outer + nearFar) / 3f);
+					Check("its near pieces are only near", near > 0 && nearFar == 0);
+					Shot("arrived");
+					chestsBefore = Director.Game.GetChildren().Count(c => c is ChestReward);
+					workClock = 0f;
+					step = 3;
+					return;
+				}
+				case 3:
+				{
+					workClock += dt;
+					if (Work(dt, workClock))
+					{
+						step = 4;
+						return;
+					}
+					if (workClock > WorkLimit)
+					{
+						Check($"the work opened it within {WorkLimit:0} s", false);
+						Finish();
+					}
+					return;
+				}
+				case 4:
+				{
+					// Wait for the light to reach him and the vault to pay.
+					workClock += dt;
+					if (!Vault.IsOpened && workClock < WorkLimit + 10f)
+						return;
+					// What the work set down has done its job; and the toast fades in over a beat.
+					foreach (Enemy e in Kept)
+						if (e != null && IsInstanceValid(e))
+							e.QueueFree();
+					Kept.Clear();
+					step = 5;
+					Wait(0.7f);
+					return;
+				}
+				case 5:
+				{
+					Shot("the light reached him: the toast");
+					Check("the vault is opened for the run", Vault.IsOpened);
+					Check("it is found on the save", Save.HasFoundSecret(Vault.SecretId));
+					Check("its deed is recorded", GlobalStatsManager.IsAchievementUnlocked(Save, AchievementDefinitions.SecretDeedId(Vault.SecretId)));
+					Check($"{SpellId} is owned on the save", GlobalStatsManager.IsSpellUnlockedForLevelUp(Save, SpellId));
+					Check($"{SpellId} joins the level-up pool in this run", InPool());
+					Check("and is not put into the run (not in the loadout)",
+						!Hero.GetEquippedSpells().Any(s => s != null && s.Id.Equals(SpellId, StringComparison.OrdinalIgnoreCase)));
+					int chests = Director.Game.GetChildren().Count(c => c is ChestReward);
+					if (HadBefore)
+						Check($"found before: a chest from the budget instead ({chestsBefore} -> {chests}, paid {Director.ChestsPaid})", chests == chestsBefore + 1 && Director.ChestsPaid == 1);
+					else
+						Check($"found for the first time: no chest, the spell is the reward ({chestsBefore} -> {chests})", chests == chestsBefore && Director.ChestsPaid == 0);
+					step = 6;
+					Wait(0.5f);
+					return;
+				}
+				case 6:
+					Finish();
+					return;
+			}
+		}
+	}
+
+	// THE SWALLOW-HOLE (8.6): its mud is a hazard to him - wading in slows him to a crawl and stings - and
+	// not solid; an elite walked into it is NOT taken; a horde chasing him across it is, thirty of them, with
+	// no XP and no kill; full, it heaves, and the light comes to him.
+	private partial class SwallowHoleWalk : VaultWalk
+	{
+		private SwallowHole hole;
+		private int sub;
+		private float mark;
+		private Vector2 from;
+		private float freeStep;
+		private int hpBefore;
+		private Enemy elite;
+		private int waves;
+		private int orbsBefore;
+		private int kills;
+		private bool heaveShot;
+
+		protected override bool ExpectSolid => false;
+		protected override float WorkLimit => 90f;
+
+		private static int Orbs(SceneTree tree) => tree.GetNodesInGroup(XPOrb.GroupName).Count;
+
+		private void OnKilled(Enemy enemy, Vector2 at, SpellData source)
+		{
+			if (Kept.Contains(enemy))
+				kills++;
+		}
+
+		public override void _ExitTree() => Player.EnemyKilled -= OnKilled;
+
+		protected override bool Work(float delta, float seconds)
+		{
+			hole ??= Vault as SwallowHole;
+			if (hole == null)
+			{
+				Check("the vault is a SwallowHole", false);
+				Finish();
+				return false;
+			}
+			Vector2 c = hole.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+					// A free step first, on the apron outside the mud, to measure him against.
+					Pin = null;
+					StandFeetAt(c + new Vector2(-40f, SwallowHole.HoleRadius + 60f));
+					Steering = true;
+					Input.ActionPress("move_right");
+					from = Hero.GlobalPosition;
+					mark = seconds;
+					sub = 1;
+					return false;
+				case 1:
+					if (seconds - mark < 0.5f)
+						return false;
+					freeStep = Hero.GlobalPosition.DistanceTo(from) / (seconds - mark);
+					Input.ActionRelease("move_right");
+					// Then the same step in the mud, with his health let go.
+					StandFeetAt(c + new Vector2(-46f, 10f));
+					Immortal = false;
+					hpBefore = Hero.CurrentHP;
+					Input.ActionPress("move_right");
+					from = Hero.GlobalPosition;
+					mark = seconds;
+					sub = 2;
+					return false;
+				case 2:
+					if (seconds - mark < 0.6f)
+						return false;
+					float wadeStep = Hero.GlobalPosition.DistanceTo(from) / (seconds - mark);
+					GD.Print($"VAULTWALK walking: {freeStep:0} px/s on the bank, {wadeStep:0} px/s in the mud");
+					Check($"wading slows him to a crawl ({wadeStep:0} px/s against {freeStep:0})", freeStep > 50f && wadeStep < freeStep * 0.45f);
+					Check("he is wading", hole.IsWading);
+					Input.ActionRelease("move_right");
+					Steering = false;
+					Pin = Hero.GlobalPosition;
+					mark = seconds;
+					sub = 3;
+					return false;
+				case 3:
+					if (seconds - mark < 2.2f)
+						return false;
+					Check($"the mud stings: {hpBefore} -> {Hero.CurrentHP} HP in 2.8 s", Hero.CurrentHP < hpBefore);
+					Shot("wading in the mud");
+					Immortal = true;
+					// An elite walked into the mud is not the hole's to take.
+					Pin = c + new Vector2(0f, SwallowHole.HoleRadius + 120f);
+					elite = Body(c + new Vector2(10f, -10f), elite: true);
+					mark = seconds;
+					sub = 4;
+					return false;
+				case 4:
+					if (seconds - mark < 0.6f)
+						return false;
+					Check($"an elite in the mud is not taken ({hole.Taken} taken)", elite != null && IsInstanceValid(elite) && elite.IsTargetable && hole.Taken == 0);
+					if (elite != null && IsInstanceValid(elite))
+					{
+						Kept.Remove(elite);
+						elite.QueueFree();
+					}
+					// The lure: he stands on the near rim, and bodies come at him from beyond the hole.
+					Pin = c + new Vector2(0f, SwallowHole.HoleRadius + 40f);
+					Player.EnemyKilled += OnKilled;
+					orbsBefore = Orbs(GetTree());
+					mark = seconds;
+					sub = 5;
+					return false;
+				case 5:
+				{
+					// Three waves of twelve, a beat apart, from the far side: they chase him straight across.
+					if (waves < 3 && seconds - mark >= waves * 2.5f)
+					{
+						for (int k = 0; k < 12; k++)
+							Body(c + new Vector2(-150f + k * 27f, -330f - (k % 3) * 30f));
+						waves++;
+					}
+					if (hole.Taken > 0 && hole.Taken < SwallowHole.NeededTaken && !heaveShot && hole.Taken >= 10)
+					{
+						heaveShot = true;
+						Shot($"swallowing ({hole.Taken} taken)");
+					}
+					if (hole.IsFull)
+					{
+						GD.Print($"VAULTWALK full after {seconds - mark:0.0} s of luring");
+						Check($"thirty taken ({hole.Taken})", hole.Taken == SwallowHole.NeededTaken);
+						Check($"none of them was killed ({kills} kills)", kills == 0);
+						Check($"no XP left by what it took ({orbsBefore} -> {Orbs(GetTree())} orbs)", Orbs(GetTree()) <= orbsBefore);
+						mark = seconds;
+						sub = 6;
+						return false;
+					}
+					if (seconds - mark > 40f)
+					{
+						Check($"the horde filled it within 40 s ({hole.Taken} of {SwallowHole.NeededTaken})", false);
+						Finish();
+					}
+					return false;
+				}
+				case 6:
+					if (seconds - mark < 0.55f)
+						return false;
+					Shot("full: it heaves");
+					return true;
+			}
+			return false;
+		}
+	}
+
+	// THE BROKEN WARD (8.7): five solid stones on open ground, their notches one to five in the seed's order
+	// round the ring; a wrong stone resets the sequence (never locks it), the right order raises the ward, and
+	// the ward throws out what was inside it when it rose and keeps out a pack chasing him for its thirty
+	// seconds; then it breaks and its light goes to him.
+	private partial class BrokenWardWalk : VaultWalk
+	{
+		private BrokenWard ward;
+		private int sub;
+		private float mark;
+		private int touchIndex;
+		private readonly List<Enemy> inside = new();
+		private float closest = float.MaxValue;
+
+		protected override bool ExpectSolid => true;
+		protected override Vector2 SolidPoint => ((BrokenWard)Vault).StoneFoot(0);
+		protected override float WorkLimit => 70f;
+
+		private int StoneWith(int n)
+		{
+			for (int i = 0; i < BrokenWard.StoneCount; i++)
+				if (ward.NotchesOf(i) == n)
+					return i;
+			return -1;
+		}
+
+		// Where he walks to for the stone with n notches: just in from its foot, toward the middle, inside the
+		// touch reach but clear of its solid foot.
+		private Vector2 Approach(int n)
+		{
+			Vector2 foot = ward.StoneFoot(StoneWith(n));
+			return foot + (ward.GlobalPosition - foot).Normalized() * 34f;
+		}
+
+		// The touches the walk makes, in order: a wrong first stone, then one and two, then a wrong four, then
+		// the five in their order.
+		private static readonly int[] Touches = { 2, 1, 2, 4, 1, 2, 3, 4, 5 };
+		private static readonly int[] LitAfter = { 0, 1, 2, 0, 1, 2, 3, 4, 5 };
+
+		protected override bool Work(float delta, float seconds)
+		{
+			ward ??= Vault as BrokenWard;
+			if (ward == null)
+			{
+				Check("the vault is a BrokenWard", false);
+				Finish();
+				return false;
+			}
+			Vector2 c = ward.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+				{
+					var counts = new HashSet<int>();
+					bool open = true;
+					string order = "";
+					for (int i = 0; i < BrokenWard.StoneCount; i++)
+					{
+						counts.Add(ward.NotchesOf(i));
+						Vector2 f = ward.StoneFoot(i);
+						open &= Director.Game.Terrain?.IsBlockedAtWorld(f) != true && Director.Game.Terrain?.IsWallAtWorld(f) != true;
+						order += ward.NotchesOf(i);
+					}
+					GD.Print($"VAULTWALK the notches round the ring: {order}");
+					Check("five stones cut with one to five notches", counts.Count == 5 && counts.Min() == 1 && counts.Max() == 5);
+					Check("every stone stands on open ground (no water, no wall)", open);
+					mark = seconds;
+					sub = 1;
+					return false;
+				}
+				case 1:
+				{
+					// One touch at a time: walk to the stone, check, walk back to the middle.
+					if (touchIndex >= Touches.Length)
+					{
+						Check("the five in their order raise the ward", ward.WardStanding);
+						mark = seconds;
+						Pin = c;
+						Hero.GlobalPosition = c;
+						// Three bodies inside the ring as it rises: it must throw them out.
+						foreach (Vector2 off in new[] { new Vector2(-70f, 20f), new Vector2(60f, -50f), new Vector2(20f, 80f) })
+							if (Body(c + off) is Enemy e)
+								inside.Add(e);
+						mark = seconds;
+						sub = 3;
+						return false;
+					}
+					// Walk to it; a few seconds at most.
+					if (!SteerTo(Approach(Touches[touchIndex]), 6f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 2;
+					return false;
+				}
+				case 2:
+				{
+					if (seconds - mark < 0.25f)
+						return false;
+					int n = Touches[touchIndex];
+					bool wrong = LitAfter[touchIndex] == 0 && touchIndex > 0 || touchIndex == 0;
+					Check($"touched the {n}-notch stone: {ward.Lit} lit (expected {LitAfter[touchIndex]}{(wrong ? ", a wrong stone resets" : "")})",
+						ward.Lit == LitAfter[touchIndex]);
+					if (touchIndex == 3)
+						Shot("a wrong stone: the notches go to embers");
+					if (touchIndex == 7)
+						Shot("four of the five lit");
+					touchIndex++;
+					mark = seconds;
+					sub = 6;
+					return false;
+				}
+				case 6:
+					// Back to the middle, out of every stone's reach, before the next.
+					if (!SteerTo(c, 10f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 1;
+					return false;
+				case 3:
+				{
+					if (seconds - mark < 1.5f)
+						return false;
+					float least = float.MaxValue;
+					foreach (Enemy e in inside)
+						if (e != null && IsInstanceValid(e))
+							least = Math.Min(least, e.GlobalPosition.DistanceTo(c));
+					Check($"what was inside when it rose is thrown out (nearest now {least:0} px, the wall at {BrokenWard.WardRadius:0})", least > BrokenWard.WardRadius - 12f);
+					// Then a pack from outside, chasing him at the middle.
+					for (int k = 0; k < 14; k++)
+					{
+						float a = k * Mathf.Tau / 14f;
+						Body(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 360f);
+					}
+					mark = seconds;
+					sub = 4;
+					return false;
+				}
+				case 4:
+				{
+					foreach (Enemy e in Kept)
+						if (e != null && IsInstanceValid(e))
+							closest = Math.Min(closest, e.GlobalPosition.DistanceTo(c));
+					if (seconds - mark > 3f && seconds - mark - delta <= 3f)
+						Shot("the ward stands: the pack held at its wall");
+					if (seconds - mark < 6f)
+						return false;
+					GD.Print($"VAULTWALK the pack came no nearer than {closest:0} px over 6 s");
+					Check($"the pack never reaches him at the middle (nearest {closest:0} px)", closest > BrokenWard.WardRadius * 0.6f);
+					sub = 5;
+					return false;
+				}
+				case 5:
+					// Its thirty seconds, then it breaks and the light goes to him.
+					if (ward.WardStanding)
+						return false;
+					Check("the ward broke after its time", ward.WardBroken);
+					Shot("the ward breaks: its light goes to him");
+					return true;
+			}
+			return false;
+		}
+	}
+
+	// THE BURIED RUNES (8.8): nothing shows while he keeps moving; a short stop grows the calm but shows
+	// nothing, and walking on lets the wind back; two seconds still near the middle shows all three stones;
+	// he walks onto each in turn and digs it; the third sends the light to him.
+	private partial class BuriedRunesWalk : VaultWalk
+	{
+		private BuriedRunes runes;
+		private int sub;
+		private float mark;
+		private int digging;
+
+		protected override bool ExpectSolid => false;
+		protected override float WorkLimit => 60f;
+
+		protected override bool Work(float delta, float seconds)
+		{
+			runes ??= Vault as BuriedRunes;
+			if (runes == null)
+			{
+				Check("the vault is a BuriedRunes", false);
+				Finish();
+				return false;
+			}
+			Vector2 c = runes.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+					Check($"no stone shows on arrival ({runes.Shown} shown)", runes.Shown == 0);
+					mark = seconds;
+					sub = 1;
+					return false;
+				case 1:
+				{
+					// Keep walking, round the middle, for three seconds.
+					float a = (seconds - mark) * 1.6f;
+					SteerTo(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 220f, 1f);
+					if (seconds - mark < 3f)
+						return false;
+					Check($"walking through the field shows nothing ({runes.Shown} shown, settled {runes.Settled:0.00})", runes.Shown == 0);
+					Steering = false;
+					Pin = Hero.GlobalPosition;
+					mark = seconds;
+					sub = 2;
+					return false;
+				}
+				case 2:
+					// A short stop: the calm grows, nothing shows yet.
+					if (seconds - mark < 1.3f)
+						return false;
+					Check($"a short stop starts the snow settling ({runes.Settled:0.00}) and shows nothing yet ({runes.Shown})", runes.Settled > 0.2f && runes.Shown == 0);
+					Shot("standing still: the wind drops round him");
+					mark = seconds;
+					sub = 3;
+					return false;
+				case 3:
+					// Walk on: the wind comes back.
+					if (!SteerTo(c, 12f) && seconds - mark < 4f)
+						return false;
+					Check($"walking on, it stops settling ({runes.Settled:0.00}) and nothing shows ({runes.Shown})", runes.Settled == 0f && runes.Shown == 0);
+					mark = seconds;
+					sub = 4;
+					return false;
+				case 4:
+					// Now stand at the middle and hold.
+					if (seconds - mark < StillCheckEarly)
+						return false;
+					Check($"before two seconds still, nothing shows ({Hero.StillSeconds:0.0} s, {runes.Shown} shown)", runes.Shown == 0);
+					sub = 5;
+					return false;
+				case 5:
+					if (seconds - mark < 2.6f)
+						return false;
+					Check($"two seconds still at the middle: all three stones show ({runes.Shown})", runes.Shown == BuriedRunes.RuneCount);
+					Shot("the snow has settled: the stones show");
+					mark = seconds;
+					sub = 6;
+					return false;
+				case 6:
+				{
+					// Walk onto each in turn.
+					if (!SteerTo(runes.RuneAt(digging), 10f) && seconds - mark < 6f)
+						return false;
+					mark = seconds;
+					sub = 7;
+					return false;
+				}
+				case 7:
+					if (seconds - mark < 0.3f)
+						return false;
+					Check($"stone {digging + 1} dug ({runes.Dug} dug)", runes.IsDug(digging) && runes.Dug == digging + 1);
+					if (digging == 1)
+						Shot("two dug");
+					digging++;
+					mark = seconds;
+					if (digging < BuriedRunes.RuneCount)
+					{
+						sub = 6;
+						return false;
+					}
+					return true;
+			}
+			return false;
+		}
+
+		private const float StillCheckEarly = 1.5f;
+	}
+
+	// THE FULGURITE (8.9): solid at its foot; nothing happens until the storm comes round on the pace clock;
+	// the cloud gathers for its ten seconds; the bolts come down telegraphed, and those that land on a body
+	// hit it; he holds the circle through them, stepping out from under any called at his feet; the last is
+	// drawn into the glass, which rings, and the light goes to him.
+	private partial class FulguriteWalk : VaultWalk
+	{
+		private Fulgurite glass;
+		private int sub;
+		private float mark;
+		private bool hooked;
+		private bool gatherShot;
+		private bool boltShot;
+		private int boltFrame;
+		private int called;
+		private int landedOnBodies;
+		private int bodiesHit;
+		private Vector2? dodge;
+		private readonly List<(Enemy Body, Vector2 At)> targets = new();
+
+		protected override bool ExpectSolid => true;
+		protected override float WorkLimit => 130f;
+
+		public override void _ExitTree()
+		{
+			if (hooked && glass != null && IsInstanceValid(glass))
+			{
+				glass.StrikeCalled -= OnCalled;
+				glass.StrikeLanded -= OnLanded;
+			}
+		}
+
+		// A body set down under every bolt that is not at his feet, held there, to show what a bolt does to one.
+		private void OnCalled(Vector2 at)
+		{
+			called++;
+			Vector2 c = glass.GlobalPosition;
+			if (at.DistanceTo(Hero.FootPosition) > 80f && at.DistanceTo(c) > 30f)
+			{
+				if (Body(at, health: 4000f) is Enemy e)
+					targets.Add((e, at));
+				return;
+			}
+			// Called at his feet: step out from under it, to whichever side of the glass, inside the circle,
+			// is farthest from it.
+			Vector2 best = c;
+			float far = -1f;
+			foreach (Vector2 off in new[] { new Vector2(-85f, 40f), new Vector2(85f, 40f), new Vector2(0f, 90f), new Vector2(-60f, 80f), new Vector2(60f, 80f) })
+			{
+				float d = (c + off).DistanceTo(at);
+				if (d > far)
+				{
+					far = d;
+					best = c + off;
+				}
+			}
+			dodge = best;
+		}
+
+		private void OnLanded(Vector2 at, int hit)
+		{
+			if (targets.Exists(t => t.At.DistanceTo(at) < 1f))
+			{
+				landedOnBodies++;
+				bodiesHit += hit;
+			}
+		}
+
+		protected override bool Work(float delta, float seconds)
+		{
+			glass ??= Vault as Fulgurite;
+			if (glass == null)
+			{
+				Check("the vault is a Fulgurite", false);
+				Finish();
+				return false;
+			}
+			if (!hooked)
+			{
+				glass.StrikeCalled += OnCalled;
+				glass.StrikeLanded += OnLanded;
+				hooked = true;
+			}
+			// The bodies under the bolts stay where the bolts were called.
+			foreach (var (body, at) in targets)
+				if (body != null && IsInstanceValid(body))
+				{
+					body.GlobalPosition = at;
+					body.Velocity = Vector2.Zero;
+				}
+			Vector2 c = glass.GlobalPosition;
+			switch (sub)
+			{
+				case 0:
+					// Into the circle, and wait for the storm.
+					if (!SteerTo(c + new Vector2(0f, 80f), 6f) && seconds < 6f)
+						return false;
+					GD.Print($"VAULTWALK at the glass at pace {Director.Game.PaceSeconds:0.0} s; the first storm comes at {Fulgurite.FirstStorm:0} s");
+					Check($"no storm before its hour (pace {Director.Game.PaceSeconds:0.0} s)", !glass.StormOn || Director.Game.PaceSeconds >= Fulgurite.FirstStorm);
+					sub = 1;
+					return false;
+				case 1:
+				{
+					if (!glass.StormOn)
+						return false;
+					if (!gatherShot && glass.StormSecond > Fulgurite.GatherSeconds * 0.7f)
+					{
+						gatherShot = true;
+						GD.Print($"VAULTWALK the storm came at pace {Director.Game.PaceSeconds - glass.StormSecond:0.0} s");
+						Check("the storm comes on its hour", MathF.Abs(Director.Game.PaceSeconds - glass.StormSecond - Fulgurite.FirstStorm) < 1f);
+						Shot("the cloud gathers over the glass");
+					}
+					if (glass.StormSecond < Fulgurite.GatherSeconds)
+						return false;
+					sub = 2;
+					return false;
+				}
+				case 2:
+				{
+					if (dodge is Vector2 to && SteerTo(to, 6f))
+						dodge = null;
+					// A frame after it lands: the frame it lands has not been drawn yet.
+					if (!boltShot && landedOnBodies > 0)
+					{
+						if (boltFrame++ > 0)
+						{
+							boltShot = true;
+							Shot("a bolt comes down");
+						}
+					}
+					if (!glass.HasRung)
+					{
+						if (!glass.StormOn && called >= Fulgurite.StrikeCount)
+						{
+							Check("he held the circle and the glass rang", false);
+							Finish();
+						}
+						return false;
+					}
+					GD.Print($"VAULTWALK {called} bolts called, {landedOnBodies} on bodies, {bodiesHit} hits");
+					Check($"six bolts called ({called})", called == Fulgurite.StrikeCount);
+					Check($"the bolts hit the enemies under them ({bodiesHit} hits from {landedOnBodies} bolts on bodies)", landedOnBodies > 0 && bodiesHit >= landedOnBodies);
+					// It rings only if he held the circle when the last bolt was called (Fulgurite.Call).
+					Check("he held the circle, and the glass drew the last bolt into itself and rang", glass.HasRung);
+					mark = seconds;
+					sub = 3;
+					return false;
+				}
+				case 3:
+					if (seconds - mark < 0.35f)
+						return false;
+					Shot("the glass rings");
+					return true;
+			}
+			return false;
+		}
+	}
+}

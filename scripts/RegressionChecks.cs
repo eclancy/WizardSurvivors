@@ -32,6 +32,7 @@ public static class RegressionChecks
 		ValidateElementPaths(warnings);
 		ValidateEvolutionReaders(warnings);
 		ValidateLevelUpReaders(warnings);
+		ValidateAmountReaders(warnings);
 		ValidateStarfall(warnings);
 		ValidateCycloneGust(warnings);
 		ValidateFear(warnings);
@@ -55,6 +56,8 @@ public static class RegressionChecks
 		ValidateStageCatalog(warnings);
 		ValidateCampaign(warnings);
 		ValidateCampaignMigration(warnings);
+		ValidateGateReachability(warnings);
+		ValidateAchievementMigration(warnings);
 		ValidateRetiredChargeRefund(warnings);
 		ValidateNoPixelsInText(warnings);
 		ValidateAudio(warnings);
@@ -68,6 +71,7 @@ public static class RegressionChecks
 		ValidateMazeHazards(warnings);
 		ValidateStageHazards(warnings);
 		ValidateStatusEffectAtlas(warnings);
+		ValidateTelegraphIcons(warnings);
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
 		ValidateExploreArt(warnings);
@@ -239,14 +243,22 @@ public static class RegressionChecks
 	// a found level of Growth, Amount or a charge would undercut the Apotheosis floor measured with the
 	// shop at its cap; and two keepsakes of one stat would let a save find it twice.
 	// THE BOSS RUSH (issue #12, BossRushCatalog). Its roster is derived, not written, so what can go
-	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
-	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
+	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the arena's
+	// (the Emberdeep's, StageCatalog.GateChapter: the run would end on the wrong fight - and a castle
+	// boss built before C2's RoadOrder would land after it), or arrivals that are not strictly before the
 	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
 	// Traps fit their map (2026-10-28, "there shouldn't be fire vents outside. double check that all
 	// traps make sense for the map they're in"). A flame vent is an iron grate set in a floor: indoors
 	// only. Spike plates are built too: only where somebody built things. The lists are the decision.
-	private static readonly StageEnvironmentKind[] IndoorChapters = { StageEnvironmentKind.Castle };
-	private static readonly StageEnvironmentKind[] BuiltChapters = { StageEnvironmentKind.Castle, StageEnvironmentKind.Ruins };
+	// The castle's three are written in now (.ai/endgame-castle.md 1.9) so its chapters' agents never edit
+	// this file to place a trap: the Court and the Throne are indoors, and the bridge is built though open.
+	private static readonly StageEnvironmentKind[] IndoorChapters =
+		{ StageEnvironmentKind.Castle, StageEnvironmentKind.Court, StageEnvironmentKind.Throne };
+	private static readonly StageEnvironmentKind[] BuiltChapters =
+	{
+		StageEnvironmentKind.Castle, StageEnvironmentKind.Ruins,
+		StageEnvironmentKind.Bridge, StageEnvironmentKind.Court, StageEnvironmentKind.Throne,
+	};
 
 	private static void ValidateHazardPlacement(List<string> warnings)
 	{
@@ -270,7 +282,7 @@ public static class RegressionChecks
 			return;
 		}
 		if (finale == null || !ReferenceEquals(roster[roster.Count - 1], finale))
-			warnings.Add($"Boss Rush: the roster ends on '{roster[roster.Count - 1].Id}', not the final chapter's boss '{finale?.Id}'.");
+			warnings.Add($"Boss Rush: the roster ends on '{roster[roster.Count - 1].Id}', not the arena's boss '{finale?.Id}' ({BossRushCatalog.Arena?.DisplayName}).");
 		if (roster.Select(b => b.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != roster.Count)
 			warnings.Add("Boss Rush: a boss is in the roster twice.");
 		foreach (BossDefinition boss in roster)
@@ -292,12 +304,21 @@ public static class RegressionChecks
 			warnings.Add($"Boss Rush: the finale arrives at pace {previous:0}s, not at the ordinary boss time.");
 	}
 
+	// THE SECRETS (.ai/stage-secrets.md 7.5, with .ai/achievements-and-secrets.md 6.2's revised payment
+	// rule): every secret written down, built or planned. A secret may pay a spell now - only a spell
+	// vault, one a chapter, and only a spell the unlock catalog sources from that vault's deed - and
+	// still never a wizard or a boon (SecretMetaReward has no value for either).
 	private static void ValidateSecretCatalog(List<string> warnings)
 	{
 		var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		var foundStats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		var keepsakesByStage = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-		foreach (SecretDefinition secret in SecretCatalog.All)
+		var vaultsByStage = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		Dictionary<string, string> spellNames = ContentValidator.LoadAllSpells()
+			.Where(s => s != null && !string.IsNullOrWhiteSpace(s.Id))
+			.GroupBy(s => s.Id, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(g => g.Key, g => g.First().Name, StringComparer.OrdinalIgnoreCase);
+		foreach (SecretDefinition secret in SecretCatalog.Defined)
 		{
 			if (!ids.Add(secret.Id))
 				warnings.Add($"Secrets: '{secret.Id}' is listed twice.");
@@ -306,10 +327,43 @@ public static class RegressionChecks
 				warnings.Add($"Secrets: '{secret.Id}' names a stage that is not in StageCatalog: '{secret.StageId}'.");
 			if (string.IsNullOrWhiteSpace(secret.DisplayName) || string.IsNullOrWhiteSpace(secret.FoundLine))
 				warnings.Add($"Secrets: '{secret.Id}' has no name or no found line for the Secrets page.");
+			// Its deed is Hidden, and a hidden achievement once seen shows what was seen (4.3).
+			if (string.IsNullOrWhiteSpace(secret.SeenLine))
+				warnings.Add($"Secrets: '{secret.Id}' has no seen line, so its achievement has nothing to say once its tell has been seen.");
+			if (secret.IsKeepsake && secret.IsVault)
+				warnings.Add($"Secrets: '{secret.Id}' is both a keepsake and a spell vault; a chapter's keepsake and its vault are two secrets.");
+			// How a built secret gets into a run (SecretDirector, piece A4): a placed one names its node, a
+			// custom one its install; and a vault is placed as a vault (6.4), a keepsake as a keepsake.
+			if (secret.IsBuilt && (secret.Placement == SecretPlacement.Custom ? secret.Install == null : secret.CreateSite == null))
+				warnings.Add($"Secrets: '{secret.Id}' is built but has no {(secret.Placement == SecretPlacement.Custom ? "Install" : "CreateSite")}, so no run ever puts it in the world.");
+			if (secret.IsVault && secret.Placement != SecretPlacement.Vault)
+				warnings.Add($"Secrets: '{secret.Id}' is a spell vault placed as {secret.Placement}; a vault is placed five to seven chunks out (SecretPlacement.Vault).");
+			if (secret.IsKeepsake && secret.Placement != SecretPlacement.Keepsake)
+				warnings.Add($"Secrets: '{secret.Id}' is a keepsake placed as {secret.Placement}; a keepsake is placed ten to twelve chunks out (SecretPlacement.Keepsake).");
+
+			bool paysSpell = secret.MetaReward == SecretMetaReward.Spell;
+			if (paysSpell != !string.IsNullOrWhiteSpace(secret.SpellUnlockId))
+				warnings.Add($"Secrets: '{secret.Id}' pays {secret.MetaReward} but names spell '{secret.SpellUnlockId}'; a spell is named exactly when one is paid.");
+			if (secret.IsVault != paysSpell)
+				warnings.Add($"Secrets: '{secret.Id}' {(secret.IsVault ? "is a spell vault that pays no spell" : "pays a spell but is not a spell vault")}; only a vault pays a spell, and a vault pays one.");
+			if (secret.IsVault)
+				vaultsByStage[secret.StageId] = (vaultsByStage.TryGetValue(secret.StageId, out int v) ? v : 0) + 1;
+			if (paysSpell && !string.IsNullOrWhiteSpace(secret.SpellUnlockId))
+			{
+				UnlockDefinition source = UnlockCatalog.GetSpell(secret.SpellUnlockId);
+				string deedId = AchievementDefinitions.SecretDeedId(secret.Id);
+				if (source == null)
+					warnings.Add($"Secrets: '{secret.Id}' pays spell '{secret.SpellUnlockId}', which has no unlock catalog entry.");
+				else if (source.Source != UnlockSource.Achievement || !source.SourceId.Equals(deedId, StringComparison.OrdinalIgnoreCase))
+					warnings.Add($"Secrets: '{secret.Id}' pays '{secret.SpellUnlockId}', but the catalog sources that spell from {source.Source} '{source.SourceId}', not this vault's deed '{deedId}'.");
+				if (!spellNames.TryGetValue(secret.SpellUnlockId, out string name) || !name.Equals(secret.SpellName, StringComparison.Ordinal))
+					warnings.Add($"Secrets: '{secret.Id}' names its spell '{secret.SpellName}', but '{secret.SpellUnlockId}' is called '{name ?? "(no resource)"}'.");
+			}
+
 			if (secret.IsKeepsake)
 				keepsakesByStage[secret.StageId] = (keepsakesByStage.TryGetValue(secret.StageId, out int n) ? n : 0) + 1;
-			else if (secret.MetaReward != SecretMetaReward.PageOnly)
-				warnings.Add($"Secrets: '{secret.Id}' is not a keepsake but pays {secret.MetaReward}; only a keepsake pays beyond the page.");
+			else if (secret.MetaReward != SecretMetaReward.PageOnly && !secret.IsVault)
+				warnings.Add($"Secrets: '{secret.Id}' is not a keepsake but pays {secret.MetaReward}; only a keepsake pays beyond the page, and a vault its spell.");
 			if (secret.MetaReward == SecretMetaReward.FoundLevel)
 			{
 				if (!SecretCatalog.FoundLevelStats.Contains(secret.MetaRewardId, StringComparer.OrdinalIgnoreCase))
@@ -326,6 +380,9 @@ public static class RegressionChecks
 		foreach (var (stageId, count) in keepsakesByStage)
 			if (count > 1)
 				warnings.Add($"Secrets: {stageId} has {count} keepsakes; a chapter has one.");
+		foreach (var (stageId, count) in vaultsByStage)
+			if (count > 1)
+				warnings.Add($"Secrets: {stageId} has {count} spell vaults; a chapter has one at most.");
 	}
 
 	// WHAT EACH CHAPTER HOLDS (StageRewards, .ai/world-map.md section 9) is what the world map's card
@@ -338,17 +395,21 @@ public static class RegressionChecks
 	private static void ValidateStageRewards(List<string> warnings)
 	{
 		IReadOnlyList<StageReward> all = StageRewards.All;
-		bool Has(string stageId, string id) => all.Any(r =>
+		bool OnCard(string stageId, string id) => all.Any(r =>
 			r.StageId.Equals(stageId, StringComparison.OrdinalIgnoreCase) && r.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+		// A spell a chapter's vault pays is on that chapter's card as the vault's secret slot (planned
+		// vaults join the card when built): the link is in data, SecretDefinition.StageId.
+		bool Has(string stageId, string id) => OnCard(stageId, id) || SecretCatalog.Defined.Any(s =>
+			s.StageId.Equals(stageId, StringComparison.OrdinalIgnoreCase) && s.SpellUnlockId.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-		foreach (UnlockDefinition found in UnlockCatalog.All.Where(d => d.Source == UnlockSource.Discovery))
+		foreach (UnlockDefinition found in UnlockCatalog.All.Where(d => !string.IsNullOrWhiteSpace(d.SiteId)))
 		{
 			List<StageDefinition> sites = StageCatalog.All
-				.Where(s => string.Equals(global::SideEventDirector.ForStage(s.Id)?.SiteId, found.SourceId, StringComparison.OrdinalIgnoreCase))
+				.Where(s => string.Equals(global::SideEventDirector.ForStage(s.Id)?.SiteId, found.SiteId, StringComparison.OrdinalIgnoreCase))
 				.ToList();
 			if (sites.Count != 1)
-				warnings.Add($"Stage rewards: '{found.Id}' is found at site '{found.SourceId}', which {(sites.Count == 0 ? "no chapter's side event stands on" : $"{sites.Count} chapters' side events stand on")}, so no single chapter's card can show it.");
-			else if (!Has(sites[0].Id, found.Id))
+				warnings.Add($"Stage rewards: '{found.Id}' is found at site '{found.SiteId}', which {(sites.Count == 0 ? "no chapter's side event stands on" : $"{sites.Count} chapters' side events stand on")}, so no single chapter's card can show it.");
+			else if (!OnCard(sites[0].Id, found.Id))
 				warnings.Add($"Stage rewards: '{found.Id}' is found in {sites[0].DisplayName} but its card does not list it.");
 		}
 
@@ -357,7 +418,7 @@ public static class RegressionChecks
 			StageDefinition stage = StageCatalog.GetById(revealed.RevealStageId);
 			if (stage == null)
 				warnings.Add($"Stage rewards: '{revealed.Id}' is revealed by '{revealed.RevealStageId}', which is not a chapter.");
-			else if (!Has(stage.Id, revealed.Id))
+			else if (!OnCard(stage.Id, revealed.Id))
 				warnings.Add($"Stage rewards: '{revealed.Id}' is tied to {stage.DisplayName} but its card does not list it.");
 		}
 
@@ -373,14 +434,14 @@ public static class RegressionChecks
 			StageDefinition stage = StageCatalog.GetByIndex(index);
 			foreach (string id in RewardIdsOf(deed))
 			{
-				if (!Has(stage.Id, id))
+				if (!OnCard(stage.Id, id))
 					warnings.Add($"Stage rewards: {stage.DisplayName}'s warden pays '{id}' ('{deed.Id}') but its card does not list it.");
 			}
 		}
 
 		foreach (SecretDefinition secret in SecretCatalog.All)
 		{
-			if (StageCatalog.GetById(secret.StageId) != null && !Has(secret.StageId, secret.Id))
+			if (StageCatalog.GetById(secret.StageId) != null && !OnCard(secret.StageId, secret.Id))
 				warnings.Add($"Stage rewards: the secret '{secret.Id}' is in {secret.StageId} but its card does not list it.");
 		}
 
@@ -452,9 +513,14 @@ public static class RegressionChecks
 			warnings.Add($"World map: {problem}");
 			return;
 		}
+		// A chapter not built yet may stand off the map for now (.ai/endgame-castle.md 1.9): the world map
+		// is its own piece (C8), and drawing the castle waits on the Dungeon's move. Its missing stop is
+		// then an item on that chapter's campaign to-do line (ValidateCampaignToDo), and the screen leaves
+		// it out quietly (WorldMap.BuildStops). A PLAYABLE chapter with no stop is a fault, as always, so
+		// none can flip with its place undrawn.
 		foreach (StageDefinition stage in StageCatalog.All)
 		{
-			if (map.Get(stage.Id) == null)
+			if (map.Get(stage.Id) == null && stage.IsPlayable)
 				warnings.Add($"World map: {stage.DisplayName} ({stage.Id}) has no place on the map - add it to PLACES in tools/art/world_map.py and draw its landmark.");
 		}
 		WorldMapStop rush = map.Get(WorldMapLayout.BossRushId);
@@ -821,7 +887,8 @@ public static class RegressionChecks
 		if (!assigned)
 			warnings.Add("Spiritual Weapon: player.tscn does not assign SpiritualWeaponScene; no spell would fire at all (Player stops the fire loop without it).");
 
-		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96) })
+		// The dagger is Twin Blades' (2026-10-30), on the projectile cell.
+		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96), ("dagger", 32) })
 		{
 			string path = $"res://assets/bonelight/effects/spirit-{name}.png";
 			if (!ResourceLoader.Exists(path) || GD.Load<Texture2D>(path) is not Texture2D sheet)
@@ -832,6 +899,8 @@ public static class RegressionChecks
 			if (sheet.GetWidth() != cell * 32 || sheet.GetHeight() % cell != 0)
 				warnings.Add($"Spiritual Weapon: {path} is {sheet.GetWidth()}x{sheet.GetHeight()}; SpiritualWeapon draws 32 headings of a {cell} cell a row.");
 		}
+		foreach (string problem in SpiritualWeapon.CutProblems())
+			warnings.Add($"Spiritual Weapon: {problem}");
 
 		SpellData template = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "spiritual_weapon");
 		if (template == null)
@@ -1067,6 +1136,45 @@ public static class RegressionChecks
 			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} exists but did not load as a texture.");
 		else if (atlas.GetSize() != expected)
 			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} is {atlas.GetSize()}, expected {expected} ({StatusEffectLayer.Rows} rows of {StatusEffectLayer.Frames} {StatusEffectLayer.Cell}px frames).");
+	}
+
+	// The attack icons (TelegraphIcon, 0.9.2: "if you need to telegraph an attack, do so with icon
+	// animation"). Two silent failures. The atlas is addressed by glyph row and state column, so a sheet
+	// regenerated with a row added, or never imported, draws the wrong glyph or nothing. And an enemy
+	// class that holds a wind-up clock but never says what it is winding up (Enemy.ReadAttackTell) gets
+	// no icon node at all - its attack lands with no tell over it, which is the one thing a telegraph
+	// may never do. Re-run: python tools/art/telegraph_icons.py, then import.
+	private static void ValidateTelegraphIcons(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(TelegraphIcon.AtlasPath))
+			warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} is missing or not imported; no enemy will show a wind-up.");
+		else
+		{
+			Texture2D atlas = GD.Load<Texture2D>(TelegraphIcon.AtlasPath);
+			var expected = new Vector2(TelegraphIcon.Cell * TelegraphIcon.Columns, TelegraphIcon.Cell * TelegraphIcon.Rows);
+			if (atlas == null)
+				warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} exists but did not load as a texture.");
+			else if (atlas.GetSize() != expected)
+				warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} is {atlas.GetSize()}, expected {expected} ({TelegraphIcon.Rows} glyph rows of {TelegraphIcon.Columns} {TelegraphIcon.Cell}px states).");
+		}
+
+		const System.Reflection.BindingFlags Fields = System.Reflection.BindingFlags.Instance
+			| System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+		foreach (Type type in typeof(Enemy).Assembly.GetTypes())
+		{
+			if (!typeof(Enemy).IsAssignableFrom(type) || type == typeof(Enemy) || type.IsAbstract)
+				continue;
+			bool holdsClock = false;
+			for (Type t = type; t != null && t != typeof(Enemy); t = t.BaseType)
+				holdsClock |= t.GetFields(Fields | System.Reflection.BindingFlags.DeclaredOnly)
+					.Any(f => f.FieldType == typeof(AttackTelegraph) || f.FieldType == typeof(GroundSlamAttack));
+			if (!holdsClock)
+				continue;
+			var read = type.GetMethod("ReadAttackTell", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+				null, new[] { typeof(TelegraphGlyph).MakeByRefType(), typeof(float).MakeByRefType() }, null);
+			if (read == null || read.DeclaringType == typeof(Enemy))
+				warnings.Add($"Attack icons: {type.Name} holds a wind-up clock but does not override Enemy.ReadAttackTell, so its attacks show no icon.");
+		}
 	}
 
 	// Enemy navigation on a hand-made lake (.ai/terrain.md, "Enemy navigation"). Three things a build
@@ -1344,6 +1452,22 @@ public static class RegressionChecks
 		}
 		if (!catalog.TileVariants(LevelGenerator.WallTerrain, "edge_bottom").Any(e => e.Dressing == "sconce"))
 			warnings.Add("Ground: the maze walls' faces have no lit sconce. Re-run: python tools/art/tiles.py");
+
+		// A chapter's own wall set (StageEnvironmentProfile.WallSet; court_walls.py, ruin_walls.py...) is
+		// held to the same roles the moment the manifest has any of it: the painter takes a set whole or not
+		// at all (LevelTilePainter.WallArtSet), so a set missing a role would paint that role as the void.
+		// A set nobody has drawn yet paints the jail walls, and is its chapter's to-do, not a fault.
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			string set = StageEnvironmentCatalog.Get(kind).WallSet;
+			if (set == StageEnvironmentProfile.DefaultWallSet || catalog.TileVariants(set, "fill").Count == 0)
+				continue;
+			foreach (string role in wallRoles)
+			{
+				if (!catalog.TileVariants(set, role).Any(e => e.Role == role && e.Dressing == null))
+					warnings.Add($"Ground: {kind}'s wall set '{set}' has no plain '{role}' tile, so those cells paint as the black void. Re-run: python tools/art/tiles.py");
+			}
+		}
 		foreach (string shade in new[] { "shade_n", "shade_w", "shade_nw", "shade_corner" })
 		{
 			if (!catalog.TileVariants("wall_shadow", shade).Any(e => e.Role == shade))
@@ -1555,13 +1679,25 @@ public static class RegressionChecks
 		var generator = new LevelGenerator();
 		var autotiler = new TerrainAutotiler();
 
-		foreach (StageEnvironmentKind kind in new[] { StageEnvironmentKind.Swamp, StageEnvironmentKind.Volcanic })
+		// The two open stages that stamp the most, and every chapter on a topology built in a partial file
+		// of LevelGenerator's (the bridge's band, the Court's layout, the Ruins' walls, the Cave's
+		// caverns): each is held to the rule the day its file is built, with no edit here.
+		var seamKinds = new List<StageEnvironmentKind> { StageEnvironmentKind.Swamp, StageEnvironmentKind.Volcanic };
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			StageTopology built = generator.Describe(kind).Topology;
+			if (built != StageTopology.Open && built != StageTopology.Maze)
+				seamKinds.Add(kind);
+		}
+
+		foreach (StageEnvironmentKind kind in seamKinds)
 		{
 			LevelLayout layout = generator.Describe(kind);
 			foreach ((int cx, int cy) in new[] { (0, 0), (3, -2) })
 			{
-				TileResolution[,] narrow = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m), layout.BaseTerrain);
-				TileResolution[,] wide = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m * 2), layout.BaseTerrain);
+				// Cleaned as the game cleans it: walled ground is not (Node2DGame, TerrainStreamer).
+				TileResolution[,] narrow = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m), layout.BaseTerrain, cleanup: !layout.Walled);
+				TileResolution[,] wide = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m * 2), layout.BaseTerrain, cleanup: !layout.Walled);
 				int differ = 0;
 				for (int x = 0; x < c; x++)
 					for (int y = 0; y < c; y++)
@@ -1585,6 +1721,13 @@ public static class RegressionChecks
 				warnings.Add($"Terrain: {kind} chunks (0, 0) and (1, 0) disagree on {rawDiffer} raw cells they share. "
 					+ "Something in LevelGenerator draws from an order-dependent RNG instead of a hash of the tile.");
 		}
+
+		// Every walled topology in a partial file (the Ruins' broken walls, the Cave's caverns, and whatever is
+		// built after them) is held to "connected by construction" too: ExplorePlacer and
+		// Node2DGame.IsExploreGroundClear skip the walk-away test on walled ground because of it.
+		foreach (StageEnvironmentKind kind in seamKinds)
+			if (generator.Describe(kind).Walled)
+				ValidateNoSealedPockets(generator, kind, seed, warnings);
 
 		LevelLayout maze = generator.Describe(StageEnvironmentKind.Castle);
 		if (maze.Topology != StageTopology.Maze)
@@ -1623,6 +1766,87 @@ public static class RegressionChecks
 		if (!open[c, c] || reached < total * 0.9f)
 			warnings.Add($"Terrain: the maze round the start reaches only {reached} of {total} floor cells across nine chunks; "
 				+ "corridors are not connecting across chunk borders (LevelGenerator.DoorMask).");
+	}
+
+	// Nine chunks round the start of a walled topology, flooded over every cell a body can stand on (not wall,
+	// not water). A pocket is a piece of that ground which neither holds the start nor reaches the edge of the
+	// nine: whatever is placed in it - an enemy, a chest, a secret - could never walk out, and nothing on
+	// walled ground checks, because the ground is meant to be connected by construction
+	// (LevelGenerator.Caverns.cs says why it is). The start must be standing ground as well. With the user
+	// argument --terrain-stats it also prints how much of the nine is wall and water, for tuning.
+	private static void ValidateNoSealedPockets(LevelGenerator generator, StageEnvironmentKind kind, ulong seed, List<string> warnings)
+	{
+		const int c = TerrainStreamer.ChunkTiles;
+		const int m = TerrainStreamer.Margin;
+		const int span = 3 * c;
+		var walk = new bool[span, span];
+		int walls = 0, water = 0;
+		for (int cy = -1; cy <= 1; cy++)
+		{
+			for (int cx = -1; cx <= 1; cx++)
+			{
+				string[,] g = generator.GenerateChunk(kind, seed, cx, cy, c, m);
+				for (int x = 0; x < c; x++)
+				{
+					for (int y = 0; y < c; y++)
+					{
+						string t = g[x + m, y + m];
+						walls += t == LevelGenerator.WallTerrain ? 1 : 0;
+						water += t == "water" ? 1 : 0;
+						walk[(cx + 1) * c + x, (cy + 1) * c + y] = t != LevelGenerator.WallTerrain && t != "water";
+					}
+				}
+			}
+		}
+		if (OS.GetCmdlineUserArgs().Contains("--terrain-stats"))
+			GD.Print($"Terrain stats: {kind} nine chunks round the start, seed {seed}: "
+				+ $"wall {100f * walls / (span * span):0.0}%, water {100f * water / (span * span):0.0}%");
+
+		if (!walk[c, c])
+			warnings.Add($"Terrain: {kind}'s start (world tile 0, 0) is not standing ground; the run would begin in a wall or water.");
+
+		var label = new int[span, span];
+		var stack = new Stack<(int, int)>();
+		int pocketCells = 0, pockets = 0;
+		(int, int)? firstPocket = null;
+		int next = 0;
+		for (int sx = 0; sx < span; sx++)
+		{
+			for (int sy = 0; sy < span; sy++)
+			{
+				if (!walk[sx, sy] || label[sx, sy] != 0)
+					continue;
+				next++;
+				label[sx, sy] = next;
+				stack.Push((sx, sy));
+				int size = 0;
+				bool edge = false, start = false;
+				while (stack.Count > 0)
+				{
+					(int x, int y) = stack.Pop();
+					size++;
+					edge |= x == 0 || y == 0 || x == span - 1 || y == span - 1;
+					start |= x == c && y == c;
+					foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+					{
+						int nx = x + dx, ny = y + dy;
+						if (nx < 0 || ny < 0 || nx >= span || ny >= span || label[nx, ny] != 0 || !walk[nx, ny]) continue;
+						label[nx, ny] = next;
+						stack.Push((nx, ny));
+					}
+				}
+				if (!edge && !start)
+				{
+					pockets++;
+					pocketCells += size;
+					firstPocket ??= (sx - c, sy - c);
+				}
+			}
+		}
+		if (pockets > 0)
+			warnings.Add($"Terrain: {kind} has {pockets} sealed pocket(s), {pocketCells} cells of standing ground walled or "
+				+ $"watered in, round the start (first near world tile {firstPocket}). Its topology claims to be connected "
+				+ "by construction, and nothing on walled ground checks: whatever is placed in one cannot walk out.");
 	}
 
 	// The input map lives in project.godot as a wall of serialised event objects, which is the one
@@ -1843,7 +2067,7 @@ public static class RegressionChecks
 				warnings.Add($"Stage '{stage.Id}' has no CorruptionText, so its card never says how the dark wizard holds it.");
 			}
 
-			if (!stage.IsPlayable && string.IsNullOrWhiteSpace(stage.LockedHint) && stage.Gate != StageGate.CampaignComplete)
+			if (!stage.IsPlayable && string.IsNullOrWhiteSpace(stage.LockedHint) && stage.Gate != StageGate.PreviousBossAndWizards)
 				warnings.Add($"Stage '{stage.Id}' is not playable and has no LockedHint, so its card locks with no explanation.");
 		}
 	}
@@ -1874,9 +2098,21 @@ public static class RegressionChecks
 		if (campaign[0].Gate != StageGate.Open || !campaign[0].IsPlayable)
 			warnings.Add($"Campaign: the first chapter, {campaign[0].DisplayName}, must be open and playable, or a new save has nowhere to start.");
 
+		// The gate chapters (.ai/achievements-and-secrets.md 2.5, .ai/endgame-castle.md 1.9): the last
+		// chapter is one, and once the road reaches the first, every chapter after it is boss-gated or is
+		// another gate chapter (the castle's Throne). Nothing past a gate is ever open from the start.
 		StageDefinition final = StageCatalog.FinalChapter;
-		if (final == null || final.Gate != StageGate.CampaignComplete || campaign.Count(s => s.Gate == StageGate.CampaignComplete) != 1)
-			warnings.Add("Campaign: the last chapter in the order must be the one chapter gated on every spell and wizard recovered.");
+		StageDefinition firstGate = StageCatalog.GateChapter;
+		if (final == null || final.Gate != StageGate.PreviousBossAndWizards)
+			warnings.Add("Campaign: the last chapter in the order must be a gate chapter (its previous boss and every wizard freed before it).");
+		if (firstGate != null)
+		{
+			foreach (StageDefinition after in campaign.Skip(StageCatalog.CampaignPositionOf(firstGate.Id) + 1))
+			{
+				if (!StageCatalog.IsBossGated(after.Gate))
+					warnings.Add($"Campaign: {after.DisplayName} comes after the gate chapter {firstGate.DisplayName} but is gated {after.Gate}; past the gate the road is boss-gated or another gate.");
+			}
+		}
 
 		foreach (StageDefinition stage in StageCatalog.All)
 		{
@@ -1890,8 +2126,9 @@ public static class RegressionChecks
 		for (int i = 0; i < campaign.Count; i++)
 		{
 			StageDefinition stage = campaign[i];
-			if (stage.Gate != StageGate.PreviousBoss)
+			if (!StageCatalog.IsBossGated(stage.Gate))
 				continue;
+			bool isGate = stage.Gate == StageGate.PreviousBossAndWizards;
 
 			StageDefinition previous = StageCatalog.PreviousChapter(stage);
 			if (previous == null)
@@ -1905,13 +2142,17 @@ public static class RegressionChecks
 				continue;
 			if (BossCatalog.ForStageIndex(previous.Index) == null)
 				warnings.Add($"Campaign: {stage.DisplayName} is opened by the boss of {previous.DisplayName}, which has none in BossCatalog.");
-			if (StageCatalog.ChapterOpenedBy(previous.Id) != stage)
+			// A gate chapter is never written open by its boss alone: that would skip the wizards.
+			if (isGate && StageCatalog.ChapterOpenedBy(previous.Id) == stage)
+				warnings.Add($"Campaign: beating {previous.DisplayName} writes the gate chapter {stage.DisplayName} open, without the wizards it counts.");
+			else if (!isGate && StageCatalog.ChapterOpenedBy(previous.Id) != stage)
 				warnings.Add($"Campaign: {stage.DisplayName}'s gate names {previous.DisplayName}, but beating {previous.DisplayName} opens {StageCatalog.ChapterOpenedBy(previous.Id)?.DisplayName ?? "nothing"}.");
 		}
 
 		// END TO END. A new save in memory, every available chapter's boss beaten the way a victory
 		// records it (the lifetime record, and the chapter written to the save), until nothing new
-		// opens. Every playable chapter but the finale must be reached that way.
+		// opens. Every playable chapter on the road - before the first gate - must be reached that way;
+		// a gate needs the wizards as well (ValidateGateReachability walks a new save through those).
 		var save = new SaveData();
 		for (int pass = 0; pass <= campaign.Count; pass++)
 		{
@@ -1927,21 +2168,51 @@ public static class RegressionChecks
 			if (!changed)
 				break;
 		}
+		int gatePosition = firstGate != null ? StageCatalog.CampaignPositionOf(firstGate.Id) : campaign.Count;
 		foreach (StageDefinition stage in campaign)
 		{
-			if (stage.IsPlayable && stage.Gate != StageGate.CampaignComplete && !GlobalStatsManager.IsStageAvailable(save, stage))
+			if (stage.IsPlayable && StageCatalog.CampaignPositionOf(stage.Id) < gatePosition
+				&& !GlobalStatsManager.IsStageAvailable(save, stage))
 				warnings.Add($"Campaign: {stage.DisplayName} cannot be reached by beating every boss in order from a new save.");
 		}
-		if (final != null && final.IsPlayable)
+		foreach (StageDefinition gate in StageCatalog.GateChapters.Where(s => s.IsPlayable))
 		{
-			if (GlobalStatsManager.IsStageAvailable(save, final) && !GlobalStatsManager.IsCampaignComplete(save))
-				warnings.Add($"Campaign: {final.DisplayName} opens without every spell and wizard recovered.");
-			SaveData complete = SaveWithEverything();
-			if (!GlobalStatsManager.IsStageAvailable(complete, final))
-				warnings.Add($"Campaign: {final.DisplayName} stays closed to a save that has recovered every spell and wizard.");
+			if (GlobalStatsManager.IsStageAvailable(save, gate) && !GlobalStatsManager.IsGateMet(save, gate))
+				warnings.Add($"Campaign: {gate.DisplayName} opens on bosses alone, without the wizards its gate counts.");
+			SaveData through = SaveThroughGates();
+			if (!GlobalStatsManager.IsStageAvailable(through, gate))
+				warnings.Add($"Campaign: {gate.DisplayName} stays closed to a save that has beaten its previous boss and freed every wizard.");
 		}
 
+		// NOTHING UNBUILT IS EVER WRITTEN INTO A SAVE (.ai/endgame-castle.md 1.9). An unbuilt gate's
+		// previous playable chapter is earlier than it will be - the Throne's is the Emberdeep until the
+		// bridge and the Court exist - so a save with the Warden of the Deep beaten and every wizard free
+		// "meets" it; writing that down (RecordMetGates, at every run's end) would hand the Throne to that
+		// save the day it flips, past a bridge and a court it never crossed. Every boss beaten and every
+		// wizard free is the save most likely to be handed something.
+		SaveData veteran = SaveThroughGates();
+		foreach (BossDefinition beaten in BossCatalog.All)
+			veteran.Lifetime.BossesDefeated.Add(beaten.Id);
+		foreach (StageDefinition written in GlobalStatsManager.RecordMetGates(veteran).Where(s => !s.IsPlayable))
+			warnings.Add($"Campaign: {written.DisplayName} is not playable, but a save that has beaten every boss had it written into its opened chapters (GlobalStatsManager.RecordMetGates).");
+
 		ValidateCampaignToDo(warnings);
+	}
+
+	// Every wizard free and the boss before every gate chapter beaten: what opens each gate.
+	private static SaveData SaveThroughGates()
+	{
+		var save = new SaveData();
+		foreach (string wizardId in UnlockCatalog.AllWizardIds)
+			GlobalStatsManager.UnlockCharacter(save, wizardId);
+		foreach (StageDefinition gate in StageCatalog.GateChapters)
+		{
+			StageDefinition previous = StageCatalog.PreviousChapter(gate);
+			BossDefinition boss = previous != null ? BossCatalog.ForStageIndex(previous.Index) : null;
+			if (boss != null)
+				save.Lifetime.BossesDefeated.Add(boss.Id);
+		}
+		return save;
 	}
 
 	// What a boss victory does to the save, the two halves Node2DGame performs at run end: the run
@@ -1959,6 +2230,8 @@ public static class RegressionChecks
 			GlobalStatsManager.UnlockStage(save, opened.Id);
 	}
 
+	// Every spell and wizard owned and no boss beaten: the shape of a save that met the old, schema 18
+	// gate. The migration samples use it; the gate itself needs a boss now (SaveThroughGates).
 	private static SaveData SaveWithEverything()
 	{
 		var save = new SaveData();
@@ -1975,6 +2248,10 @@ public static class RegressionChecks
 	// playable. A PLAYABLE chapter with any of these is not a to-do but a fault, and says so.
 	private static void ValidateCampaignToDo(List<string> warnings)
 	{
+		// The world map is asked once, for the castle's chapters that have no stop yet (ValidateWorldMap
+		// leaves those to this list).
+		WorldMapLayout map = WorldMapLayout.Load(out _);
+		var generator = new LevelGenerator();
 		foreach (StageDefinition stage in StageCatalog.Campaign)
 		{
 			var todo = new List<string>();
@@ -1984,24 +2261,34 @@ public static class RegressionChecks
 			MusicSet own = MusicCatalog.OwnSetForStage(stage.Index);
 			if (own != null && own.StandIn != null && !own.IsRendered)
 				todo.Add($"music plays '{own.StandIn.Id}' until {own.Id}_bed/_pulse/_lead.wav are rendered and imported");
+			// The castle's plumbing (.ai/endgame-castle.md 1.9): a topology named and not yet built, rules
+			// designed and still the null line, a place on the world map not yet drawn.
+			LevelLayout ground = generator.Describe(stage.EnvironmentKind);
+			if (ground.DeclaredTopology != ground.Topology)
+				todo.Add($"its ground is open field until LevelGenerator.{ground.DeclaredTopology}.cs builds the {ground.DeclaredTopology} topology");
+			if (ChapterRulesCatalog.IsAwaitingRules(stage.Id))
+				todo.Add("its rules are still the null line in ChapterRulesCatalog");
+			// (A playable chapter with no stop is ValidateWorldMap's fault to report, not a to-do.)
+			if (!stage.IsPlayable && map != null && map.Get(stage.Id) == null)
+				todo.Add("it has no place on the world map (PLACES in tools/art/world_map.py)");
 
 			if (todo.Count == 0)
 				continue;
 			if (stage.IsPlayable)
 				warnings.Add($"Campaign: {stage.DisplayName} is playable but still has stand-ins - " + string.Join("; ", todo) + ".");
 			else
-				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {stage.DisplayName} ({stage.Id}) is not playable yet - "
-					+ string.Join("; ", todo) + "; then its side event line, its ground, and IsPlayable = true last.");
+				warnings.Add($"Campaign to-do (.ai/campaign.md 7, .ai/endgame-castle.md 9): {stage.DisplayName} ({stage.Id}) is not playable yet - "
+					+ string.Join("; ", todo) + "; then IsPlayable = true, last.");
 		}
 
 		// A thing found in the world needs somewhere to find it. A discovery whose site no chapter's
 		// side event pays out can never be had - a fault once its chapter is built, a to-do before.
-		foreach (UnlockDefinition found in UnlockCatalog.All.Where(d => d.Source == UnlockSource.Discovery))
+		foreach (UnlockDefinition found in UnlockCatalog.All.Where(d => !string.IsNullOrWhiteSpace(d.SiteId)))
 		{
 			StageDefinition holder = StageCatalog.All.FirstOrDefault(s =>
-				SideEventDirector.ForStage(s.Id)?.SiteId.Equals(found.SourceId, StringComparison.OrdinalIgnoreCase) == true);
+				SideEventDirector.ForStage(s.Id)?.SiteId.Equals(found.SiteId, StringComparison.OrdinalIgnoreCase) == true);
 			if (holder == null)
-				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {found.Kind} '{found.Id}' is found at '{found.SourceId}', and no chapter's side event (SideEventDirector.ForStage) is that site yet, so nobody can find it.");
+				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {found.Kind} '{found.Id}' is found at '{found.SiteId}', and no chapter's side event (SideEventDirector.ForStage) is that site yet, so nobody can find it.");
 			else if (!holder.IsPlayable)
 				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {found.Kind} '{found.Id}' is found in {holder.DisplayName}, which is not playable yet.");
 		}
@@ -2061,11 +2348,14 @@ public static class RegressionChecks
 		CheckMigration(warnings, "a gap in the old order", stored: new[] { "stage_1", "stage_3", "stage_4" },
 			open: new[] { "stage_0", "stage_1", "stage_2", "stage_3", "stage_4" }, closed: new[] { "stage_5" });
 
-		// The finale is still the campaign gate and nothing else.
+		// A save that had met the old gate - every spell and wizard - can still enter the finale after
+		// every step (schema 19 writes it open for such a save, whatever the gate has become).
 		SaveData done = SaveWithEverything();
 		done.SchemaVersion = 12;
 		done.Migrate(log: false);
-		StageDefinition final = StageCatalog.FinalChapter;
+		// The gate chapter (the Emberdeep), which is what such a save had met - not FinalChapter, which is
+		// the castle's Throne and not playable yet, so reading it would quietly check nothing.
+		StageDefinition final = StageCatalog.GateChapter;
 		if (final != null && final.IsPlayable && !GlobalStatsManager.IsStageAvailable(done, final))
 			warnings.Add($"Migration: a save with every spell and wizard cannot enter {final.DisplayName} after schema 13.");
 	}
@@ -2116,6 +2406,282 @@ public static class RegressionChecks
 		int before = save.UnlockedStageIds.Count;
 		if (save.Migrate(log: false) || save.UnlockedStageIds.Count != before)
 			warnings.Add($"Migration ({label}): migrating twice changed the save again.");
+	}
+
+	// GATE REACHABILITY (.ai/achievements-and-secrets.md 2.6; .ai/endgame-castle.md 1.6). The rule the
+	// old final gate broke: a gate must never count something that can only be earned behind it. It
+	// counted every spell, and Fireball was paid only by the boss behind it, so no save written since
+	// schema 8 could open the Emberdeep - and nothing said so, because the old check asked only whether
+	// a save that already owned everything got in. This asks it of every gate chapter, two ways:
+	//   - on paper: everything the gate counts has a source before it - its previous boss is earlier
+	//     in the order, and every wizard it counts is a starter, a Feat's that names no chapter at or
+	//     past it, or a chapter's deed earlier in the campaign; never a secret's, which is missable;
+	//   - in memory: a brand-new save walks the road before the gate - every boss beaten as a victory
+	//     records it, every side event won, every built secret found, every Feat done - and must then
+	//     be able to enter it. And the gate must want both halves: without the boss, or without any one
+	//     wizard it counts, it stays shut.
+	// It is also what keeps Tituba out of the Emberdeep's count once the Dungeon moves behind it, and in
+	// the Throne's; and the last gate must count every wizard, which is what makes "he is reachable only
+	// when every wizard is free" true where he is.
+	private static void ValidateGateReachability(List<string> warnings)
+	{
+		List<StageDefinition> gates = StageCatalog.GateChapters.ToList();
+		if (gates.Count == 0)
+		{
+			warnings.Add("Gate reachability: the campaign has no gate chapter (StageGate.PreviousBossAndWizards).");
+			return;
+		}
+
+		StageDefinition lastGate = gates[gates.Count - 1];
+		foreach (string wizardId in UnlockCatalog.AllWizardIds)
+		{
+			if (!GlobalStatsManager.CountsTowardGate(wizardId, lastGate))
+				warnings.Add($"Gate reachability: the last gate, {lastGate.DisplayName}, does not count '{wizardId}', so the campaign can end with him still held.");
+		}
+
+		foreach (StageDefinition gate in gates)
+		{
+			int gatePosition = StageCatalog.CampaignPositionOf(gate.Id);
+			bool BeforeGate(string stageId)
+			{
+				if (string.IsNullOrWhiteSpace(stageId))
+					return true;
+				int position = StageCatalog.CampaignPositionOf(stageId);
+				return position < 0 ? StageCatalog.GetById(stageId)?.Gate == StageGate.Open : position < gatePosition;
+			}
+
+			// On paper.
+			StageDefinition previous = StageCatalog.PreviousChapter(gate);
+			BossDefinition gateBoss = previous != null ? BossCatalog.ForStageIndex(previous.Index) : null;
+			if (gateBoss == null || StageCatalog.CampaignPositionOf(previous.Id) >= gatePosition)
+				warnings.Add($"Gate reachability: {gate.DisplayName}'s gate names no boss before it, so half of it can never be met.");
+			List<string> counted = GlobalStatsManager.GateWizardIds(gate).ToList();
+			foreach (string wizardId in counted)
+			{
+				UnlockDefinition wizard = UnlockCatalog.GetCharacter(wizardId);
+				if (wizard == null || wizard.Source == UnlockSource.Starter)
+					continue;
+				AchievementDefinition deed = UnlockCatalog.SourceDeedOf(wizard);
+				if (deed == null)
+					warnings.Add($"Gate reachability: {gate.DisplayName} counts '{wizardId}', whose source '{wizard.SourceId}' is no achievement, so nothing can free him.");
+				else if (deed.Kind == AchievementKind.Secret)
+					warnings.Add($"Gate reachability: {gate.DisplayName} counts '{wizardId}', whom a secret frees ('{deed.Id}'); a secret is missable, and no gate may wait on one.");
+				else if (!BeforeGate(deed.StageId))
+					warnings.Add($"Gate reachability: {gate.DisplayName} counts '{wizardId}', freed by '{deed.Id}' in {StageCatalog.DisplayNameFor(deed.StageId)}, which is not before the gate.");
+			}
+
+			// In memory: a new save walks the road.
+			var save = new SaveData();
+			for (int pass = 0; pass <= StageCatalog.Campaign.Count + 1; pass++)
+			{
+				bool changed = false;
+				foreach (StageDefinition stage in StageCatalog.Campaign)
+				{
+					if (!BeforeGate(stage.Id) || !GlobalStatsManager.IsStageAvailable(save, stage))
+						continue;
+					BossDefinition boss = BossCatalog.ForStageIndex(stage.Index);
+					if (boss != null && !save.Lifetime.HasDefeatedBoss(boss.Id))
+					{
+						WinOnPaper(save, boss, stage);
+						changed = true;
+					}
+					string site = global::SideEventDirector.ForStage(stage.Id)?.SiteId;
+					if (!string.IsNullOrWhiteSpace(site) && !save.Lifetime.HasWonEvent(site))
+					{
+						DiscoveryRewards.GrantSite(save, site);
+						changed = true;
+					}
+					foreach (SecretDefinition secret in SecretCatalog.ForStage(stage.Id))
+					{
+						if (save.HasFoundSecret(secret.Id))
+							continue;
+						AchievementManager.Complete(save, AchievementDefinitions.SecretDeedId(secret.Id));
+						changed = true;
+					}
+				}
+				foreach (AchievementDefinition feat in AchievementDefinitions.All.Where(d =>
+					(d.Kind == AchievementKind.Feat || d.Kind == AchievementKind.Collection) && BeforeGate(d.StageId)))
+				{
+					if (GlobalStatsManager.IsAchievementUnlocked(save, feat.Id))
+						continue;
+					AchievementManager.Complete(save, feat.Id);
+					changed = true;
+				}
+				if (!changed)
+					break;
+			}
+			if (!GlobalStatsManager.IsStageEarned(save, gate))
+			{
+				var held = counted.Where(id => !GlobalStatsManager.IsCharacterUnlocked(save, id)).ToList();
+				warnings.Add($"Gate reachability: a new save that does everything before {gate.DisplayName} still cannot enter it"
+					+ $" - boss {(gateBoss != null && save.Lifetime.HasDefeatedBoss(gateBoss.Id) ? "beaten" : "not beaten")}"
+					+ (held.Count > 0 ? $", still held: {string.Join(", ", held)}" : "") + ".");
+			}
+
+			// Both halves.
+			var noBoss = new SaveData();
+			foreach (string id in counted)
+				GlobalStatsManager.UnlockCharacter(noBoss, id);
+			if (GlobalStatsManager.IsStageEarned(noBoss, gate))
+				warnings.Add($"Gate reachability: {gate.DisplayName} opens with every wizard free but {gateBoss?.DisplayName ?? "its boss"} unbeaten.");
+			foreach (string missing in counted.Where(id => !UnlockCatalog.IsStarter(id, UnlockKind.Character)))
+			{
+				var oneShort = new SaveData();
+				if (gateBoss != null)
+					oneShort.Lifetime.BossesDefeated.Add(gateBoss.Id);
+				foreach (string id in counted.Where(id => !id.Equals(missing, StringComparison.OrdinalIgnoreCase)))
+					GlobalStatsManager.UnlockCharacter(oneShort, id);
+				if (GlobalStatsManager.IsStageEarned(oneShort, gate))
+					warnings.Add($"Gate reachability: {gate.DisplayName} opens with '{missing}' still held.");
+			}
+		}
+	}
+
+	// A boss victory as the end of a run records it: the run's achievements (ApplyRunAchievements folds
+	// the run into the lifetime record and pays the deeds), and the chapter the order says it opens.
+	private static void WinOnPaper(SaveData save, BossDefinition boss, StageDefinition stage)
+	{
+		AchievementManager.ApplyRunAchievements(save, new global::RunResult
+		{
+			Outcome = global::RunOutcome.Victory,
+			BossId = boss.Id,
+			StageId = stage.Id,
+		});
+		StageDefinition opened = BossCatalog.ChapterOpenedBy(boss);
+		if (opened != null)
+			GlobalStatsManager.UnlockStage(save, opened.Id);
+	}
+
+	// SCHEMA 19 ON SAMPLE SAVES (SaveData.MigrateToAchievementUnlocks, .ai/achievements-and-secrets.md
+	// section 3). Each is a save as schema 18 wrote it, migrated in memory. The rules being held: nothing
+	// owned is taken away; a done deed is paid its current reward and never Arcane Energy; a won event
+	// shows its deed done; a save that had met the old gate still enters the Emberdeep; a new save is
+	// granted nothing; and a second pass changes nothing. Then two older saves, run through every step,
+	// because schema 19 froze what the old steps read - a pre-campaign save must still not be handed
+	// the rescued wizards, and a save that had everything at 9 must still be credited its discoveries.
+	private static void ValidateAchievementMigration(List<string> warnings)
+	{
+		bool OwnsSpell(SaveData s, string id) => GlobalStatsManager.IsSpellUnlockedForLevelUp(s, id);
+
+		SaveData Sample(string label, Action<SaveData> shape, Action<SaveData> check)
+		{
+			var save = new SaveData { SchemaVersion = 18, TotalCurrency = 100 };
+			shape(save);
+			var ownedBefore = save.UnlockedSpellIds.Concat(save.UnlockedBoonIds).Concat(save.UnlockedCharacterIds)
+				.Concat(save.UnlockedStageIds).Concat(save.UnlockedAchievementIds).ToList();
+			if (!save.Migrate(log: false))
+				warnings.Add($"Achievement migration ({label}): a schema-18 save was not migrated.");
+			var ownedAfter = save.UnlockedSpellIds.Concat(save.UnlockedBoonIds).Concat(save.UnlockedCharacterIds)
+				.Concat(save.UnlockedStageIds).Concat(save.UnlockedAchievementIds).ToList();
+			foreach (string id in ownedBefore.Where(id => !ownedAfter.Contains(id, StringComparer.OrdinalIgnoreCase)))
+				warnings.Add($"Achievement migration ({label}): the save lost '{id}'.");
+			if (save.TotalCurrency != 100)
+				warnings.Add($"Achievement migration ({label}): the purse changed from 100 to {save.TotalCurrency}; schema 19 pays unlocks, never Arcane Energy.");
+			check(save);
+
+			// Twice: the step again, on the migrated save, changes nothing.
+			string once = Json.Stringify(save.ToGodotDictionary());
+			save.MigrateToAchievementUnlocks();
+			AchievementManager.Reconcile(save);
+			if (save.Migrate(log: false) || Json.Stringify(save.ToGodotDictionary()) != once)
+				warnings.Add($"Achievement migration ({label}): migrating twice changed the save again.");
+			return save;
+		}
+
+		Sample("bought Gravewell", s => s.UnlockedSpellIds.Add("gravewell"), s =>
+		{
+			if (!OwnsSpell(s, "gravewell"))
+				warnings.Add("Achievement migration (bought Gravewell): the bought spell is gone.");
+			if (GlobalStatsManager.IsAchievementUnlocked(s, AchievementDefinitions.SecretDeedId("swallow_hole")) || s.HasFoundSecret("swallow_hole"))
+				warnings.Add("Achievement migration (bought Gravewell): its vault reads as found; buying the spell found nothing.");
+		});
+
+		Sample("Survivor done", s =>
+		{
+			s.UnlockedAchievementIds.Add("survivor");
+			s.UnlockedSpellIds.Add("frost_shard");
+			s.Lifetime.BestTimeByStage["stage_0"] = 640f;
+		}, s =>
+		{
+			if (!OwnsSpell(s, "frost_shard") || !OwnsSpell(s, "hollow_star"))
+				warnings.Add($"Achievement migration (Survivor done): should own Frost Shard and Hollow Star; owns {string.Join(", ", s.UnlockedSpellIds)}.");
+		});
+
+		Sample("the Long Coil and the Warden beaten", s =>
+		{
+			s.UnlockedAchievementIds.AddRange(new[] { "sands_unwound", "emberdeep_ended" });
+			s.UnlockedSpellIds.Add("fireball");
+			s.UnlockedBoonIds.Add("sunsteel_filament");
+			s.Lifetime.BossesDefeated.AddRange(new[] { "sands_coil", "emberdeep_warden" });
+		}, s =>
+		{
+			if (!OwnsSpell(s, "fireball") || !GlobalStatsManager.IsBoonUnlocked(s, "sunsteel_filament"))
+				warnings.Add("Achievement migration (the Long Coil and the Warden beaten): should own Fireball and Sunsteel Filament.");
+		});
+
+		Sample("the Long Coil beaten, not the Warden", s =>
+		{
+			s.UnlockedAchievementIds.Add("sands_unwound");
+			s.UnlockedBoonIds.Add("sunsteel_filament");
+			s.Lifetime.BossesDefeated.Add("sands_coil");
+		}, s =>
+		{
+			if (!OwnsSpell(s, "fireball"))
+				warnings.Add("Achievement migration (the Long Coil beaten): Unwound done should pay Fireball, which moved to it.");
+		});
+
+		Sample("met the old gate without the Long Coil", s =>
+		{
+			foreach (string id in UnlockCatalog.AllSpellIds.Where(id => !UnlockCatalog.IsStarter(id, UnlockKind.Spell)))
+				s.UnlockedSpellIds.Add(id);
+			foreach (string id in UnlockCatalog.AllWizardIds.Where(id => !UnlockCatalog.IsStarter(id, UnlockKind.Character)))
+				s.UnlockedCharacterIds.Add(id);
+		}, s =>
+		{
+			StageDefinition final = StageCatalog.GetById("stage_7");
+			if (final != null && final.IsPlayable && !GlobalStatsManager.IsStageAvailable(s, final))
+				warnings.Add("Achievement migration (met the old gate without the Long Coil): the save could enter the Emberdeep at 18 and cannot now.");
+		});
+
+		Sample("owns Bramble Seed", s => s.UnlockedSpellIds.Add("bramble_seed"), s =>
+		{
+			if (!s.Lifetime.HasWonEvent("the_grove") || !GlobalStatsManager.IsAchievementUnlocked(s, AchievementDefinitions.EventDeedId("the_grove")))
+				warnings.Add("Achievement migration (owns Bramble Seed): the grove's deed should read as done.");
+			if (s.Lifetime.EventsWon.Count != 1)
+				warnings.Add($"Achievement migration (owns Bramble Seed): events won {string.Join(", ", s.Lifetime.EventsWon)}; only the grove was.");
+		});
+
+		Sample("a fresh save", _ => { }, s =>
+		{
+			if (s.UnlockedSpellIds.Count + s.UnlockedBoonIds.Count + s.UnlockedCharacterIds.Count + s.UnlockedStageIds.Count > 0
+				|| s.UnlockedAchievementIds.Count > 0 || s.Lifetime.EventsWon.Count > 0 || s.GlimpsedSecretIds.Count > 0)
+				warnings.Add("Achievement migration (a fresh save): it was granted or credited with something.");
+		});
+
+		// Through every step from before the campaign: the legacy grant, and no rescued wizard.
+		var legacy = new SaveData { SchemaVersion = 7 };
+		legacy.Migrate(log: false);
+		if (GlobalStatsManager.IsCharacterUnlocked(legacy, "tituba") || GlobalStatsManager.IsCharacterUnlocked(legacy, "vainamoinen"))
+			warnings.Add("Achievement migration: a pre-campaign save was handed a rescued wizard; schema 8 must read its frozen list, not the live catalog.");
+		if (!OwnsSpell(legacy, "fireball") || !OwnsSpell(legacy, "spiritual_weapon"))
+			warnings.Add("Achievement migration: a pre-campaign save lost the legacy grant of schema 8.");
+
+		// From 9, with everything that existed then: credited the discoveries (10) and John Dee (12),
+		// and so the schema 18 gate, and so the Emberdeep (19).
+		var nine = new SaveData { SchemaVersion = 9 };
+		string[] laterSpells = { "starfall", "familiar", "stormsweep", "sleet_runes", "iron_palisade", "contagion", "bramble_seed" };
+		foreach (string id in UnlockCatalog.AllSpellIds.Where(id => !UnlockCatalog.IsStarter(id, UnlockKind.Spell)
+			&& !laterSpells.Contains(id, StringComparer.OrdinalIgnoreCase)))
+			nine.UnlockedSpellIds.Add(id);
+		nine.Migrate(log: false);
+		foreach (string id in new[] { "tituba", "vainamoinen", "john_dee" })
+		{
+			if (!GlobalStatsManager.IsCharacterUnlocked(nine, id))
+				warnings.Add($"Achievement migration: a save that had everything at schema 9 was not credited '{id}' on the way up.");
+		}
+		StageDefinition emberdeep = StageCatalog.GetById("stage_7");
+		if (emberdeep != null && emberdeep.IsPlayable && !GlobalStatsManager.IsStageAvailable(nine, emberdeep))
+			warnings.Add("Achievement migration: a save that had everything at schema 9 cannot enter the Emberdeep after every step.");
 	}
 
 	// The recurring miniboss. Node2DGame loads it by path on a timer and returns quietly when the
@@ -3298,6 +3864,13 @@ public static class RegressionChecks
 		int bigger = DropTable.GreaterOrbValue;
 		if (bigger <= 2)
 			warnings.Add($"A bigger XP orb is worth {bigger}, no more than the ordinary orb it replaces.");
+		// The Gleaning Bell is a find, one or two a run (.ai/passives-and-items.md 8i): the first carrier's
+		// chance must be a real chance and not a certainty, the climb must climb, and the spacing must hold.
+		float bell = DropTable.GleaningBellBaseChance, bellStep = DropTable.GleaningBellChanceStep;
+		float bellApart = DropTable.GleaningBellMinSecondsApart, bellToss = DropTable.GleaningBellTossSeconds;
+		if (bell <= 0f || bell >= 0.25f || bellStep <= 0f || bellStep >= 0.1f || bellApart <= 0f || bellToss <= 0f)
+			warnings.Add($"DropTable's Gleaning Bell numbers are out of range: a first chance of {bell:0.000} (want (0, 0.25)), "
+				+ $"a step of {bellStep:0.000} (want (0, 0.1)), {bellApart:0} s apart and a {bellToss:0.00} s toss (both above 0).");
 
 		// Schema 12: a save that had everything at 11 is credited with John Dee; one that did not is not.
 		var complete = new SaveData { SchemaVersion = 11 };
@@ -3306,8 +3879,12 @@ public static class RegressionChecks
 		foreach (string id in UnlockCatalog.AllWizardIds.Where(id => !id.Equals("john_dee", StringComparison.OrdinalIgnoreCase)))
 			complete.UnlockedCharacterIds.Add(id);
 		complete.Migrate();
-		if (!GlobalStatsManager.IsCampaignComplete(complete))
-			warnings.Add("A save that had freed every wizard and recovered every spell at schema 11 loses the Emberdeep at 12: SaveData.MigrateCollectorIntoCompletedCampaign did not credit John Dee.");
+		// The gate chapter, not the last: the Emberdeep was the finale these saves had met, and the last
+		// chapter is the castle's Throne now - not playable yet, which would turn this check off quietly.
+		StageDefinition finale = StageCatalog.GateChapter;
+		if (!GlobalStatsManager.IsCharacterUnlocked(complete, "john_dee")
+			|| (finale != null && finale.IsPlayable && !GlobalStatsManager.IsStageAvailable(complete, finale)))
+			warnings.Add("A save that had freed every wizard and recovered every spell at schema 11 loses the Emberdeep: SaveData.MigrateCollectorIntoCompletedCampaign did not credit John Dee, or schema 19 did not keep the gate open.");
 		var partial = new SaveData { SchemaVersion = 11 };
 		partial.Migrate();
 		if (GlobalStatsManager.IsCharacterUnlocked(partial, "john_dee"))
@@ -3699,6 +4276,11 @@ public static class RegressionChecks
 		// Summing them as one pool would let a six-boon element borrow spell slots it cannot use.
 		var spellContributions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
 		var boonContributions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+		// The second pass (.ai/achievements-and-secrets.md 6.3, item 5): only what a player has on the
+		// road - starters, the shop's boons, Feats, and chapter deeds before the gate - and never a spell a
+		// secret pays, since a secret is missable. No element's capstone may wait on one.
+		var roadSpellContributions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+		var roadBoonContributions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
 
 		static void RecordInto(Dictionary<string, List<int>> pool, string element, int weight)
 		{
@@ -3754,14 +4336,24 @@ public static class RegressionChecks
 					best[element] = best.TryGetValue(element, out int had) ? Math.Max(had, total) : total;
 				}
 			}
+			bool onRoad = IsOnTheRoad(UnlockCatalog.GetSpell(template.Id));
 			foreach (var pair in best)
+			{
 				Record(pair.Key, pair.Value);
+				if (onRoad)
+					RecordInto(roadSpellContributions, pair.Key, pair.Value);
+			}
 		}
 
 		foreach (BoonDefinition boon in BoonCatalog.All)
 		{
+			bool onRoad = IsOnTheRoad(UnlockCatalog.Get(boon.Id, UnlockKind.Boon));
 			foreach (var (element, weight) in boon.ElementWeights)
+			{
 				RecordInto(boonContributions, element, weight);
+				if (onRoad)
+					RecordInto(roadBoonContributions, element, weight);
+			}
 		}
 
 		foreach (Element element in Enum.GetValues<Element>())
@@ -3774,8 +4366,41 @@ public static class RegressionChecks
 			if (reachable < 6)
 			{
 				warnings.Add($"Element '{name}' can reach at most {reachable} instances ({fromSpells} from spells, {fromBoons} from boons), so its tier-6 bonus is unreachable. It needs more carriers.");
+				continue;
 			}
+
+			int roadSpells = TopN(roadSpellContributions, name, Player.MaxSpellSlots);
+			int roadBoons = TopN(roadBoonContributions, name, Player.MaxBoonSlots);
+			if (roadSpells + roadBoons < 6)
+				warnings.Add($"Element '{name}' reaches only {roadSpells + roadBoons} instances ({roadSpells} from spells, {roadBoons} from boons) without the spells hidden in secrets and past the gate, so its tier-6 bonus waits on a secret. Give it a carrier on the road (.ai/achievements-and-secrets.md 6.3, item 5).");
 		}
+	}
+
+	// Whether an unlock can be had on the road, before the first gate, without a secret: a starter, a
+	// shop boon, or an achievement that is no secret and names no chapter at or past the gate.
+	private static bool IsOnTheRoad(UnlockDefinition unlock)
+	{
+		if (unlock == null)
+			return false;
+		if (unlock.Source == UnlockSource.Starter || unlock.Source == UnlockSource.Purchase)
+			return true;
+		AchievementDefinition deed = UnlockCatalog.SourceDeedOf(unlock);
+		if (deed == null || deed.Kind == AchievementKind.Secret)
+			return false;
+		return IsBeforeFirstGate(deed.StageId);
+	}
+
+	// A chapter a new save can reach before the first gate: in the campaign before it, or outside the
+	// campaign and open from the start. An empty chapter (a Feat's) is before every gate.
+	private static bool IsBeforeFirstGate(string stageId)
+	{
+		if (string.IsNullOrWhiteSpace(stageId))
+			return true;
+		StageDefinition gate = StageCatalog.GateChapter;
+		int position = StageCatalog.CampaignPositionOf(stageId);
+		if (position < 0)
+			return StageCatalog.GetById(stageId)?.Gate == StageGate.Open;
+		return gate == null || position < StageCatalog.CampaignPositionOf(gate.Id);
 	}
 
 	private static int TopN(Dictionary<string, List<int>> pool, string element, int slots)
@@ -4302,6 +4927,90 @@ public static class RegressionChecks
 		}
 	}
 
+	// The Split Lens (0.9.3, Eric: "it should only reduce damage of spells that are affected by the
+	// projectile count"). One row decides both halves of its trade - EvolutionStat.Amount, which
+	// Player.AmountFor pays the +1 by and Player.GetSpellDamageMultiplier charges the -25% by - so this checks
+	// the trade as a cast sees it: a Player that never enters a tree takes the lens, and every spell form
+	// must come out charged exactly when it is paid, untouched otherwise. It also checks what a row cannot
+	// say for itself: a spell that reads Amount has a count to add it to, and a milestone named as dropping
+	// Amount is one the spell offers. A cast site that starts reading Amount without its row saying so is
+	// reported by AmountFor the first time it fires, and gets nothing until it does.
+	private static void ValidateAmountReaders(List<string> warnings)
+	{
+		var player = new Player();
+		try
+		{
+			var spells = ContentValidator.LoadAllSpellForms()
+				.Where(s => s != null && !string.IsNullOrWhiteSpace(s.Id) && EvolutionStatReaders.TryGet(s, out _)).ToList();
+			var before = new Dictionary<SpellData, (float Damage, int Amount)>();
+			foreach (SpellData spell in spells)
+				before[spell] = player.DebugCastTerms(spell);
+			player.DebugTakeChestItem(ChestItemCatalog.CrackedPrism);
+
+			var charged = new List<string>();
+			int spared = 0;
+			foreach (SpellData spell in spells)
+			{
+				EvolutionStatReaders.TryGet(spell, out SpellStatReaders row);
+				string label = ContentValidator.Label(spell);
+				bool reads = row.ReadsAmount(spell);
+				(float damage, int amount) = player.DebugCastTerms(spell);
+				float ratio = before[spell].Damage > 0f ? damage / before[spell].Damage : 0f;
+				int gained = amount - before[spell].Amount;
+				float expected = reads ? Player.SplitLensDamageMultiplier : 1f;
+				if (MathF.Abs(ratio - expected) > 0.001f || gained != (reads ? 1 : 0))
+					warnings.Add($"Split Lens on '{label}': damage x{ratio:0.###} and {gained:+0;-0;0} projectile, where a spell that "
+						+ $"{(reads ? "reads" : "does not read")} Amount should get x{expected:0.##} and {(reads ? "+1" : "none")}. "
+						+ "The lens must charge exactly the spells it pays (Player.GetSplitLensMultiplier, AmountFor).");
+				if (reads)
+					charged.Add(spell.Id);
+				else
+					spared++;
+
+				if ((row.Stats & EvolutionStat.Amount) != 0 && (row.Stats & EvolutionStat.Projectiles) == 0)
+					warnings.Add($"Spell '{label}' reads Amount but no projectile count of its own ({row.ReadIn}): Amount is added to that count.");
+				if (row.AmountDroppedBy.Count > 0)
+				{
+					SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+					foreach (string id in row.AmountDroppedBy)
+					{
+						SpellEvolutionOption milestone = spell.Level4Options?.FirstOrDefault(o => o?.Id == id)
+							?? spell.Level8Options?.FirstOrDefault(o => o?.Id == id);
+						if ((row.Stats & EvolutionStat.Amount) == 0 || milestone == null)
+						{
+							warnings.Add($"Spell '{label}' names '{id}' as dropping Amount, but {((row.Stats & EvolutionStat.Amount) == 0 ? "it never reads Amount" : "offers no such milestone")}.");
+							continue;
+						}
+						// Held, the milestone frees the spell from the lens: by its id alone (HasEvolution), put
+						// back at once - these are the loaded resources a run plays.
+						bool atFour = milestone.MilestoneLevel == 4;
+						string held = atFour ? spell.SelectedLevel4EvolutionId : spell.SelectedLevel8EvolutionId;
+						try
+						{
+							if (atFour) spell.SelectedLevel4EvolutionId = id; else spell.SelectedLevel8EvolutionId = id;
+							(float heldDamage, int heldAmount) = player.DebugCastTerms(spell);
+							float heldRatio = before[spell].Damage > 0f ? heldDamage / before[spell].Damage : 0f;
+							if (MathF.Abs(heldRatio - 1f) > 0.001f || heldAmount != 0)
+								warnings.Add($"Split Lens on '{label}' holding '{id}': damage x{heldRatio:0.###} and {heldAmount} projectile from Amount, "
+									+ "where a milestone that drops Amount should leave it untouched by the lens.");
+						}
+						finally
+						{
+							if (atFour) spell.SelectedLevel4EvolutionId = held; else spell.SelectedLevel8EvolutionId = held;
+						}
+					}
+				}
+			}
+			// A row edit that flagged every spell, or none, would turn the trade back into a flat tax or a gift.
+			if (charged.Count == 0 || spared == 0)
+				warnings.Add($"Split Lens charges {charged.Count} spell forms and spares {spared}: it should be a trade some spells take and others do not.");
+		}
+		finally
+		{
+			player.Free();
+		}
+	}
+
 	private static void ReportUnread(List<string> warnings, HashSet<(string, EvolutionStat, SpellEffect)> unbuilt,
 		HashSet<(string, EvolutionStat, SpellEffect)> stillUnbuilt, string spellId, SpellStatReaders readers,
 		SpellEvolutionOption option, (string, EvolutionStat, SpellEffect) key, string what)
@@ -4420,7 +5129,37 @@ public static class RegressionChecks
 				warnings.Add($"Unlock '{definition.Id}' points at achievement '{definition.SourceId}', which does not exist, so it can never be earned.");
 			}
 
+			// EVERY SPELL IS EARNED (.ai/achievements-and-secrets.md section 2): a spell is a starter or an
+			// achievement's - a Feat, a chapter's deed or a secret - and a wizard the same. The shop sells
+			// boons only, and Discovery is retired: a side event's unlock is its Road deed's reward.
+			if (definition.Source == UnlockSource.Discovery)
+				warnings.Add($"Unlock '{definition.Id}' is sourced Discovery, which is retired; source it from its side event's Road deed (AchievementDefinitions.EventDeedId) with its SiteId.");
+			else if (definition.Kind != UnlockKind.Boon && definition.Source == UnlockSource.Purchase)
+				warnings.Add($"{definition.Kind} '{definition.Id}' is bought with Arcane Energy; since schema 19 every {definition.Kind.ToString().ToLowerInvariant()} is a starter or an achievement's.");
+
+			// A side event's unlock names its site, and its source is that site's deed - the deed reads
+			// its reward from the site, so the two must agree or the event pays nothing.
+			if (!string.IsNullOrWhiteSpace(definition.SiteId)
+				&& !definition.SourceId.Equals(AchievementDefinitions.EventDeedId(definition.SiteId), StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"Unlock '{definition.Id}' is paid at site '{definition.SiteId}' but sourced from '{definition.SourceId}', not that site's deed '{AchievementDefinitions.EventDeedId(definition.SiteId)}'.");
+
+			// A spell a vault pays: its locked hint is the Spell Index's line for it, and must be the
+			// deed's sealed line - the chapter, never the place or the verb (decision 7).
+			AchievementDefinition source = UnlockCatalog.SourceDeedOf(definition);
+			if (source != null && source.Kind == AchievementKind.Secret
+				&& !definition.LockedHint.TrimEnd('.').Equals(source.SealedLine, StringComparison.Ordinal))
+				warnings.Add($"Unlock '{definition.Id}' is hidden in a secret, and its hint \"{definition.LockedHint}\" is not its deed's sealed line \"{source.SealedLine}.\"");
+
 			ValidateSecret(definition, warnings);
+		}
+
+		// A side event's site pays at most one thing of each kind: its deed has one field per kind.
+		foreach (IGrouping<string, UnlockDefinition> site in UnlockCatalog.All
+			.Where(d => !string.IsNullOrWhiteSpace(d.SiteId)).GroupBy(d => d.SiteId, StringComparer.OrdinalIgnoreCase))
+		{
+			foreach (IGrouping<UnlockKind, UnlockDefinition> kind in site.GroupBy(d => d.Kind))
+				if (kind.Count() > 1)
+					warnings.Add($"Site '{site.Key}' pays {kind.Count()} {kind.Key}s; its deed carries one of each kind.");
 		}
 
 		// Every spell the game can offer needs a source. A spell with no entry is locked forever -
@@ -4453,6 +5192,16 @@ public static class RegressionChecks
 					warnings.Add($"Achievement '{achievement.Id}' frees '{achievement.CharacterUnlockId}', but the catalog sources that wizard from {wizard.Source} '{wizard.SourceId}' - one of the two is wrong.");
 			}
 
+			// And a boon (the Long Coil's, an event's), the same agreement.
+			if (!string.IsNullOrWhiteSpace(achievement.BoonUnlockId))
+			{
+				UnlockDefinition boon = UnlockCatalog.Get(achievement.BoonUnlockId, UnlockKind.Boon);
+				if (boon == null)
+					warnings.Add($"Achievement '{achievement.Id}' grants boon '{achievement.BoonUnlockId}', which has no unlock catalog entry.");
+				else if (boon.Source != UnlockSource.Achievement || !boon.SourceId.Equals(achievement.Id, StringComparison.OrdinalIgnoreCase))
+					warnings.Add($"Achievement '{achievement.Id}' grants '{achievement.BoonUnlockId}', but the catalog sources that boon from {boon.Source} '{boon.SourceId}' - one of the two is wrong.");
+			}
+
 			if (string.IsNullOrWhiteSpace(achievement.SpellUnlockId))
 				continue;
 
@@ -4469,8 +5218,21 @@ public static class RegressionChecks
 		if (!StageCatalog.All.Any(s => GlobalStatsManager.IsStageAvailable(fresh, s)))
 			warnings.Add("No chapter is available on a new save, so a fresh game cannot be started.");
 
-		if (GlobalStatsManager.IsCampaignComplete(fresh))
-			warnings.Add("A brand-new save already satisfies the campaign gate, so the final chapter is not gated by anything.");
+		foreach (StageDefinition gate in StageCatalog.GateChapters)
+		{
+			if (GlobalStatsManager.IsGateMet(fresh, gate) || GlobalStatsManager.IsStageEarned(fresh, gate))
+				warnings.Add($"A brand-new save already satisfies {gate.DisplayName}'s gate, so it is not gated by anything.");
+		}
+
+		// The other direction, for every spell: its achievement exists and grants it. The forward check
+		// above walks the deeds; this one walks the spells, so a spell pointing at a deed that pays
+		// something else is caught from its own side too.
+		foreach (UnlockDefinition spell in UnlockCatalog.All.Where(d => d.Kind == UnlockKind.Spell && d.Source == UnlockSource.Achievement))
+		{
+			AchievementDefinition deed = AchievementDefinitions.GetById(spell.SourceId);
+			if (deed != null && !deed.SpellUnlockId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"Spell '{spell.Id}' is sourced from '{deed.Id}', which grants '{deed.SpellUnlockId}' instead, so it can never be earned.");
+		}
 
 		ValidateCuration(fresh, warnings);
 	}
@@ -4507,20 +5269,29 @@ public static class RegressionChecks
 		}
 		if (!stage.IsPlayable)
 			warnings.Add($"Secret '{definition.Id}' is revealed by '{stage.DisplayName}', which is not playable yet, so its card stays sealed.");
-		// The final chapter opens only once every wizard is free, and a wizard nobody has seen
-		// cannot be looked for: revealed by it, he would be revealed after he was needed.
-		if (stage.Gate == StageGate.CampaignComplete)
-			warnings.Add($"Secret '{definition.Id}' is revealed by '{stage.DisplayName}', which needs every wizard freed first - he would stay sealed until after he was needed.");
+		// A gate opens only once the wizards it counts are free, and a wizard nobody has seen cannot be
+		// looked for: a wizard a gate counts must be revealed by a chapter BEFORE that gate, or he would
+		// stay sealed until after he was needed (.ai/endgame-castle.md 1.6, generalised from the one gate).
+		if (definition.Kind == UnlockKind.Character)
+		{
+			int revealAt = StageCatalog.CampaignPositionOf(stage.Id);
+			foreach (StageDefinition gate in StageCatalog.GateChapters)
+			{
+				if (GlobalStatsManager.CountsTowardGate(definition.Id, gate)
+					&& (revealAt < 0 ? stage.Gate != StageGate.Open : revealAt >= StageCatalog.CampaignPositionOf(gate.Id)))
+					warnings.Add($"Secret '{definition.Id}' is counted by {gate.DisplayName}'s gate but revealed by '{stage.DisplayName}', which is not before it - he would stay sealed until after he was needed.");
+			}
+		}
 		if (GlobalStatsManager.IsCharacterRevealed(new SaveData(), definition.Id) && stage.Gate != StageGate.Open)
 			warnings.Add($"Secret '{definition.Id}' reads as revealed on a brand-new save although '{stage.DisplayName}' is closed on one; IsCharacterRevealed has stopped honouring the reveal.");
 
-		// A discovered wizard is revealed by the chapter that holds him: the place the player is
-		// shown is the place he is freed from. Anything else hints at the wrong map.
-		if (definition.Source == UnlockSource.Discovery)
+		// A wizard found at a side event is revealed by the chapter that holds him: the place the
+		// player is shown is the place he is freed from. Anything else hints at the wrong map.
+		if (!string.IsNullOrWhiteSpace(definition.SiteId))
 		{
 			var site = SideEventDirector.ForStage(stage.Id);
-			if (site == null || !site.Value.SiteId.Equals(definition.SourceId, StringComparison.OrdinalIgnoreCase))
-				warnings.Add($"Secret '{definition.Id}' is found at '{definition.SourceId}' but revealed by '{stage.DisplayName}', whose side event is '{site?.SiteId ?? "none"}'; reveal him with the chapter that holds him.");
+			if (site == null || !site.Value.SiteId.Equals(definition.SiteId, StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"Secret '{definition.Id}' is found at '{definition.SiteId}' but revealed by '{stage.DisplayName}', whose side event is '{site?.SiteId ?? "none"}'; reveal him with the chapter that holds him.");
 		}
 	}
 
@@ -4558,10 +5329,13 @@ public static class RegressionChecks
 			if (achievement.IsComplete(fresh))
 				warnings.Add($"Achievement '{achievement.Id}' is already complete on a new save.");
 
+			// A secret's deed always pays its mark on the page (the found level or Arcane lump of a
+			// keepsake is SecretDirector's to pay, never the deed's - so it can never be paid twice).
 			bool grantsSomething = !string.IsNullOrWhiteSpace(achievement.SpellUnlockId)
 				|| !string.IsNullOrWhiteSpace(achievement.BoonUnlockId)
 				|| !string.IsNullOrWhiteSpace(achievement.CharacterUnlockId)
-				|| achievement.CurrencyReward > 0;
+				|| achievement.CurrencyReward > 0
+				|| achievement.Kind == AchievementKind.Secret;
 			if (!grantsSomething)
 				warnings.Add($"Achievement '{achievement.Id}' grants nothing, so completing it is not a reward.");
 
@@ -4570,6 +5344,117 @@ public static class RegressionChecks
 			{
 				warnings.Add($"Achievement '{achievement.Id}' frees '{achievement.CharacterUnlockId}', which has no unlock catalog entry.");
 			}
+
+			ValidateAchievementShape(achievement, warnings);
+		}
+
+		// Derivation is complete in both directions: every side event's site and every secret has its
+		// deed, and the words table names no site that has none (a renamed site would leave words behind).
+		var sites = StageCatalog.All.Select(s => global::SideEventDirector.ForStage(s.Id)?.SiteId)
+			.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+		foreach (string site in sites)
+		{
+			if (AchievementDefinitions.GetById(AchievementDefinitions.EventDeedId(site)) == null)
+				warnings.Add($"Achievements: the side event at '{site}' has no deed, so winning it records nothing.");
+			if (!AchievementDefinitions.HasSideEventWords(site))
+				warnings.Add($"Achievements: the side event at '{site}' has no name, line or reward words (AchievementDefinitions.SideEventWords).");
+		}
+		foreach (string site in AchievementDefinitions.SideEventWordSites)
+		{
+			if (!sites.Contains(site, StringComparer.OrdinalIgnoreCase))
+				warnings.Add($"Achievements: there are words for a side event at '{site}', which no chapter's side event stands on.");
+		}
+		foreach (SecretDefinition secret in SecretCatalog.Defined)
+		{
+			if (AchievementDefinitions.GetById(AchievementDefinitions.SecretDeedId(secret.Id)) == null)
+				warnings.Add($"Achievements: the secret '{secret.Id}' has no deed, so finding it records nothing.");
+		}
+
+		// The reward words name what the deed actually grants (the derived deeds' words are written by
+		// hand beside an id read from another catalog; a renamed spell or a moved reward would leave
+		// the card saying the old thing).
+		Dictionary<string, string> spellNames = ContentValidator.LoadAllSpells()
+			.Where(s => s != null && !string.IsNullOrWhiteSpace(s.Id))
+			.GroupBy(s => s.Id, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(g => g.Key, g => g.First().Name, StringComparer.OrdinalIgnoreCase);
+		foreach (AchievementDefinition achievement in AchievementDefinitions.All)
+		{
+			var names = new List<string>();
+			if (!string.IsNullOrWhiteSpace(achievement.SpellUnlockId))
+				names.Add(spellNames.TryGetValue(achievement.SpellUnlockId, out string spell) ? spell : achievement.SpellUnlockId);
+			if (!string.IsNullOrWhiteSpace(achievement.BoonUnlockId))
+				names.Add(BoonCatalog.GetById(achievement.BoonUnlockId)?.Name ?? achievement.BoonUnlockId);
+			if (!string.IsNullOrWhiteSpace(achievement.CharacterUnlockId))
+				names.Add(CharacterRoster.GetAll().FirstOrDefault(c => c != null
+					&& c.Id.Equals(achievement.CharacterUnlockId, StringComparison.OrdinalIgnoreCase))?.Name ?? achievement.CharacterUnlockId);
+			foreach (string name in names)
+			{
+				if (achievement.RewardText.IndexOf(name, StringComparison.Ordinal) < 0)
+					warnings.Add($"Achievement '{achievement.Id}' grants {name}, but its reward line \"{achievement.RewardText}\" does not say so.");
+			}
+		}
+	}
+
+	// The fields .ai/achievements-and-secrets.md 2.6 added must agree with each other, and every one of
+	// them disagreeing is silent: a Hidden deed with no seen line is a blank row, a Road deed with no
+	// chapter is grouped nowhere, a deed completed in the run with no fact to measure is never done.
+	private static void ValidateAchievementShape(AchievementDefinition deed, List<string> warnings)
+	{
+		string id = deed.Id;
+		if (string.IsNullOrWhiteSpace(deed.DisplayName) || string.IsNullOrWhiteSpace(deed.Description) || string.IsNullOrWhiteSpace(deed.RewardText))
+			warnings.Add($"Achievement '{id}' has no name, line or reward words, so its row says nothing.");
+
+		bool hasChapter = !string.IsNullOrWhiteSpace(deed.StageId);
+		StageDefinition stage = StageCatalog.GetById(deed.StageId);
+		if (hasChapter && stage == null)
+			warnings.Add($"Achievement '{id}' belongs to '{deed.StageId}', which is not a chapter in StageCatalog.");
+
+		switch (deed.Kind)
+		{
+			case AchievementKind.Feat:
+			case AchievementKind.Collection:
+				if (deed.Visibility != AchievementVisibility.Always)
+					warnings.Add($"Achievement '{id}' is a {deed.Kind} shown {deed.Visibility}; a {deed.Kind} is listed from the first run.");
+				break;
+			case AchievementKind.Road:
+				if (!hasChapter || deed.Visibility != AchievementVisibility.ChapterOpen)
+					warnings.Add($"Achievement '{id}' is a Road deed with chapter '{deed.StageId}' shown {deed.Visibility}; a chapter's deed names its chapter and is listed once it is open.");
+				break;
+			case AchievementKind.Secret:
+				if (!hasChapter || deed.Visibility != AchievementVisibility.Hidden || string.IsNullOrWhiteSpace(deed.SecretId))
+					warnings.Add($"Achievement '{id}' is a Secret deed that is not Hidden, names no chapter or mirrors no secret.");
+				break;
+		}
+
+		if (deed.Visibility == AchievementVisibility.Hidden)
+		{
+			if (string.IsNullOrWhiteSpace(deed.SealedLine) || string.IsNullOrWhiteSpace(deed.SeenLine))
+				warnings.Add($"Achievement '{id}' is Hidden with no sealed line or no seen line (.ai/achievements-and-secrets.md 4.3), so its row has nothing to show before it is found.");
+			if (AchievementDefinitions.IsListed(deed, new SaveData()))
+				warnings.Add($"Achievement '{id}' is Hidden but listed on a brand-new save.");
+		}
+
+		// A deed for a secret wizard is sealed until his chapter opens, and says so with a line.
+		if (AchievementDefinitions.IsSealed(deed, new SaveData()) && string.IsNullOrWhiteSpace(deed.SealedLine))
+			warnings.Add($"Achievement '{id}' frees a secret wizard but has no sealed line for the row it shows before his chapter opens.");
+
+		bool mirrors = !string.IsNullOrWhiteSpace(deed.SiteId) || !string.IsNullOrWhiteSpace(deed.SecretId);
+		if (deed.CompletesInRun != mirrors)
+			warnings.Add($"Achievement '{id}' {(deed.CompletesInRun ? "completes in the run but mirrors no site or secret" : "mirrors a site or a secret but is not completed in the run")}.");
+		if (!string.IsNullOrWhiteSpace(deed.SiteId)
+			&& !string.Equals(global::SideEventDirector.ForStage(deed.StageId)?.SiteId, deed.SiteId, StringComparison.OrdinalIgnoreCase))
+			warnings.Add($"Achievement '{id}' mirrors site '{deed.SiteId}', which is not the side event of its chapter '{deed.StageId}'.");
+		if (!string.IsNullOrWhiteSpace(deed.SecretId)
+			&& SecretCatalog.Get(deed.SecretId)?.StageId.Equals(deed.StageId, StringComparison.OrdinalIgnoreCase) != true)
+			warnings.Add($"Achievement '{id}' mirrors secret '{deed.SecretId}', which is not a secret of its chapter '{deed.StageId}'.");
+
+		// The measure and the fact agree: recording the fact a derived deed mirrors completes it.
+		if (mirrors)
+		{
+			var save = new SaveData();
+			AchievementManager.Complete(save, id);
+			if (!deed.IsComplete(AchievementContext.ForSave(save)) || !GlobalStatsManager.IsAchievementUnlocked(save, id))
+				warnings.Add($"Achievement '{id}': completing it in the run does not satisfy its own measure, so the page and the save would disagree.");
 		}
 	}
 

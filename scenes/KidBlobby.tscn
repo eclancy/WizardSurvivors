@@ -24,7 +24,6 @@ RecoverySeconds = 0.85
 RecoverySpeedMultiplier = 0.35
 LungeRange = 400.0
 MinimumLungeDistance = 88.0
-TellColor = Color(0.72, 0.33, 0.9, 1)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 scale = Vector2(1.6, 1.6)

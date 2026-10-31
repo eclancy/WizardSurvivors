@@ -248,28 +248,99 @@ public static class GlobalStatsManager
 		return data.UnlockedAchievementIds.Any(id => id.Equals(achievementId, StringComparison.OrdinalIgnoreCase));
 	}
 
-	// --- The campaign gate ----------------------------------------------------------------------
-	// The final chapter opens only when every spell has been recovered and every wizard freed.
+	// --- The gate chapters ----------------------------------------------------------------------
+	// A gate chapter (StageGate.PreviousBossAndWizards: the Emberdeep, and the castle's Throne when it
+	// is built) opens when its previous chapter's boss is beaten and every wizard whose rescue comes
+	// before it is free (.ai/achievements-and-secrets.md 2.5, .ai/endgame-castle.md 1.6). It used to
+	// be one global gate, "every spell recovered and every wizard freed", and a new save could never
+	// meet it: Fireball was paid only behind it. Spells are the collection now (The Grimoire Restored).
 
 	public static bool AllSpellsUnlocked(SaveData data) =>
 		UnlockCatalog.AllSpellIds.All(id => IsSpellUnlockedForLevelUp(data, id));
 
-	public static bool AllWizardsUnlocked(SaveData data) =>
-		UnlockCatalog.AllWizardIds.All(id => IsCharacterUnlocked(data, id));
-
-	public static bool IsCampaignComplete(SaveData data) =>
-		AllSpellsUnlocked(data) && AllWizardsUnlocked(data);
-
-	/// <summary>Spells still missing, for the "what is left" line on the final chapter's card.</summary>
+	/// <summary>Spells still missing, for the Grimoire's "what is left".</summary>
 	public static int RemainingSpellCount(SaveData data) =>
 		UnlockCatalog.AllSpellIds.Count(id => !IsSpellUnlockedForLevelUp(data, id));
 
-	public static int RemainingWizardCount(SaveData data) =>
-		UnlockCatalog.AllWizardIds.Count(id => !IsCharacterUnlocked(data, id));
+	/// <summary>
+	/// The wizards a gate chapter counts: every wizard (<see cref="UnlockCatalog.AllWizardIds"/>, which
+	/// leaves out Laelaps) whose rescue can happen before it. Written per chapter, so a wizard freed in
+	/// a chapter that moves behind a gate - Tituba, when the Cursed Dungeon goes into the castle - drops
+	/// out of that gate's count by himself and into the next one's, and a gate can never wait on a
+	/// person held behind it (the Fireball bug, for a wizard).
+	/// </summary>
+	public static IEnumerable<string> GateWizardIds(StageDefinition gate) =>
+		UnlockCatalog.AllWizardIds.Where(id => CountsTowardGate(id, gate));
 
 	/// <summary>
-	/// Whether a chapter can be entered, resolving its <see cref="StageGate"/>. The campaign-gated
-	/// final chapter is the reason this is not just a lookup in the unlocked-stages list.
+	/// Whether a gate counts this wizard: he is a wizard (not outside the campaign gate) and his rescue
+	/// chapter - the chapter his source deed belongs to - comes before the gate. A starter, or one freed by
+	/// a Feat that names no chapter (John Dee's chests), can be had before any gate, so every gate counts
+	/// him. A chapter outside the campaign counts only if it is open from the first run.
+	/// </summary>
+	public static bool CountsTowardGate(string wizardId, StageDefinition gate)
+	{
+		UnlockDefinition wizard = UnlockCatalog.GetCharacter(wizardId);
+		if (wizard == null || wizard.OutsideCampaignGate || gate == null)
+			return false;
+		string chapter = RescueChapterOf(wizard);
+		if (string.IsNullOrWhiteSpace(chapter))
+			return true;
+		int position = StageCatalog.CampaignPositionOf(chapter);
+		if (position < 0)
+			return StageCatalog.GetById(chapter)?.Gate == StageGate.Open;
+		return position < StageCatalog.CampaignPositionOf(gate.Id);
+	}
+
+	/// <summary>The chapter a wizard is freed in: his source deed's StageId. Empty for a starter or a Feat.</summary>
+	public static string RescueChapterOf(UnlockDefinition wizard) =>
+		UnlockCatalog.SourceDeedOf(wizard)?.StageId ?? string.Empty;
+
+	/// <summary>The wizards a gate counts that this save has not freed yet, for the world map's card.</summary>
+	public static int RemainingGateWizardCount(SaveData data, StageDefinition gate) =>
+		GateWizardIds(gate).Count(id => !IsCharacterUnlocked(data, id));
+
+	/// <summary>
+	/// Whether a gate chapter's gate is met live: its previous chapter's boss beaten (the lifetime record)
+	/// and every wizard it counts free. False for a chapter that is not a gate chapter.
+	/// </summary>
+	public static bool IsGateMet(SaveData data, StageDefinition gate) =>
+		gate != null && gate.Gate == StageGate.PreviousBossAndWizards
+		&& HasClearedPreviousChapter(data, gate)
+		&& GateWizardIds(gate).All(id => IsCharacterUnlocked(data, id));
+
+	/// <summary>
+	/// Writes every gate chapter whose gate is met into the save's opened list, so it stays open (rule 1
+	/// of <see cref="IsStageEarned"/>) whatever is added to its count later. A wizard added before a
+	/// gate would otherwise close it, live, to every save that had it open - which is why schemas 10,
+	/// 12, 14, 15 and 16 each had to grant what they added. Only adds. Returns the chapters it wrote,
+	/// which the results screen shows as opened. Run after every run's achievements and in the schema 19
+	/// step (which writes the ones a save had already met, so none of those is announced as new).
+	/// </summary>
+	/// <remarks>
+	/// Only a PLAYABLE gate is recorded. A gate chapter not built yet has no built chapter before it to be
+	/// gated on - the Throne's previous playable chapter is the Emberdeep until the bridge and the Court
+	/// exist - so "met" would mean the Warden of the Deep and the wizards, and writing that down would hand
+	/// the Throne to a save the day it flips, past a bridge and a court it never crossed
+	/// (.ai/endgame-castle.md 1.9). Nobody can have had an unbuilt chapter open, so skipping it closes
+	/// nothing; it is recorded by the same rule once it is playable and its real previous boss is known.
+	/// </remarks>
+	public static List<StageDefinition> RecordMetGates(SaveData data)
+	{
+		var opened = new List<StageDefinition>();
+		if (data == null)
+			return opened;
+		foreach (StageDefinition gate in StageCatalog.GateChapters)
+		{
+			if (gate.IsPlayable && !IsStageUnlocked(data, gate.Id) && IsGateMet(data, gate) && UnlockStage(data, gate.Id))
+				opened.Add(gate);
+		}
+		return opened;
+	}
+
+	/// <summary>
+	/// Whether a chapter can be entered, resolving its <see cref="StageGate"/>. The gate chapters are
+	/// the reason this is not just a lookup in the unlocked-stages list.
 	/// </summary>
 	public static bool IsStageAvailable(SaveData data, StageDefinition stage)
 	{
@@ -298,6 +369,10 @@ public static class GlobalStatsManager
 	///      kill opens instead of trusting what the old order wrote.
 	///
 	/// Nothing here ever closes a chapter a save could already enter: each rule only adds.
+	///
+	/// A gate chapter (<see cref="StageGate.PreviousBossAndWizards"/>) keeps rules 1 and 2 - the
+	/// opened list, which the schema 19 step writes for every save that had met the old gate, and being
+	/// past it - and takes <see cref="IsGateMet"/> in place of rule 3: its previous boss AND the wizards.
 	/// </remarks>
 	public static bool IsStageEarned(SaveData data, StageDefinition stage)
 	{
@@ -307,7 +382,9 @@ public static class GlobalStatsManager
 		return stage.Gate switch
 		{
 			StageGate.Open => true,
-			StageGate.CampaignComplete => IsCampaignComplete(data),
+			StageGate.PreviousBossAndWizards => IsStageUnlocked(data, stage.Id)
+				|| HasPassedInCampaign(data, stage)
+				|| IsGateMet(data, stage),
 			_ => IsStageUnlocked(data, stage.Id)
 				|| HasPassedInCampaign(data, stage)
 				|| HasClearedPreviousChapter(data, stage),

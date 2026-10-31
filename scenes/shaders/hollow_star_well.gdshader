@@ -24,6 +24,14 @@
 // Apotheosis) the hole is Dee's obsidian scrying glass instead: black glass with one hard reflection
 // across it, the specular as a line (obsidian_glass.py's rule), so the form is told from the spell.
 //
+// THE HEAT IS THE FALLOFF (0.9.3, Eric: "enemies should take more damage the closer they are to the
+// center"). The collapse hits hardest at the centre and least at its edge (HollowStar.ShareAt), so the
+// floor of the well between the lip and `heat_radius` (the collapse radius) glows: cells of the ramp,
+// opaque, by ordered dither - densest and hottest against the core, thinning and cooling to nothing at the
+// edge of the collapse, in slow turning bands like an accretion disc. `heat` (0..1) is how bright it
+// burns: a smoulder as the well opens, building through the pull, a flare as the core shuts - and with the
+// hole gone, the flare is a disc hottest at its centre. No ring: it fades out, it is never outlined.
+//
 // The node's modulate (a Legendary's gold) arrives in COLOR and is multiplied in.
 shader_type canvas_item;
 render_mode unshaded;
@@ -38,6 +46,9 @@ uniform float clock = 0.0;
 uniform float corona = 0.0;
 uniform bool black_sun = false;
 uniform bool mirror = false;
+// The collapse's falloff: its radius, and how bright it burns (0: not drawn).
+uniform float heat_radius = 80.0;
+uniform float heat = 0.0;
 uniform vec4 ramp_core : source_color = vec4(0.910, 0.847, 1.0, 1.0);
 uniform vec4 ramp_hot : source_color = vec4(0.706, 0.549, 0.910, 1.0);
 uniform vec4 ramp_mid : source_color = vec4(0.541, 0.361, 0.769, 1.0);
@@ -161,6 +172,30 @@ void fragment() {
 				hit = true;
 				col = ramp_edge.rgb;
 				break;
+			}
+		}
+	}
+
+	// The heat, under everything above: the arms and the corona cross it. 0 at the lip (or the centre,
+	// once the core has shut), 1 at the collapse's edge; density falls as the square of the way out, so
+	// the core reads solid and the edge sparse, and the colour steps down the ramp with it.
+	if (!hit && heat > 0.0 && r < heat_radius) {
+		float lip = max(core, 0.0);
+		float u = clamp((r - lip) / max(heat_radius - lip, 1.0), 0.0, 1.0);
+		if (r >= lip) {
+			float swirl = 0.5 + 0.5 * sin(phi * 3.0 - spin * 0.8 + r * 0.09);
+			float inward = 1.0 - u;
+			float density = heat * inward * inward * (0.6 + 0.4 * swirl);
+			if (b < density) {
+				hit = true;
+				if (u < 0.15 && heat > 0.9)
+					col = ramp_core.rgb;
+				else if (u < 0.35)
+					col = ramp_hot.rgb;
+				else if (u < 0.65)
+					col = ramp_mid.rgb;
+				else
+					col = ramp_edge.rgb;
 			}
 		}
 	}

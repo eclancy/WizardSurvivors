@@ -193,22 +193,26 @@ Changing a node's `collision_layer` requires updating **every** `collision_mask`
 
 ## Unlocks and the campaign
 
-`scripts/UnlockCatalog.cs` is the single authority on how every spell and character is obtained
-(`Starter` / `Achievement` / `Purchase` / `Discovery`). `GlobalStatsManager` reads it;
+`scripts/UnlockCatalog.cs` is the single authority on how every spell and character is obtained.
+**Every spell that is not a starter comes from exactly one achievement** (Eric, 2026-10-30): a Feat,
+a chapter's Road deed (a boss, or a side event's derived `event_<site>` deed), or a secret's derived
+`secret_<id>` deed - the nine spell vaults. `Discovery` is retired and the shop sells no spells;
+`.ai/achievements-and-secrets.md` (section 11 says what was built). `GlobalStatsManager` reads it;
 `DefaultUnlockedSpellIds` is gone, surviving only as `LegacyDefaultUnlockedSpellIds` for save
 migration. **A spell or character with no catalog entry is permanently locked**, and
 `RegressionChecks.ValidateUnlockCatalog` reports it — so adding content means adding an entry.
-**The final chapter's gate is `AllWizardIds`: every wizard owned.** A new character joins that gate,
-which closes the Emberdeep on every save that had already opened it - unless the entry sets
-`OutsideCampaignGate` (Laelaps, the dog, does: he is not a wizard and his deed is optional). Tools
-that "own everything" read `AllCharacterIds`.
+**A gate chapter (`StageGate.PreviousBossAndWizards`, today the Emberdeep) opens on the previous
+chapter's boss beaten and every wizard whose rescue comes before it** (`GateWizardIds`); once met it
+is written into the save's opened list, so a wizard added later can never close it.
+`ValidateGateReachability` proves a fresh save can reach every gate chapter on paper. Laelaps is
+outside every gate (`OutsideCampaignGate`). Tools that "own everything" read `AllCharacterIds`.
 
 `scripts/StageCatalog.cs` is the chapter roster and the only place a stage is named. It replaced
 four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `Node2DGame`, and
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 18 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 19 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
@@ -219,7 +223,11 @@ has already finished the campaign; 13 re-derives the opened chapters under the c
 to a finished campaign, 15 the Familiar and 16 the facing spells (Stormsweep, Sleet Runes); 17
 adds the stage secrets' `FoundSecretIds` and `FoundUpgradeLevels` (found levels, issue #20, summed
 with the shop's in `Player.ApplyArcaneUpgrades`) and credits nothing; 18 refunds every shop level
-bought of the removed Save and Augury charges (`MigrateRetiredLevelUpCharges`).
+bought of the removed Save and Augury charges (`MigrateRetiredLevelUpCharges`); 19 moves every
+unlock onto achievements (`MigrateToAchievementUnlocks`: `GlimpsedSecretIds`, `LifetimeStats.EventsWon`,
+event deeds seeded from what the save owns, every done deed reconciled, the Emberdeep kept open for a
+save that met the old gate). Steps 8-16 read frozen schema-18 lists, never the live catalog, and
+`ValidateAchievementMigration` runs sample saves through all of it.
 
 **A branch with a schema bump migrates the developer's REAL save the moment any Godot run in it
 loads it** - the MainMenu validator run included - and `SaveManager` writes the migrated save

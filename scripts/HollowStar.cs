@@ -37,6 +37,21 @@ using WizardSurvivors.scripts;
 //     re-pulling between, and the motes circling its core count the collapses it has left.
 //   - Nova Seed (level 8): the collapse throws NovaShards shards of the star at the nearest packs
 //     outside it; each opens a smaller well where it lands, which knots that pack in turn.
+//
+// **Eric's playtest of 0.9.2** (2026-10-30): "hollow star should never be centered on the player, so the
+// enemies are not dragged into the player. reduce the cooldown on hollow star, it's very powerful. hollow
+// star should pull the enemies in slower. enemies should take more damage the closer they are to the
+// center." Four answers, all here or in Player.FireHollowStar:
+//   - Never on the wizard: a well opens with the rim of its pull ClearOfWizard past him (OpenSpot), so the
+//     pack it was aimed at is on its near side and is dragged AWAY from him. Twin Stars' drift never
+//     carries a well nearer than that, Nova Seed's wells land by the same rule, and a well he walks into
+//     himself leaves alone anything he stands in the way of (Pull, WizardGuard).
+//   - Slower: half the drag (the scene's PullSpeed 240 -> 120) and a softer ease near the centre, so the
+//     swarm drifts in over the pull rather than snapping to it.
+//   - The core hits hardest: ShareAt, the collapse's whole damage at the centre down to about a third at
+//     its edge, drawn as the well's heat (the shader's accretion glow, densest and hottest at the core).
+//   - "Reduce the cooldown ... it's very powerful" was read as fire LESS often (SpellData_HollowStar.tres):
+//     a shorter cooldown would have made a spell he called too strong stronger still.
 public partial class HollowStar : Node2D, IPaintsElementPath
 {
 	public const string CrushId = "hollow_star_amplified_impact";
@@ -45,8 +60,11 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	public const string NovaSeedId = "hollow_star_infinite_horizon";
 
 	// Crush: the collapse's damage x (1 + CrushPerBody x the bodies inside it), counting no more than
-	// CrushMostBodies - a knot of fifteen is a full one; past it the swarm only stacks deeper.
-	public const float CrushPerBody = 0.06f;
+	// CrushMostBodies - a knot of fifteen is a full one; past it the swarm only stacks deeper. 6% a body
+	// (up to +90%) until 0.9.3, when the collapse began hitting its core harder (ShareAt): the two both pay
+	// for a full knot, and Crush had measured twice the level 4 band and half again over Twin Stars; 2%
+	// (up to +30%).
+	public const float CrushPerBody = 0.02f;
 	public const int CrushMostBodies = 15;
 
 	// Twin Stars: the twin opens on a pack at least a reach from the first and at most this many
@@ -67,6 +85,59 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	public const float NovaThrowReaches = 3f;
 	private const float NovaShardSeconds = 0.35f;
 
+	// Never on the wizard: the rim of a well's pull opens at least this far past him (Iron Ring's 40, the
+	// stride it keeps between its pen and him), and the pull leaves alone an enemy whose road to the centre
+	// passes within WizardGuard of him - his body and theirs.
+	public const float ClearOfWizard = 40f;
+	private const float WizardGuard = 30f;
+
+	// The collapse's damage by distance from the centre: CoreShare at it, falling straight to RimShare at
+	// the edge of the collapse. A knot pulled all the way in takes the spell's whole damage - the number on
+	// its card is the core's - and a straggler that only just crossed the edge, about a third of it. (First
+	// built at 1.5 and 0.5: since the pull lays the knot on the centre, that was a 40% raise on a spell
+	// Eric had just called too strong.)
+	public const float CoreShare = 1f;
+	public const float RimShare = 0.35f;
+
+	/// <summary>The share of the collapse's damage an enemy this far from the centre takes.</summary>
+	public static float ShareAt(float distance, float collapseRadius) =>
+		Mathf.Lerp(CoreShare, RimShare, Mathf.Clamp(distance / MathF.Max(1f, collapseRadius), 0f, 1f));
+
+	/// <summary>Whether a well of this reach centred here keeps the rim of its pull ClearOfWizard past him.</summary>
+	public static bool IsClearOf(Vector2 wizard, Vector2 centre, float reach) =>
+		wizard.DistanceSquaredTo(centre) >= (reach + ClearOfWizard) * (reach + ClearOfWizard) - 1f;
+
+	/// <summary>
+	/// Where a well of this reach opens when aimed at <paramref name="aim"/>: there, or - when that would put
+	/// the wizard inside its pull - pushed straight out from him until the rim is ClearOfWizard past him. The
+	/// pack it was aimed at is then on the well's near side, and is dragged away from him, not onto him. A
+	/// spot pushed onto water or a wall turns a little round him for open ground, and keeps the straight
+	/// push if there is none (a well over water still pulls; a well on the wizard is the one thing it may not).
+	/// </summary>
+	public static Vector2 OpenSpot(Vector2 wizard, Vector2 aim, float reach)
+	{
+		if (IsClearOf(wizard, aim, reach))
+			return aim;
+		Vector2 away = aim - wizard;
+		float distance = away.Length();
+		Vector2 dir = distance > 1f ? away / distance : Vector2.Right;
+		float clear = reach + ClearOfWizard;
+		Vector2 spot = wizard + dir * clear;
+		MazeNavigation nav = MazeNavigation.Active;
+		if (nav == null || !nav.IsBlockedAt(spot))
+			return spot;
+		for (int step = 1; step <= 2; step++)
+		{
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Vector2 turned = wizard + dir.Rotated(Mathf.DegToRad(15f * step * side)) * clear;
+				if (!nav.IsBlockedAt(turned))
+					return turned;
+			}
+		}
+		return spot;
+	}
+
 	/// <summary>Twin Stars: the well this one was opened with. They drift together while they pull.</summary>
 	public HollowStar Partner { get; set; }
 
@@ -82,9 +153,13 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	// well that caught nothing in its pull also hits little when it closes.
 	[Export] public float CollapseRadius { get; set; } = 80f;
 	// Pull speed in px/s, eased down near the centre (speed = min(PullSpeed, distance x
-	// PullStiffness)) so the swarm settles into a knot instead of overshooting through it.
-	[Export] public float PullSpeed { get; set; } = 240f;
-	[Export] public float PullStiffness { get; set; } = 4.5f;
+	// PullStiffness)) so the swarm settles into a knot instead of overshooting through it. Halved in
+	// 0.9.3 ("hollow star should pull the enemies in slower"): 240 px/s carried the rim of a plain well
+	// to its knot in about half a second, a snap. At 120 the rim takes 0.8 s to come within 55 px, where
+	// the ease takes over and halves what is left every 0.3 s - so the swarm drifts in over the whole
+	// pull and an enemy from the rim is still about ten px from the centre when it collapses.
+	[Export] public float PullSpeed { get; set; } = 120f;
+	[Export] public float PullStiffness { get; set; } = 2.2f;
 	// How often the pull is re-applied. ApplyKnockback holds a constant velocity for its first
 	// ~0.3 s, so a tenth of a second keeps the drag continuous at a tenth of the group scans a
 	// per-frame pull would cost.
@@ -170,6 +245,15 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	private static readonly StringName ParamCorona = "corona";
 	private static readonly StringName ParamBlackSun = "black_sun";
 	private static readonly StringName ParamMirror = "mirror";
+	private static readonly StringName ParamHeatRadius = "heat_radius";
+	private static readonly StringName ParamHeat = "heat";
+	// The heat: the collapse's falloff drawn on the floor of the well (the shader's accretion glow), dense
+	// and hot at the core and thinning to nothing at the collapse's edge - where it hits hardest and where
+	// it hits at all, read off one picture. It smoulders while the well opens, builds through the pull so
+	// the collapse can be seen coming, and flares the frame the core shuts.
+	private const float HeatOpen = 0.35f;
+	private const float HeatPulled = 0.8f;
+	private const float HeatFlareSeconds = 0.25f;
 	private Node2D well;
 	private ShaderMaterial wellMaterial;
 	private float clock;
@@ -343,6 +427,15 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		Vector2 next = GlobalPosition + toMid / distance * MathF.Min(driftSpeed * dt, distance - stop);
 		if (MazeNavigation.Active?.IsBlockedAt(next) == true)
 			return;
+		// Never onto the wizard: a pair opened either side of him would meet on him, dragging both knots
+		// with them. A step that would bring the rim nearer him than ClearOfWizard is not taken; one that
+		// carries the well away from him still is.
+		if (PlayerRef != null && IsInstanceValid(PlayerRef))
+		{
+			Vector2 wizard = PlayerRef.GlobalPosition;
+			if (!IsClearOf(wizard, next, PullRadius) && wizard.DistanceSquaredTo(next) < wizard.DistanceSquaredTo(GlobalPosition))
+				return;
+		}
 		GlobalPosition = next;
 	}
 
@@ -350,6 +443,11 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	{
 		float reachSquared = PullRadius * PullRadius;
 		float knotSquared = CollapseRadius * CollapseRadius;
+		// The wizard's guard is only asked for when he stands in (or at the rim of) the reach - a well opens
+		// clear of him, so this is a well he walked into, or one he is walking past.
+		bool guarded = PlayerRef != null && IsInstanceValid(PlayerRef)
+			&& GlobalPosition.DistanceSquaredTo(PlayerRef.GlobalPosition) < (PullRadius + WizardGuard) * (PullRadius + WizardGuard);
+		Vector2 wizard = guarded ? PlayerRef.GlobalPosition : Vector2.Zero;
 		int inKnot = 0;
 		foreach (Node node in EnemyRegistry.Snapshot)
 		{
@@ -367,11 +465,22 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 			// Already in the knot. Pulling an enemy sitting on the centre only makes it jitter.
 			if (distance < 6f)
 				continue;
+			// He stands on its road to the centre: dragged, it would be dragged onto him. It is left to
+			// walk as it was. (Standing on the centre himself, every road ends on him and nothing is pulled.)
+			if (guarded && InTheWay(wizard, enemy.GlobalPosition, toCentre, distanceSquared))
+				continue;
 
 			float speed = MathF.Min(PullSpeed, distance * PullStiffness);
 			enemy.ApplyKnockback(toCentre / distance * speed);
 		}
 		knot = inKnot;
+	}
+
+	// Whether the wizard is within WizardGuard of the straight road from an enemy to the centre.
+	private static bool InTheWay(Vector2 wizard, Vector2 from, Vector2 toCentre, float lengthSquared)
+	{
+		float t = Mathf.Clamp((wizard - from).Dot(toCentre) / MathF.Max(1f, lengthSquared), 0f, 1f);
+		return (from + toCentre * t).DistanceSquaredTo(wizard) < WizardGuard * WizardGuard;
 	}
 
 	private void Collapse()
@@ -401,10 +510,15 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 
 		foreach (Enemy enemy in near)
 		{
-			if (!IsInstanceValid(enemy) || GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition) > radiusSquared)
+			if (!IsInstanceValid(enemy))
+				continue;
+			float distanceSquared = GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition);
+			if (distanceSquared > radiusSquared)
 				continue;
 
-			PlayerRef.DealDamageToEnemy(enemy, damage, source: SpellData);
+			// The nearer the core, the harder (ShareAt): what the pull dragged all the way in takes the most.
+			int hit = Math.Max(1, Mathf.RoundToInt(damage * ShareAt(MathF.Sqrt(distanceSquared), CollapseRadius)));
+			PlayerRef.DealDamageToEnemy(enemy, hit, source: SpellData);
 			// What survives the collapse is held in the knot; a boss's MinSlowMultiplier makes it a slow.
 			if (HoldSeconds > 0f && IsInstanceValid(enemy) && !enemy.IsDying)
 				enemy.ApplySlow(0f, HoldSeconds);
@@ -423,13 +537,19 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		float throwReach = PullRadius * NovaThrowReaches;
 		float innerSquared = CollapseRadius * CollapseRadius * 1.44f;
 		float outerSquared = throwReach * throwReach;
-		float apartSquared = PullRadius * NovaSeedSize * PullRadius * NovaSeedSize;
+		float seedReach = PullRadius * NovaSeedSize;
+		float apartSquared = seedReach * seedReach;
 		MazeNavigation nav = MazeNavigation.Active;
+		// A seeded well is a well, and never opens on the wizard either: the pack nearest him is seeded on
+		// its far side (OpenSpot), so it too is dragged away from him.
+		bool clearOfWizard = PlayerRef != null && IsInstanceValid(PlayerRef);
+		Vector2 wizard = clearOfWizard ? PlayerRef.GlobalPosition : Vector2.Zero;
 		EnemyRegistry.CollectNear(GlobalPosition, throwReach, near);
 		shardCount = 0;
 		while (shardCount < NovaShards)
 		{
-			Enemy best = null;
+			bool found = false;
+			Vector2 bestSpot = Vector2.Zero;
 			float bestSquared = float.MaxValue;
 			foreach (Enemy enemy in near)
 			{
@@ -438,17 +558,19 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				float d2 = GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition);
 				if (d2 <= innerSquared || d2 > outerSquared || d2 >= bestSquared)
 					continue;
+				Vector2 spot = clearOfWizard ? OpenSpot(wizard, enemy.GlobalPosition, seedReach) : enemy.GlobalPosition;
 				bool taken = false;
 				for (int s = 0; s < shardCount && !taken; s++)
-					taken = shardTo[s].DistanceSquaredTo(enemy.GlobalPosition) < apartSquared;
-				if (taken || nav?.IsBlockedAt(enemy.GlobalPosition) == true)
+					taken = shardTo[s].DistanceSquaredTo(spot) < apartSquared;
+				if (taken || nav?.IsBlockedAt(spot) == true)
 					continue;
-				best = enemy;
+				found = true;
+				bestSpot = spot;
 				bestSquared = d2;
 			}
-			if (best == null)
+			if (!found)
 				break;
-			shardTo[shardCount++] = best.GlobalPosition;
+			shardTo[shardCount++] = bestSpot;
 		}
 		near.Clear();
 		if (shardCount > 0)
@@ -483,7 +605,10 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 			seed.HoldSeconds = HoldSeconds;
 			seed.Modulate = Modulate;
 			arena.AddChild(seed);
-			seed.GlobalPosition = shardTo[i];
+			// Cleared of the wizard again where he stands now: he may have walked toward it while it flew.
+			seed.GlobalPosition = PlayerRef != null && IsInstanceValid(PlayerRef)
+				? OpenSpot(PlayerRef.GlobalPosition, shardTo[i], seed.PullRadius)
+				: shardTo[i];
 		}
 	}
 
@@ -510,7 +635,8 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	// make it clear what the hitbox is"). The arms are the reach: they grow out from the core to
 	// exactly PullRadius as the well opens, and while it pulls, motes are dragged in along them from
 	// that same rim - so how far it pulls is shown by what it pulls. The collapse is debris thrown out
-	// to exactly CollapseRadius (ImpactDebris), which is the only thing that says how far it hit.
+	// to exactly CollapseRadius (ImpactDebris), and the heat on the well's floor (0.9.3) fades out at that
+	// same radius, densest where the collapse hits hardest - a gradient to nothing, never a ring.
 	//
 	// The well's radii for this frame, into its shader: how far the arms have grown, how wide the core
 	// is, and whether the corona and the prominences are lit. The same numbers the old draw calls used.
@@ -522,6 +648,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		float outer = inner;
 		float core = 0f;
 		float corona = 0f;
+		float heat = 0f;
 		bool flares = false;
 		switch (phase)
 		{
@@ -530,6 +657,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, OpenSeconds), 0f, 1f);
 				outer = Mathf.Lerp(inner, PullRadius - 1f, t);
 				core = inner * t;
+				heat = HeatOpen * t;
 				break;
 			}
 			case Phase.Pulling:
@@ -539,6 +667,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				// under Crush, with every body the knot holds: a full knot is a third as wide again.
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, pullDuration), 0f, 1f);
 				core = Mathf.Lerp(CollapseRadius * 0.3f, CollapseRadius * 0.45f, t) * CrushSwell(knot);
+				heat = Mathf.Lerp(HeatOpen, HeatPulled, t);
 				// Eclipse's corona: light hugging the black disc, inside the collapse radius - the well's
 				// own rim, not a mark of its reach.
 				corona = eclipse ? 1f + 0.06f * MathF.Sin(spin * 3.1f) : 0f;
@@ -551,19 +680,26 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				// Sun with collapses still to come does not go out: its core shrinks back and holds.
 				float shut = 1f - Mathf.Clamp(phaseSeconds / 0.08f, 0f, 1f);
 				float swell = CollapseRadius * 0.45f * CrushSwell(crushed);
+				// The flare: the whole falloff at full heat as the core shuts - with the hole gone, a disc
+				// hottest at its centre - cooling to nothing, or back to a smoulder for Black Sun's next pull.
+				float flare = 1f - Mathf.Clamp(phaseSeconds / HeatFlareSeconds, 0f, 1f);
 				if (collapsesLeft > 0)
 				{
 					core = Mathf.Lerp(CollapseRadius * 0.3f, swell, shut);
 					flares = true;
+					heat = MathF.Max(HeatOpen, flare);
 				}
 				else
 				{
 					core = swell * shut;
+					heat = flare;
 				}
 				break;
 			}
 		}
 		wellCore = core;
+		wellMaterial.SetShaderParameter(ParamHeatRadius, CollapseRadius);
+		wellMaterial.SetShaderParameter(ParamHeat, heat);
 		wellMaterial.SetShaderParameter(ParamPullRadius, PullRadius);
 		wellMaterial.SetShaderParameter(ParamArmInner, inner);
 		wellMaterial.SetShaderParameter(ParamArmOuter, outer);

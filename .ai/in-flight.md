@@ -13,42 +13,38 @@ the new evolutions, fullscreen on PC and the pity bonus removed. The next releas
 release keystore and the Android SDK live there; `.ai/releasing.md`). The CS0162 "unreachable code"
 warnings during its build are old and harmless.
 
-## 2. Two branches: `main` ships, `main-ff86ni` is the development branch
+## 2. `main` now carries everything (2026-10-31)
 
-`main-ff86ni` carries all of this on top of `main`, each merged with a build and the validator
-(0 errors; 6 warnings, five of them the castle chapters' expected to-do lines):
+All nine spell vaults are built, so `main-ff86ni` was merged into `main` (048fe79) and **`main` is
+releasable as 0.10.0**. Since 0.9.2 it adds:
 
-- **A1** every non-starter spell earned through an achievement; the gate on wizards (fixes the
-  Emberdeep being unreachable on a new save); Fireball to the Long Coil; **schema 19**.
-- **A2** the achievements page (main menu and pause tab). **A3** the shop sells no spells; its
-  three boons fold into Powers. **A4** the secret core (`.ai/stage-secrets.md` section 13 is the
-  recipe for adding a secret).
-- **Two of the nine spell vaults:** the Geode Heart (Sunken Cave, Frost Shard) and the Swallow-Hole
-  (Blighted Swamp, Gravewell); the secrets' effects redrawn on the pixel grid.
-- **C0** the castle plumbing: the Last Bridge, the Court and the Throne exist, `IsPlayable = false`,
-  on stand-ins, their music wired.
-- **V2** the Sunken Cave's own caverns.
-- The results screen's "closest unlock" no longer names a sealed deed.
+- **Achievements for every spell (A1-A4), schema 19:** every non-starter spell earned through a
+  feat, a chapter deed or one of the nine secret vaults; the achievements page; the shop sells no
+  spells; the gate on wizards (fixes the Emberdeep being unreachable on a new save).
+- **The nine vaults:** the Pale Hart, the Pinfold, the Fallen Star, the Geode Heart, the Cold Forge,
+  the Swallow-Hole, the Broken Ward, the Buried Runes and the Fulgurite.
+- **Variety:** the Sunken Cave's caverns and the Mystic Ruins' broken walls.
+- **Castle groundwork:** the Last Bridge and the Court are built but not playable (`IsPlayable =
+  false`); the Throne is a stub; their music is wired.
+- **Playtest fixes:** Glacial Spike's extra spikes land on enemies; Avalanche reworded; Spiritual
+  Weapon hovers and bobs, swings cleanly at speed, spreads its targets, and has the off-hand
+  dagger (Twin Blades) and Deflection (Riposte); the crow's Great Raven; enemy wind-ups shown by an
+  animated icon over the attacker, with danger areas as opaque dashed outlines; the Gleaning Bell
+  (a rare pickup that calls every XP orb in); Hollow Star never opens on the wizard, pulls slower,
+  hits hardest at its core and fires less often; Split Lens charges only the spells it feeds.
 
-**Do not merge `main-ff86ni` into `main` or release from it yet.** Seven spells are in vaults that
-are not built, so a new save could not earn **Hunter's Draw, the Familiar, Starfall, Molten Shard,
-Kindled Ward, Sleet Runes or Stormsweep**. Saves that already own them keep them. Once all nine
-vaults are built, merge `main-ff86ni` into `main` (with a merge commit) and release.
+`main-ff86ni` stays the development branch: merge each finished branch into it, verify, then
+fast-forward `main`.
 
-## 3. Unfinished branches, in priority order
+## 3. Branches still running or unfinished
 
-Each was stopped mid-task and pushed as is. Merge `main-ff86ni` into the branch first, finish the
-work against its design, then build, run the validator (`-- --no-save-writes`, always: schema 19
-migrates a real save the moment it loads) and the checks the design names, and merge it into
-`main-ff86ni`.
-
-| branch | what | state |
+| branch | what | base |
 |---|---|---|
-| `wip/vaults-a` | the Pale Hart (Forest, Hunter's Draw), the Pinfold (Fields, the Familiar), the Fallen Star (Broken Circle, Starfall), the Cold Forge (Cursed Dungeon, Molten Shard) | pixel fixes merged; the four vaults are **WIP b0ad603, unverified** |
-| `wip/vaults-b` | the Broken Ward (Ruins, Kindled Ward), the Buried Runes (Waste, Sleet Runes), the Fulgurite (Sands, Stormsweep) | the Swallow-Hole is merged; the rest is **WIP 2b6bd6a, unverified** (the Broken Ward was in progress) |
-| `wip/castle-bridge` | C1, the Last Bridge (`.ai/endgame-castle.md` section 3) | 51c6463: band, abyss, collapsing front, towers; the agent was on the ground detail. Not yet verified by the integrator. Do not flip `IsPlayable` |
-| `wip/castle-court` | C3, the Court (section 5) | bde62e3: layout, `Authored` reader, rules, rooms, photographed; the agent was writing a tour probe. Not yet verified by the integrator |
-| `wip/variety-walls` | V1, the Mystic Ruins' broken walls (V2 is merged) | **WIP 813db36, unverified**: mostly generated wall tiles |
+| `wip/difficulty-curve` | the difficulty curve; Ascensions earned; 4 spell slots by default; rerolls and bans per run; Skip gives half an XP bar | `main-ff86ni` |
+| `wip/ascension-audit` | Tidal Wall starts small and grows, fires less; every Ascension checked for power and screen share; Ascensions keep the mutation working; Sun Dogs glide back and stay on screen with Daybreak | `main` |
+| `wip/fix-clipped-art` | the bushes and Scorched Sands art cut off at their boxes, and a scan of all world art | `main` |
+| `wip/hounds-icons-hares` | the hound Ascension (main hound only, a bigger Cerberus; Littermates as two one-headed pups; Pancho pups), Familiar and Molten Shard icons, the hares' run cycle | `main` |
+| `wip/pause-toasts-sketchbook` | the pause screen shows mutations and Ascensions, no Spell Index there, live achievements, the achievement banner, no white flash after a level-up, the Sketchbook as its own map | `main-ff86ni` |
 | `wip/evolutions2-sky` | phase 2 cards for Stormsweep, Sleet Runes, Aegis Ward, and their pixel-art pass | **WIP d8048b3** from 10-29 |
 | `wip/evolutions2-blasts` | phase 2 cards for Arcane Explosion, Fireball, Meteor Swarm | not started (Solar Flare landed) |
 

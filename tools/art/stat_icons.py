@@ -743,6 +743,27 @@ def sealed():
     ])
 
 
+def eye():
+    """An open eye, for a hidden achievement the player has SEEN but not yet found - the achievements
+    page's "Seen" tag (.ai/achievements-and-secrets.md 4.3). Not `sealed` (never met, unknown) and
+    not `todo` (a requirement): it says only "you have been near this". Steel lids and white, an
+    arcane-blue iris - the page's Seen ink - and a dark pupil; lit from the upper left like the rest."""
+    return _grid([
+        "............",
+        "............",
+        "....LLLL....",
+        "..LLHHHHBB..",
+        ".LHHAAAAHHB.",
+        ".LHAAkkAaHS.",
+        ".LHAAkkaaHS.",
+        ".BHHAaaaHHS.",
+        "..BBHHHHSS..",
+        "....SSSS....",
+        "............",
+        "............",
+    ], {"A": T("arcane", "lit"), "a": T("arcane", "base")})
+
+
 GLYPHS = [
     ("damage", damage),
     ("cooldown", cooldown),
@@ -774,6 +795,7 @@ GLYPHS = [
     ("lock", lock),
     ("todo", todo),
     ("sealed", sealed),
+    ("eye", eye),
     ("kills", kills),
     ("elite", elite),
     ("chest", chest),
