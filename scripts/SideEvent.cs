@@ -315,13 +315,15 @@ public abstract partial class SideEvent : Node2D
 		foreach (var grant in grants)
 		{
 			Game?.RecordDiscovery(grant);
-			// The early chapters' sites pay boons (.ai/campaign.md), which are found, not recovered.
+			// The early chapters' sites pay boons (.ai/campaign.md), which are found, not recovered. The
+			// kind leads and the name follows ("Spell recovered - Bramble Seed"): the eye catches what sort
+			// of thing arrived before it has to read a name it may never have seen.
 			if (grant.IsWizard)
-				parts.Add($"{grant.DisplayName} is free - a new wizard");
+				parts.Add($"Wizard freed - {grant.DisplayName}");
 			else if (BoonCatalog.GetById(grant.Id) != null)
-				parts.Add($"{grant.DisplayName} found - a new boon");
+				parts.Add($"Boon found - {grant.DisplayName}");
 			else
-				parts.Add($"{grant.DisplayName} recovered - a new spell");
+				parts.Add($"Spell recovered - {grant.DisplayName}");
 		}
 		// meta_unlock, not event_reward: an unlock is the save changing, and that has its own sound.
 		SfxPlayer.Global(SfxCatalog.MetaUnlock);

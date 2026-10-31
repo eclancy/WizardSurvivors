@@ -4863,30 +4863,36 @@ def _(sp, c):
 
 @card("spiritual_weapon_sword_twin_blades")
 def _(sp, c):
-    """Twin Blades: two swords crossed."""
+    """Twin Blades (2026-10-30): the sword and its off-hand dagger, crossed - one sword, one smaller blade,
+    never two swords (the levels give those)."""
     reset(sp)
-    sp.subject = weapons([("sword", -125.0, (24.0, 26.0), 0.62), ("sword", -55.0, (8.0, 26.0), 0.62)], box=27.0)
-    sp.why = "a second sword"
+    sp.subject = weapons([("sword", -125.0, (24.0, 26.0), 0.62), ("dagger", -50.0, (9.0, 27.0), 0.5)], box=27.0)
+    sp.why = "a dagger beside the sword"
 
 
 @card("spiritual_weapon_sword_riposte")
 def _(sp, c):
-    """Riposte: a dark bolt struck back off the blade as a bright one."""
+    """Deflection (Riposte's id, 2026-10-30): a dark bolt broken on the blade, its pieces knocked aside down
+    across its path - never struck back, which is the Endless Chase's verb."""
     reset(sp)
     sp.subject = weapon("sword", box=24.0, angle=-80.0)
     sp.place = Place(1.0, dx=3.0)
 
-    def bounce(cv, x):
+    def swat(cv, x):
         d, a = E["darkness"], E["arcane"]
-        cv.line(2, 22, 13, 17, d[2])
-        cv.line(2, 23, 13, 18, d[3])
-        cv.set(13, 17, d[1])
-        cv.line(15, 15, 5, 5, a[1])
-        cv.line(15, 16, 5, 6, a[2])
-        cv.set(5, 5, a[0])
-        m_glint(cv, 15, 16, 2, E["light"])
-    O(sp, bounce)
-    sp.why = "parries strike back"
+        # The bolt coming in along its path...
+        cv.line(2, 15, 12, 15, d[2])
+        cv.line(4, 16, 12, 16, d[3])
+        cv.line(9, 15, 12, 15, d[1])
+        # ...broken on the blade, its pieces thrown aside across the path, not back along it.
+        for (px, py, k) in ((13, 19, 1), (12, 21, 1), (15, 21, 2), (13, 24, 2), (11, 25, 1), (16, 24, 2)):
+            cv.set(px, py, d[k])
+        cv.set(14, 20, a[0])
+        cv.set(12, 22, a[1])
+        cv.set(15, 23, a[1])
+        m_glint(cv, 14, 15, 2, E["light"])
+    O(sp, swat)
+    sp.why = "swats bolts aside"
 
 
 @card("spiritual_weapon_sword_soul_siphon")

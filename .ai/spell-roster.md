@@ -120,6 +120,48 @@ so its own hit is modest and most of its value is what the knot does for the are
 Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
 and all ended inside the collapse; with no well they moved 3 px.
 
+**0.9.3: Eric's playtest of 0.9.2** (2026-10-30): *"hollow star should never be centered on the player,
+so the enemies are not dragged into the player. reduce the cooldown on hollow star, it's very powerful.
+hollow star should pull the enemies in slower. enemies should take more damage the closer they are to
+the center."*
+
+- **Never on the wizard.** A swarm pressed round him was the densest pack in range, so the well opened
+  on his feet and dragged it onto him. Now a well opens with the rim of its pull 40 px past him
+  (`HollowStar.OpenSpot`, Iron Ring's clearance): a pack within a reach of him is aimed *through* - the
+  well goes out along the line to it, the pack ends on its near side and is dragged away. Every well of
+  a cast is cleared by its exact reach (the level 3 reach and the Spirit Mirror's half again included);
+  a spot pushed onto water or a wall turns up to 30 degrees round him for open ground. Twin Stars' twin
+  is drawn again if the pair would meet on him, and its drift never steps a well nearer him than that;
+  Nova Seed's wells land by the same rule (re-cleared where he stands when they land). A well he walks
+  into himself leaves alone any enemy whose road to the centre passes within 30 px of him, so it never
+  drags one onto him. With the widest wells (Black Sun with the Spirit Mirror, about 470 px) a pack on
+  him is knotted some 500 px off - near the edge of the screen.
+- **Slower pull:** 240 -> 120 px/s and the ease 4.5 -> 2.2, so the rim of a plain well takes 0.8 s to
+  come within 55 px and the swarm drifts in over the whole pull rather than snapping in half a second.
+- **More at the core:** the collapse deals its whole damage at the centre, falling straight to 35% at
+  its edge (`HollowStar.ShareAt`), drawn as the well's heat (art-replacement-manifest section 9).
+- **"Reduce the cooldown ... it's very powerful" was read as fire less often:** a shorter cooldown would
+  have made a spell he called too strong stronger. 4.5 -> 6.0 s (5.1 at level 8, was 3.6).
+- **The numbers.** In the 8-minute bot the spell kills everything it catches, so its damage a second
+  follows its hit, not its cooldown (the longer cooldown only let more gather - the first pass, with the
+  cooldown alone and the core at x1.5, measured *higher*). Damage 18 / +5 / +6 / +8 -> 8 / +2 / +3 / +8;
+  Crush 6% a body (up to +90%) -> 2% (up to +30%); Twin Stars +30% damage, because Crush's Darkness lifts
+  the spell to tier 2 attunement (x1.2) and Twin Stars' gains nothing, and at the same footing the Crush
+  path read 1.5-1.9 times the Twin path's.
+
+Eight minutes, normal health (`--minutes=8 --timescale=2 --all-unlocked --immortal --character=0
+--seed=11 --spell=hollow_star --solo --upgrade-chance=1 --force-ascension`), damage a second, before ->
+after, against the peer bands 40-60 / 70-130 / 331-465. Read levels 4 and 6 as bands: each is 15-55
+seconds of play, two to nine casts.
+
+| path | L4 | L6 | L8 |
+|---|---|---|---|
+| Crush, Black Sun (John Dee's path) | 113 -> 40 | 250 -> 100 | 758 -> 506 |
+| Twin Stars, Nova Seed | 82 -> 56 | 174 -> 67 | 509 -> 361 |
+
+Black Sun's 506 is its own +60% on the strongest base path, past the band by 9%: an Ascension number,
+left for the level 8 audit, as is whether Black Sun's 60% re-pulls still knot enough at half the drag.
+
 ### Starfall - the weather spell (2026-10-25)
 
 The developer: *"lets add a falling star spell of some kind. maybe a meteor ascension, or a rain ability
@@ -1070,7 +1112,7 @@ which deals nothing and bursts in the guard's element:
 | **Familiar - the crow** (section 2g) | a bolt inside 320 px, met within 230: taken on the wing | rests 1.5 s | 254-264 caught (Enchanted Forest, 8 min, seed 11 - the dog 401 there) |
 | **Familiar - the cat** (section 2g) | a bolt inside 170 px, met within 110: batted away right at his feet | rests 1.0 s - the most often, the closest in | 273 caught (the same run) |
 | **Spiritual Weapon** (base spell; the orbiting blades until 2026-10-28) | any bolt a circling blade passes through | only while the blades are out, only what they touch | 164 parried |
-| **Spirit Sword** (the form, section 2f) | any bolt that touches a sword's blade - hanging at his shoulder, hunting or swinging | only where the swords are; Riposte widens the guard 60% and every parry is a strike | see 2f |
+| **Spirit Sword** (the form, section 2f) | any bolt that touches a sword's blade (or Twin Blades' dagger's) - hanging at his shoulder, hunting or swinging | only where the swords are; Deflection (Riposte's id, 2026-10-30) sends a free sword out to swat a bolt aimed at him, each sword about once a second | see 2f |
 | **Spirit Hammer** (the form) | every bolt inside a slam's shockwave | only where and when a slam lands | see 2f |
 | **Solar Flare - Daybreak Avatar** (Ascension) | every bolt inside the flare's reach this moment, between pulses too - the garlic | only inside the flare | 202 burned |
 
@@ -1245,6 +1287,8 @@ the numbers on the card ride the stat fields `EvolutionStatReaders` lists for it
 on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground under the bodies.
 
 - **Hollow Star** (`HollowStar.cs`, `Player.FireHollowStar`). Built as proposed - the pull is its own.
+  (0.9.3 changed Crush to 2% a body and gave Twin Stars +30% damage: "Hollow Star - the spell that moves
+  the swarm", above.)
   - **Crush** (L4, was +35% damage and +30% area): the collapse hits +6% harder for every body in it,
     up to +90% at fifteen; the core swells a third wider as the knot fills and throws more debris.
   - **Twin Stars** (L4, was -30% cooldown and a 25% harder drag): two wells a cast, the twin on a pack
@@ -1677,7 +1721,7 @@ colossal new drawing on the boss cell, twice the size, whose reach doubles with 
 |---|---|---|---|---|---|
 | **Axe** | **Broadaxe**: cleave 25% wider, +10% | **Headsman**: goes for the wounded; double on an enemy under half health | **Dawnsplitter**: Weakens what it cleaves (-30%, 3 s) | **Executioner's Greataxe**: double-bitted, x2 size and cleave, knockback doubled | **Whirling Axes**: two more axes, spinning end over end between blows |
 | **Hammer** | **Aftershock**: 0.4 s later a second wave, 40% wider, 60% damage, slows again | **Earthshaker**: slam 35% wider, slows 15% harder | **Hallowed Ground**: the slam leaves holy ground 2.5 s that Weakens and slows | **Titan's Maul**: x2 size and slam, +20%, freezes 0.5 s (a boss takes a hard slow) | **Hammerfall**: two more hammers, falling in turn, +15% |
-| **Sword** | **Twin Blades**: one more sword, each 10% softer | **Riposte**: guard 60% longer, a parry is a strike at once, +30% | **Soul Siphon**: 1 HP a strike, at most 3 a second | **Celestial Greatsword**: x2 size, cuts every enemy along the blade as it falls, +30% | **Thousand Cuts**: every swing a flurry of three cuts at 85%; a cut whose quarry has fallen goes to the nearest enemy |
+| **Sword** | **Twin Blades**: one off-hand dagger that stabs the main sword's quarry after each cut, 70% of a cut (was: one more sword, each 10% softer; see "2026-10-30" below) | **Deflection** (Riposte's id): free swords fly out and swat bolts aimed at the wizard, each about once a second; no damage (was Riposte: guard 60% longer, a parry is a strike at once, +30%) | **Soul Siphon**: 1 HP a strike, at most 3 a second | **Celestial Greatsword**: x2 size, cuts every enemy along the blade as it falls, +30% | **Thousand Cuts**: every swing a flurry of three cuts at 85%; a cut whose quarry has fallen goes to the nearest enemy |
 
 **The drawing.** `tools/art/spirit_weapons.py` models the six weapons as signed-distance parts,
 supersampled: the striking part (bit, face, blade) is conjured light on Arcane's emissive ramp,
@@ -1699,8 +1743,8 @@ spell's own icon is the three crossed (`tools/art/spell_icons.py`); fifteen evol
 stack; `spell_summon` when the weapon first appears. The hits are the Arcane hit.
 
 **Guards** (section 2d-bis): the old orbit's parry stays with the **sword**, the form that fights at a
-blade's length - along the blade, hanging or swinging, and Riposte widens the guard and turns a parry
-into a strike. The **hammer** crushes what is inside its slam: a guard that works only where and when
+blade's length - along the blade, hanging or swinging; Deflection (Riposte's id since 2026-10-30, when
+Riposte's wider guard and strike-on-parry went) sends a free sword out to swat a bolt aimed at him. The **hammer** crushes what is inside its slam: a guard that works only where and when
 it lands. The axe has none; it throws enemies back instead.
 
 **Measured** (`_BalanceHarness --minutes=8 --timescale=2 --immortal --all-unlocked --character=0
@@ -1750,6 +1794,69 @@ Levels 4-6 swing by a factor of two between runs of one build (section 3, Toxic 
 them as a band. The harness exits with a teardown crash after writing its report on this branch and
 on the Familiar's alike; the reports are whole.
 
+### 2026-10-30: the feel pass after 0.9.2 (`wip/spiritual-weapon-feel`)
+
+Eric, playing 0.9.2: *"Spiritual weapons should hover a little bit further away from the player and
+have a small hover animation to make them appear to be actually floating in space"*; of the sword,
+first a three-strike combo and then, *"nevermind the sword animation striking 3 times, the ascension
+flurry handles that. instead, just make sure the animation for the sword resets cleanly, and doesn't
+look goofy if it's repeatedly striking too fast"*; *"spiritual weapon, when you have multiples, should
+always target enemies that are a certain distance away from each other. multiple weapons can target the
+same miniboss or boss, but the sprites should not stack on top of each other when targeting"*; and of
+the cards, *"Riposte description is confusing. Replace with the ability to deflect projectiles. Twin
+sword mutation should create a second smaller dagger, and be capped at two blades ... the twin sword
+mutation should be more impactful or unique as leveling up already gives you more swords."*
+
+- **Further out, and floating** (every form). At rest the weapons hang 70 px from his middle, nearly
+  level with him (72 degrees off straight up, behind the way he faces; was 46 px at 38 degrees, where a
+  weapon sat on his shoulder and a fan of three arced over his hat), the fan down his back side at up to
+  26 degrees a weapon and never wider than 100 in all. Waiting - at his side or beside a quarry - each
+  rises and falls three art pixels, drifts one side to side at half the rate and rocks 7 degrees with the
+  drift (one heading cell at the ends), at its own rate (x0.85-1.15 of a 2.4 s breath) from its own
+  phase. The offset is whole art pixels, so the drawing steps on the 2-unit grid and never swims.
+- **The sword at speed.** Its swing took a fixed 0.25 s (0.45 s under Thousand Cuts) whatever the
+  cooldown, so at level 8 with cooldown boons the swings queued back to back: a dead stop at the top of
+  every bounce and a jerk into the next wind-up, a raise dropped half-drawn when its quarry died, and the
+  last slash wiped the moment the next strike began. Now the whole swing is fitted inside 80% of the
+  interval - wind-ups and recovery shorten by a pace, the cuts by its square root, at most x2.5; a swing
+  already due starts once the recovery is 55% of the way up, still rising; every wind-up starts from
+  wherever the blade is, the short way round; a raise whose quarry falls re-aims at the enemy nearest
+  where it was going; the last slash finishes its fade under the new one; and the afterimages are drawn
+  at the grips they had. At any ordinary cooldown the pace is 1 and the swing is the one it was. The axe
+  and the hammer swing well inside their cooldowns and are untouched.
+- **Spread out** (every form). A weapon choosing a quarry passes over any enemy within 96 px (a
+  weapon's width) of another weapon's quarry while anything clear of them all is in reach; an elite,
+  miniboss or boss is exempt and may be shared. Weapons that end up on one quarry (or, with nothing else
+  in reach, on neighbours) take stations: alternate sides, each pair further out and higher, so their
+  drawings never lie on one another.
+- **Twin Blades** is one dagger (`spirit-dagger.png`, the sword's make on the 32 cell), never one per
+  sword: the fan from levelling stays. It rests on his other side, in front where the swords are behind;
+  in a fight it keeps to the far flank of the main-hand sword's quarry and, in the gap after each of that
+  sword's cuts, darts in and stabs it for 70% of a cut. "Capped at two blades" is read as sword plus
+  dagger: the pair is the main-hand sword and the dagger, however wide the fan of swords grows.
+- **Deflection** keeps Riposte's id. A sword at rest or hunting watches the bolts coming at the wizard
+  inside 260 px of him and breaks off for one whose meeting point is within 220 px of its blade: it darts
+  there in 0.16 s, blade across the bolt's path, and swats it - broken, its pieces thrown on across the
+  path, never sent back (that is the Endless Chase's verb). Then that sword rests 0.8 s. Riposte's +30%
+  and its strike on every parry are gone: it is a guard card, not a damage card.
+
+**Measured** (the 2f command, `--minutes=8 --timescale=2 --immortal --all-unlocked --character=0 --solo
+--upgrade-chance=1 --force-ascension`, two Godots at once), damage a second by level:
+
+| build | L4 | L5 | L6 | L8 | note |
+|---|---|---|---|---|---|
+| Soul Siphon + Thousand Cuts, before | 38.3 | 61.7 | 63.6 | 260.8 | the control: no card on it changed |
+| Soul Siphon + Thousand Cuts, after | 39.1 | 54.0 | 63.8 | 268.6 | same level clock; swing pace reached x1.31 at level 8 |
+| Twin Blades (the dagger) + Thousand Cuts | 45.9 | 67.5 | 85.1 | 357.1 | 585 stabs; the old extra sword measured 52 / 71 / 94 / 362 |
+| Deflection + Celestial Greatsword | 47.5 | 59.6 | 67.8 | 535 | 647 bolts deflected, 2,715 cut in all (Riposte's run: 1,361) |
+
+The control moved within run-to-run noise, so the hover, the spreading out and the swing at speed
+cost no damage; the level 8 flurry gained a little where its swing used to overrun its cooldown. The
+dagger sits in every band. The Deflection run is not a comparison of damage or safety: its bot was dealt
+boon cards in 8 of 16 hands (Riposte's in 1 of 19), stayed at spell level 6 for 139 s and reached level 8
+three minutes later than Riposte's, against a later, denser crowd - rerun it at another seed before
+reading its health lost (10,425 against Riposte's 780) as the card's.
+
 ## 2g. The Familiar - the dog, the crow and the cat (2026-10-28)
 
 Eric: *"when you FIRST take familiar, you should be able to select your familiar. each has it's own
@@ -1786,7 +1893,7 @@ spell gives the wizard rather than the enemy.
 | | level 4 (+Arcane) | level 4 (element path, +20% and the rider) | level 4 | level 8 (+Arcane) | level 8 |
 |---|---|---|---|---|---|
 | **Dog** | **Great Hound**: +20%, jaws 40% wider | **Rimehound** (+Ice): bites slow 30% for 1.5 s; frost breath, jaws 40% wider | **Littermates**: +1 hound, each 15% softer | **Cerberus**: three heads, three bites a leap, +10% | **Hound of Annwn**: white and red-eared, +120% and jaws 50% wider; goes for an elite or a boss near the wizard first and bites one double |
-| **Crow** | **Raven**: +30%, beak 80% wider | **Stormcrow** (+Lightning): every peck staggers (0.2 s) | **Murder of Crows**: +1 crow, each 10% softer | **The Morrigan**: a peck on an ordinary enemy under 30% of its health kills it; double on an elite or a boss there; +100% | **Griffin** (the dog's, before forms): a swoop through its quarry and on past it along a line, +20%, 30% less often |
+| **Crow** | **Great Raven** (the card was "Raven" until 2026-10-30, when Eric found "a raven of your light" made no sense; same id, `familiar_crow_raven`, same numbers): +30%, beak 80% wider, catching enemies beside its target | **Stormcrow** (+Lightning): every peck staggers (0.2 s) | **Murder of Crows**: +1 crow, each 10% softer | **The Morrigan**: a peck on an ordinary enemy under 30% of its health kills it; double on an elite or a boss there; +100% | **Griffin** (the dog's, before forms): a swoop through its quarry and on past it along a line, +20%, 30% less often |
 | **Cat** | **Grimalkin**: every grant x1.4 | **Cait Sith** (+Darkness): what it claws takes 25% more from every spell for 3 s | **Purr**: 0.8 HP a second while it is out | **Cath Palug**: every grant x1.5 again, swipes 60% wider and 50% harder | **Nine Lives**: +1 life - when he would fall he stands back up with half his health |
 
 The Darkness rider is Vulnerable, which is the cat's way of fighting: through his spells. After an

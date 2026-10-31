@@ -482,14 +482,84 @@ public partial class Enemy : CharacterBody2D
 	/// <summary>Paints this body's warnings on the floor under it (see groundTells). Local space, as _Draw.</summary>
 	protected virtual void DrawGroundTells(CanvasItem floor) { }
 
-	/// <summary>Redraws the body and the floor under it, for a class that redraws outside the physics step.</summary>
+	/// <summary>Redraws the body, the floor under it and the icon over it, for a class that redraws outside the physics step.</summary>
 	protected void RedrawTells()
 	{
 		QueueRedraw();
 		groundTells?.QueueRedraw();
+		attackIcon?.QueueRedraw();
 	}
 
 	private void PaintGroundTells() => DrawGroundTells(groundTells);
+
+	// The icon over the head (TelegraphIcon; Eric, playing 0.9.2: "if you need to telegraph an attack, do
+	// so with icon animation"). A wind-up used to be a translucent shape growing on the floor; now the
+	// attacker shows a glyph that pops in, fills as the wind-up runs out, blinks, and flashes on the
+	// strike. A class says what it is winding up by overriding ReadAttackTell; the node is made once, in
+	// _Ready, only for such a class, on DrawLayers.AttackIcon so no body or bolt can cover it, and it is
+	// only redrawn while there is something on it.
+	private Node2D attackIcon;
+	private TelegraphIcon attackIconState;
+	private static readonly System.Collections.Generic.Dictionary<Type, bool> readsAttackTellByType = new();
+
+	/// <summary>
+	/// What this body is winding up right now, for the icon over its head: which glyph, and how far
+	/// through the wind-up (0 to 1). False while nothing is. Read only - it must never advance a clock.
+	/// </summary>
+	protected virtual bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = TelegraphGlyph.Alert;
+		progress = 0f;
+		return false;
+	}
+
+	/// <summary>
+	/// Reads this body's wind-up into its icon. Enemy's own physics step calls it; a class whose step
+	/// skips Enemy's (a detonated exploder, still flashing) calls it itself.
+	/// </summary>
+	protected void TickAttackIcon(float delta)
+	{
+		if (attackIconState == null)
+			return;
+		bool wasShowing = attackIconState.IsShowing;
+		// Never on a corpse: a body killed mid wind-up has a clock that just stopped, and an icon left on
+		// it - or a strike flash for an attack that never landed - would promise a hit that never comes.
+		if (isDying)
+			attackIconState.Clear();
+		else
+		{
+			bool windingUp = ReadAttackTell(out TelegraphGlyph glyph, out float progress);
+			attackIconState.Tick(delta, windingUp, glyph, progress);
+		}
+		if (wasShowing || attackIconState.IsShowing)
+			attackIcon.QueueRedraw();
+	}
+
+	private void PaintAttackIcon()
+	{
+		if (isDying || attackIconState == null)
+			return;
+		StatusFxGeometry geo = StatusFxGeometry;
+		// The top of the figure: the head row is a tenth of the way down a sprite whose figure spans
+		// 0.84 of it from head to feet (MeasureStatusFxGeometry). The icon stands an art pixel above it,
+		// x3 over an ordinary body (TelegraphIcon.MinPixelScale: x2 was a speck on the phone) and x4
+		// over a boss, as the status marks are.
+		float px = Mathf.Max(TelegraphIcon.MinPixelScale, geo.PixelScale);
+		float top = geo.HeadY - (geo.FeetY - geo.HeadY) * (0.10f / 0.84f);
+		attackIconState.Draw(attackIcon, new Vector2(0f, top - px), px);
+	}
+
+	private static bool ClassReadsAttackTell(Type type)
+	{
+		if (!readsAttackTellByType.TryGetValue(type, out bool reads))
+		{
+			var read = type.GetMethod(nameof(ReadAttackTell), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+				null, new[] { typeof(TelegraphGlyph).MakeByRefType(), typeof(float).MakeByRefType() }, null);
+			reads = read != null && read.DeclaringType != typeof(Enemy);
+			readsAttackTellByType[type] = reads;
+		}
+		return reads;
+	}
 
 	private static bool ClassDrawsGroundTells(Type type)
 	{
@@ -524,6 +594,13 @@ public partial class Enemy : CharacterBody2D
 			groundTells = new Node2D { Name = "GroundTells", ZAsRelative = false, ZIndex = DrawLayers.GroundTell };
 			AddChild(groundTells);
 			groundTells.Draw += PaintGroundTells;
+		}
+		if (ClassReadsAttackTell(GetType()))
+		{
+			attackIconState = new TelegraphIcon();
+			attackIcon = new Node2D { Name = "AttackIcon", ZAsRelative = false, ZIndex = DrawLayers.AttackIcon };
+			AddChild(attackIcon);
+			attackIcon.Draw += PaintAttackIcon;
 		}
 		instanceId = GetInstanceId();
 		EnemyRegistry.Join(this);
@@ -904,6 +981,7 @@ public partial class Enemy : CharacterBody2D
 		if (drawsItself)
 			QueueRedraw();
 		groundTells?.QueueRedraw();
+		TickAttackIcon((float)delta);
 		TickHitFlash((float)delta);
 		// Before any of the branches below, so an enemy that is shocked, knocked back or planted
 		// mid wind-up still has a current reading when it comes to aim.
@@ -1961,13 +2039,17 @@ public partial class Enemy : CharacterBody2D
 		// And none of its marks, tint or slowed walk either.
 		StatusEffectLayer.Current?.Untrack(this);
 		RefreshStatusLook();
+		// Nor the icon of a wind-up the subclass is about to rebuild from nothing.
+		attackIconState?.Clear();
+		attackIcon?.QueueRedraw();
 		QueueRedraw();
 	}
 
 	// Status marks (issue #66) used to be a pip per debuff drawn here, under the sprite. They are
 	// StatusEffectLayer's now - one shared drawer for the whole arena, animated, with a shape per
-	// status - so an enemy's own _Draw is the tells that belong to its body (a caster's gathering mote,
-	// the Long Coil's segments); those on the floor are DrawGroundTells'. Subclasses still call
+	// status - so an enemy's own _Draw is the tells that belong to its body (a caster's aim tick, the
+	// Long Coil's segments); those on the floor are DrawGroundTells', and the icon over a wind-up is
+	// ReadAttackTell's. Subclasses still call
 	// base._Draw(); it is harmless, and keeps them right if anything is ever drawn here again.
 
 	private void UpdateShockVisual(float delta)

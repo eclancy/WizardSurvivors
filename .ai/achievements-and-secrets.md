@@ -628,6 +628,18 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | F6 | **The Struck Oak** | **new** | mid | **strike**: about 500 landed near a lightning-split oak; it falls open | scorch on the ground round it; an ember breathing in the split | a chest |
 | F7 | **The Woodcutter's Clearing** | **new** | mid | **reach**: a clearing ringed by trunks with one gap, found by walking the ring (trunks block, `.ai/terrain.md` 10) | the ring itself: nothing else in the scatter is a perfect ring of trees | a flask and 20 Arcane Energy in a hollow log |
 
+**F5 built (2026-10-30, `wip/vaults-a`):** `PaleHart.cs`, art `tools/art/secret_forest.py` (the hart's ten
+48-cell frames in gold and the Light ramp, no rim, its standing breath a two-frame slow swap; the high seat
+with and without its bow; the prints and the bent bracken). The hart is a `SecretMover` subclass that draws
+itself on the world grid through the dither material; six bounds of 380 to 440 px laid in `LayOut`
+(`SecretMover.LayPath`, each stand on 120 px of open ground), startle 250, leash 1500. The seat is the last
+stand, y-sorted among the bodies and walked under - nothing solid. Touching the seat before the hart stands
+under it takes nothing. The seen mark is taken from the hart wherever it is. Far tell: prints and bracken
+leaning toward it (`LeanToward`). Probed on seed 4242 fresh and `--all-unlocked` (a chest): all pass, the
+seat 1002 px from home, followed in about 6 s by the probe. The same file redraws the First Tree's
+clearing and sapling as pixel art (the secrets' pixel pass, `edc8253`). Needs eyes: whether a player
+follows a hart that runs from him at all, and whether 250 lets him catch up on the phone.
+
 ### 8.2 The Fallow Fields (`stage_9`) - event: the well (defend)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -638,6 +650,15 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | FF4 | **The Tithe Barn** | **new, keepsake** | 10-12 chunks | **carry** the last sheaf into the empty tithe barn: his tithe, given back | the barn's doors stand open on nothing; chaff drifts toward it from three chunks | full heal; **150 Arcane Energy**, once |
 | FF5 | **The Scarecrow's Post** | **new** | mid, once a run | **risk**: touch the empty cross where the scarecrow stood and a Haymaker pair walks out of the stubble | the empty cross | a chest |
 
+**FF1 built (2026-10-30, `wip/vaults-a`):** `Pinfold.cs`, art `tools/art/secret_fields.py` (the pound in three
+layers - behind, the front with the gate shut, open - so the hound lies between them, seen through the bars;
+the hound's fourteen 40-cell frames; the hurdles and the prints). Its walls are solid (a body on the terrain
+layer and a stamped footprint). Within 420 px it wakes a Rick and a Haymaker (the Wall and Slammer roles of
+the Fields' roster - not two Haymakers, which FF5 has) at 10x spawn health as elites, through
+`SpawnEventEnemy`; both down, the latch takes the glint and walking to it lifts it; the hound runs to him.
+Probed on seed 4242 fresh and `--all-unlocked`: all pass. Needs eyes: whether two elites at 10x are a fair
+ask at minute three and at minute twelve, since `spawnHealth` scales them with the run.
+
 ### 8.3 The Broken Circle (`stage_10`) - event: relight the moot (follow the runes)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -646,6 +667,15 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | BC2 | **The Hare's Form** | **new** | near | **linger** 2 s in a hare-shaped hollow pressed into the heather | the form, and Black Hares scattering from it as he comes | 60 s of +15% move speed; page |
 | BC3 | **The Shepherd's Bothy** | **new** | mid | **linger** 2 s at the cold hearth of a roofless hut | a thin warm thread of smoke | heal 50%; the hearth heals within 160 px for the run |
 | BC4 | **The Speaker's Stone** | **new, keepsake** | 10-12 chunks | **sequence**: nine cup-marks round the moot's old speaking-stone, touched smallest to largest | lichen thinning toward it; the cups catch the light | full heal; **150 Arcane Energy**, once |
+
+**BC1 built (2026-10-30, `wip/vaults-a`):** `FallenStar.cs`, art `tools/art/secret_circle.py`. The trail runs
+2300 to 2800 px from the crater on the bearing back toward the start, turned up to 50 degrees by the seed,
+so a player walking out tends to cross it; a burn mark every 42 px along it (rolled before the ground is
+asked, kept only on open heath), seven shards strewn along it (`SecretGather.AlongTrail`). The trail is the
+tell, so the seen mark is taken from the point of it nearest the player. Each shard taken lights a point on
+the crater's rim; with all seven, two seconds in the crater (80 px) raises the light, and stepping out lets
+it sink as fast as it rose. Nothing solid. Probed on seed 4242 fresh and `--all-unlocked`: all pass, shards
+taken out of order. Needs eyes: whether a dotted line of char reads as a trail in a crowd on the phone.
 
 ### 8.4 Sunken Cave (`stage_2`) - no event
 
@@ -697,6 +727,18 @@ it keeps its design.
 | D5 | **The Cold Forge** | **new, vault** | 5-7 chunks, in a hall room | **cull**: kill 40 enemies standing on the forge's hearth ring (a 180 px circle in front of the anvil); each kill sets an ember in the dead coals until the forge roars | far: the walls' sconces give way to soot-stained faces and dropped shackles from two chunks out; near: the anvil, with a warm glint on the horn | **Molten Shard**; later runs a chest |
 | D6 | **The Empty Cell** | **new** | mid | **untouched**: stand in the one cell whose door stands open for 4 s without being struck | a cell door open in a corridor of shut ones; the name scratched off the lintel | heal 50%; page. Absence, never a body |
 | D7 | **The Oubliette** | **new** | mid, in a dead-end hall room | **untouched** for 5 s on a grate in the floor | a draught of cold motes rising through the grate; a voice below | 150 Arcane Energy, once; when Merlin is built, his card turns from a sealed blank to a silhouette here (`.ai/endgame-castle.md`, decision 11) |
+
+**D5 built (2026-10-30, `wip/vaults-a`, in the Dungeon as it is now):** `ColdForge.cs`, art
+`tools/art/secret_dungeon.py`. The placer snaps a maze site to a corridor cell, where a 360 px ring does not
+fit, so `LayOut` moves it to the nearest hall (a removed post, no wall on circles of 200 and 290 px round it, searched outward
+up to eight cells, a pure function of the seed; with none, it stays where the placer put it, at a corridor crossing, and says so) and reserves it. The ring of hearth bricks is drawn at
+`RingRadius` (180) round the node and the cull counts a kill whose body fell inside it
+(`Player.EnemyKilled`, listened to only within 1400 px); forty light forty embers in the coal bed, one art
+pixel of the Fire ramp each, in a fixed order, and the forge roars. The hearth is solid; the ring and the
+anvil are walked over. The seen mark is taken from the smithy's middle. Probed on seed 4242 fresh and
+`--all-unlocked`: all pass, a kill outside the ring lighting nothing. Kills by damage over time that do not
+pass through `Player.DealDamageToEnemy` do not raise `EnemyKilled` and so do not count. Needs eyes: whether
+forty on the hearth is twenty seconds in a real swarm, and whether the ring reads as a place to stand.
 
 ### 8.6 Blighted Swamp (`stage_3`) - event: snuff the lanterns (explore)
 
@@ -776,6 +818,20 @@ thinks to stop, and whether the streaks over the bodies are too thick in a crowd
 | A3 | The Hidden Water | planned, keepsake | 10-12 | linger | cracked earth to scrub to reeds | full heal, a well; Recovery, once |
 | A4 | The Mirage | planned | - | stillness | a pool always ahead | 60 s of +20% speed |
 | A5 | **The Fulgurite** | **new, vault** | 5-7 chunks | **storm**: a branching tree of glass stands in the dunes where lightning struck. A dry storm passes over it every 90 pace seconds (clouds gather for 10 s, then six telegraphed strikes land round it over 6 s - `TelegraphedGroundHit`, 3 damage each, which also hit enemies). Stand within 120 px of the glass through the strikes: it draws the last one into itself and rings | far: glass beads in the sand and a dark sky over one place, visible from two chunks; near: the glass tree with the glint in its root | **Stormsweep**; later runs a chest |
+
+**A5 built (2026-10-30, `wip/vaults-b`):** `Fulgurite.cs`, art `tools/art/secret_sands.py` (the glass in
+Wind's ramp with Lightning's seams - Stormsweep is both - still, charged and ringing; beads and twigs of
+the same glass for the far tell). Storms on `Node2DGame.PaceSeconds`: the first at 60, then every 90;
+the cloud (stamped puffs of the violet row, always over the glass, the only one in the Sands' sky)
+spreads and darkens for 10 s, then six bolts a second apart, each warned by the shared
+`TelegraphedGroundHit` (3 to him) and dealing 3 to every enemy under it; two are called at his feet,
+so holding the 120 px circle means moving inside it. Held through all six, the last is drawn into the
+glass with no warning, it rings, and the light comes out of its root to him. Solid foot. No storm while
+the boss is up. Walked on seed 4242, fresh save, all pass: no storm before pace 60 and one at 60.0, six
+called, the three that landed on bodies hit them, he held the circle stepping out from under the two at
+his feet, and it rang. Needs eyes: the wait for a storm (up to 90 s) in play, whether the cloud over
+the top of the screen hides too much of a crowd, and whether the glass reads apart from the Sands'
+bleached dead trees.
 
 ### 8.10 The Emberdeep (`stage_7`) - no event
 

@@ -507,14 +507,15 @@ public partial class SecretDirector : Node
 		string line = firstEver || string.IsNullOrEmpty(secret.RepeatReward) ? secret.RunReward : secret.RepeatReward;
 		foreach (RunUnlockEntry entry in granted.Where(e => e.Kind == RunUnlockKind.Spell))
 		{
-			// On the results screen with the run's other discoveries.
+			// On the results screen with the run's other discoveries. The kind leads, as a side event's
+			// line does (SideEvent.Succeed): "Spell recovered - Starfall".
 			Game?.RecordDiscovery(new DiscoveryRewards.Grant(entry.Id, entry.Name, false));
-			paid = $"{entry.Name} is yours, for good";
+			paid = $"Spell recovered - {entry.Name}";
 		}
 		// A bought spell's vault says so (4.5): the spell was owned before the vault was found.
 		if (firstEver && secret.MetaReward == SecretMetaReward.Spell && granted.Count == 0)
 		{
-			paid = $"{secret.SpellName} - you already had it";
+			paid = $"Spell already known - {secret.SpellName}";
 			line = "";
 		}
 

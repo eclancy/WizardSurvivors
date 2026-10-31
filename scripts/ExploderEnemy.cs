@@ -2,7 +2,8 @@ using Godot;
 using WizardSurvivors.scripts;
 
 // Suicide detonation (issue #33). It runs at the player faster than an ordinary chaser, and once it
-// is close it plants, swells a warning ring, and blows itself apart.
+// is close it plants, marks its blast on the ground with a starburst filling over its head, and blows
+// itself apart.
 //
 // What it adds is a cost to letting things reach you. The swarm's ordinary answer - stand in a good
 // spot and let contact damage tick while your spells clear the pile - stops being free, because one
@@ -47,7 +48,10 @@ public partial class ExploderEnemy : Enemy
 	// once because Detonate ends the enemy, not because the cooldown is long.
 	private GroundSlamAttack BuildBlast()
 	{
-		return new GroundSlamAttack(0.05f, FuseSeconds, BlastRadius, BlastDamage, BlastWarningColor);
+		return new GroundSlamAttack(0.05f, FuseSeconds, BlastRadius, BlastDamage, BlastWarningColor)
+		{
+			GlyphOverride = TelegraphGlyph.Burst,
+		};
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -58,6 +62,8 @@ public partial class ExploderEnemy : Enemy
 			// _PhysicsProcess - which is what normally drives QueueRedraw - is skipped below.
 			lingerRemaining -= (float)delta;
 			blast.Tick((float)delta, false);
+			// Enemy's own step, which ticks the icon, is skipped below: the burst still has to flash.
+			TickAttackIcon((float)delta);
 			RedrawTells();
 			if (lingerRemaining <= 0f)
 				QueueFree();
@@ -87,7 +93,7 @@ public partial class ExploderEnemy : Enemy
 			case AttackTelegraph.Beat.Started:
 				PlayAttackAnimation();
 				// Hot and bright for the length of the fuse, so an exploder mid-crowd is findable
-				// by colour as well as by the ring under it.
+				// by colour as well as by the starburst over it.
 				SetBaseModulate(new Color(1.0f, 0.55f, 0.45f));
 				break;
 			case AttackTelegraph.Beat.Resolved:
@@ -124,6 +130,14 @@ public partial class ExploderEnemy : Enemy
 		lingerRemaining = 0f;
 	}
 
-	// The fuse's ring is on the floor, under every body (Enemy.DrawGroundTells).
+	// The blast's reach is a dashed ring on the floor, under every body (Enemy.DrawGroundTells); the fuse
+	// is the starburst over its head, filling as it burns.
 	protected override void DrawGroundTells(CanvasItem floor) => blast?.Draw(floor);
+
+	protected override bool ReadAttackTell(out TelegraphGlyph glyph, out float progress)
+	{
+		glyph = TelegraphGlyph.Burst;
+		progress = blast?.WindUpProgress ?? 0f;
+		return blast != null && blast.IsWindingUp;
+	}
 }

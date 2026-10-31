@@ -32,6 +32,7 @@ public static class RegressionChecks
 		ValidateElementPaths(warnings);
 		ValidateEvolutionReaders(warnings);
 		ValidateLevelUpReaders(warnings);
+		ValidateAmountReaders(warnings);
 		ValidateStarfall(warnings);
 		ValidateCycloneGust(warnings);
 		ValidateFear(warnings);
@@ -70,6 +71,7 @@ public static class RegressionChecks
 		ValidateMazeHazards(warnings);
 		ValidateStageHazards(warnings);
 		ValidateStatusEffectAtlas(warnings);
+		ValidateTelegraphIcons(warnings);
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
 		ValidateExploreArt(warnings);
@@ -885,7 +887,8 @@ public static class RegressionChecks
 		if (!assigned)
 			warnings.Add("Spiritual Weapon: player.tscn does not assign SpiritualWeaponScene; no spell would fire at all (Player stops the fire loop without it).");
 
-		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96) })
+		// The dagger is Twin Blades' (2026-10-30), on the projectile cell.
+		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96), ("dagger", 32) })
 		{
 			string path = $"res://assets/bonelight/effects/spirit-{name}.png";
 			if (!ResourceLoader.Exists(path) || GD.Load<Texture2D>(path) is not Texture2D sheet)
@@ -896,6 +899,8 @@ public static class RegressionChecks
 			if (sheet.GetWidth() != cell * 32 || sheet.GetHeight() % cell != 0)
 				warnings.Add($"Spiritual Weapon: {path} is {sheet.GetWidth()}x{sheet.GetHeight()}; SpiritualWeapon draws 32 headings of a {cell} cell a row.");
 		}
+		foreach (string problem in SpiritualWeapon.CutProblems())
+			warnings.Add($"Spiritual Weapon: {problem}");
 
 		SpellData template = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "spiritual_weapon");
 		if (template == null)
@@ -1131,6 +1136,45 @@ public static class RegressionChecks
 			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} exists but did not load as a texture.");
 		else if (atlas.GetSize() != expected)
 			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} is {atlas.GetSize()}, expected {expected} ({StatusEffectLayer.Rows} rows of {StatusEffectLayer.Frames} {StatusEffectLayer.Cell}px frames).");
+	}
+
+	// The attack icons (TelegraphIcon, 0.9.2: "if you need to telegraph an attack, do so with icon
+	// animation"). Two silent failures. The atlas is addressed by glyph row and state column, so a sheet
+	// regenerated with a row added, or never imported, draws the wrong glyph or nothing. And an enemy
+	// class that holds a wind-up clock but never says what it is winding up (Enemy.ReadAttackTell) gets
+	// no icon node at all - its attack lands with no tell over it, which is the one thing a telegraph
+	// may never do. Re-run: python tools/art/telegraph_icons.py, then import.
+	private static void ValidateTelegraphIcons(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(TelegraphIcon.AtlasPath))
+			warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} is missing or not imported; no enemy will show a wind-up.");
+		else
+		{
+			Texture2D atlas = GD.Load<Texture2D>(TelegraphIcon.AtlasPath);
+			var expected = new Vector2(TelegraphIcon.Cell * TelegraphIcon.Columns, TelegraphIcon.Cell * TelegraphIcon.Rows);
+			if (atlas == null)
+				warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} exists but did not load as a texture.");
+			else if (atlas.GetSize() != expected)
+				warnings.Add($"Attack icons: {TelegraphIcon.AtlasPath} is {atlas.GetSize()}, expected {expected} ({TelegraphIcon.Rows} glyph rows of {TelegraphIcon.Columns} {TelegraphIcon.Cell}px states).");
+		}
+
+		const System.Reflection.BindingFlags Fields = System.Reflection.BindingFlags.Instance
+			| System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+		foreach (Type type in typeof(Enemy).Assembly.GetTypes())
+		{
+			if (!typeof(Enemy).IsAssignableFrom(type) || type == typeof(Enemy) || type.IsAbstract)
+				continue;
+			bool holdsClock = false;
+			for (Type t = type; t != null && t != typeof(Enemy); t = t.BaseType)
+				holdsClock |= t.GetFields(Fields | System.Reflection.BindingFlags.DeclaredOnly)
+					.Any(f => f.FieldType == typeof(AttackTelegraph) || f.FieldType == typeof(GroundSlamAttack));
+			if (!holdsClock)
+				continue;
+			var read = type.GetMethod("ReadAttackTell", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+				null, new[] { typeof(TelegraphGlyph).MakeByRefType(), typeof(float).MakeByRefType() }, null);
+			if (read == null || read.DeclaringType == typeof(Enemy))
+				warnings.Add($"Attack icons: {type.Name} holds a wind-up clock but does not override Enemy.ReadAttackTell, so its attacks show no icon.");
+		}
 	}
 
 	// Enemy navigation on a hand-made lake (.ai/terrain.md, "Enemy navigation"). Three things a build
@@ -3820,6 +3864,13 @@ public static class RegressionChecks
 		int bigger = DropTable.GreaterOrbValue;
 		if (bigger <= 2)
 			warnings.Add($"A bigger XP orb is worth {bigger}, no more than the ordinary orb it replaces.");
+		// The Gleaning Bell is a find, one or two a run (.ai/passives-and-items.md 8i): the first carrier's
+		// chance must be a real chance and not a certainty, the climb must climb, and the spacing must hold.
+		float bell = DropTable.GleaningBellBaseChance, bellStep = DropTable.GleaningBellChanceStep;
+		float bellApart = DropTable.GleaningBellMinSecondsApart, bellToss = DropTable.GleaningBellTossSeconds;
+		if (bell <= 0f || bell >= 0.25f || bellStep <= 0f || bellStep >= 0.1f || bellApart <= 0f || bellToss <= 0f)
+			warnings.Add($"DropTable's Gleaning Bell numbers are out of range: a first chance of {bell:0.000} (want (0, 0.25)), "
+				+ $"a step of {bellStep:0.000} (want (0, 0.1)), {bellApart:0} s apart and a {bellToss:0.00} s toss (both above 0).");
 
 		// Schema 12: a save that had everything at 11 is credited with John Dee; one that did not is not.
 		var complete = new SaveData { SchemaVersion = 11 };
@@ -4873,6 +4924,90 @@ public static class RegressionChecks
 				if (upgrade.Effect != SpellEffect.None && !readers.ReadsEffect(upgrade.Effect) && reported.Add(upgrade.Effect.ToString()))
 					warnings.Add($"Spell '{label}' level {upgrade.Level} grants Effect {upgrade.Effect} {upgrade.EffectValue}, which it never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
 			}
+		}
+	}
+
+	// The Split Lens (0.9.3, Eric: "it should only reduce damage of spells that are affected by the
+	// projectile count"). One row decides both halves of its trade - EvolutionStat.Amount, which
+	// Player.AmountFor pays the +1 by and Player.GetSpellDamageMultiplier charges the -25% by - so this checks
+	// the trade as a cast sees it: a Player that never enters a tree takes the lens, and every spell form
+	// must come out charged exactly when it is paid, untouched otherwise. It also checks what a row cannot
+	// say for itself: a spell that reads Amount has a count to add it to, and a milestone named as dropping
+	// Amount is one the spell offers. A cast site that starts reading Amount without its row saying so is
+	// reported by AmountFor the first time it fires, and gets nothing until it does.
+	private static void ValidateAmountReaders(List<string> warnings)
+	{
+		var player = new Player();
+		try
+		{
+			var spells = ContentValidator.LoadAllSpellForms()
+				.Where(s => s != null && !string.IsNullOrWhiteSpace(s.Id) && EvolutionStatReaders.TryGet(s, out _)).ToList();
+			var before = new Dictionary<SpellData, (float Damage, int Amount)>();
+			foreach (SpellData spell in spells)
+				before[spell] = player.DebugCastTerms(spell);
+			player.DebugTakeChestItem(ChestItemCatalog.CrackedPrism);
+
+			var charged = new List<string>();
+			int spared = 0;
+			foreach (SpellData spell in spells)
+			{
+				EvolutionStatReaders.TryGet(spell, out SpellStatReaders row);
+				string label = ContentValidator.Label(spell);
+				bool reads = row.ReadsAmount(spell);
+				(float damage, int amount) = player.DebugCastTerms(spell);
+				float ratio = before[spell].Damage > 0f ? damage / before[spell].Damage : 0f;
+				int gained = amount - before[spell].Amount;
+				float expected = reads ? Player.SplitLensDamageMultiplier : 1f;
+				if (MathF.Abs(ratio - expected) > 0.001f || gained != (reads ? 1 : 0))
+					warnings.Add($"Split Lens on '{label}': damage x{ratio:0.###} and {gained:+0;-0;0} projectile, where a spell that "
+						+ $"{(reads ? "reads" : "does not read")} Amount should get x{expected:0.##} and {(reads ? "+1" : "none")}. "
+						+ "The lens must charge exactly the spells it pays (Player.GetSplitLensMultiplier, AmountFor).");
+				if (reads)
+					charged.Add(spell.Id);
+				else
+					spared++;
+
+				if ((row.Stats & EvolutionStat.Amount) != 0 && (row.Stats & EvolutionStat.Projectiles) == 0)
+					warnings.Add($"Spell '{label}' reads Amount but no projectile count of its own ({row.ReadIn}): Amount is added to that count.");
+				if (row.AmountDroppedBy.Count > 0)
+				{
+					SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+					foreach (string id in row.AmountDroppedBy)
+					{
+						SpellEvolutionOption milestone = spell.Level4Options?.FirstOrDefault(o => o?.Id == id)
+							?? spell.Level8Options?.FirstOrDefault(o => o?.Id == id);
+						if ((row.Stats & EvolutionStat.Amount) == 0 || milestone == null)
+						{
+							warnings.Add($"Spell '{label}' names '{id}' as dropping Amount, but {((row.Stats & EvolutionStat.Amount) == 0 ? "it never reads Amount" : "offers no such milestone")}.");
+							continue;
+						}
+						// Held, the milestone frees the spell from the lens: by its id alone (HasEvolution), put
+						// back at once - these are the loaded resources a run plays.
+						bool atFour = milestone.MilestoneLevel == 4;
+						string held = atFour ? spell.SelectedLevel4EvolutionId : spell.SelectedLevel8EvolutionId;
+						try
+						{
+							if (atFour) spell.SelectedLevel4EvolutionId = id; else spell.SelectedLevel8EvolutionId = id;
+							(float heldDamage, int heldAmount) = player.DebugCastTerms(spell);
+							float heldRatio = before[spell].Damage > 0f ? heldDamage / before[spell].Damage : 0f;
+							if (MathF.Abs(heldRatio - 1f) > 0.001f || heldAmount != 0)
+								warnings.Add($"Split Lens on '{label}' holding '{id}': damage x{heldRatio:0.###} and {heldAmount} projectile from Amount, "
+									+ "where a milestone that drops Amount should leave it untouched by the lens.");
+						}
+						finally
+						{
+							if (atFour) spell.SelectedLevel4EvolutionId = held; else spell.SelectedLevel8EvolutionId = held;
+						}
+					}
+				}
+			}
+			// A row edit that flagged every spell, or none, would turn the trade back into a flat tax or a gift.
+			if (charged.Count == 0 || spared == 0)
+				warnings.Add($"Split Lens charges {charged.Count} spell forms and spares {spared}: it should be a trade some spells take and others do not.");
+		}
+		finally
+		{
+			player.Free();
 		}
 	}
 

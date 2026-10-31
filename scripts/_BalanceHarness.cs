@@ -476,6 +476,7 @@ public partial class _BalanceHarness : Node
 			HealthPickup => "health flask",
 			BuffItem => "speed potion",
 			LevelUpPickup => "level-up pickup",
+			GleaningBell => "gleaning bell",
 			ChestReward => "chest",
 			_ => null,
 		};

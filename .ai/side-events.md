@@ -62,8 +62,9 @@ All five events resolve through `SideEvent.Succeed`, so all five now get the sam
   is solid. Its sound is `event_reward`, a breath swelling into one glass tone. A discovery keeps
   `meta_unlock`, because that is the save changing.
 - **A heading-sized line** replaces the objective under the timer: bold Cinzel, pale gold, wrapped
-  for the phone canvas, fading in and out over its five seconds. A discovery reads "Bramble Seed
-  recovered - a new spell" or "Tituba is free - a new wizard"; a chest reads in the event's own words
+  for the phone canvas, fading in and out over its five seconds. A discovery reads "Spell
+  recovered - Bramble Seed", "Boon found - ..." or "Wizard freed - Tituba", the kind first and the
+  name after (Eric, 2026-10-31); a chest reads in the event's own words
   (`ChestLine`). The label is now inset by `SafeArea.ApplyTo`; it never was, and on a phone the
   objective line sat on the XP bar.
 - **The grove blooms** for three seconds after it is held - every crown swells and a third leaf
@@ -451,7 +452,7 @@ Cursed Dungeon (`stage_1`, opened by beating Elderbark), Väinämöinen until th
   nothing to migrate. A save that already owns him shows him unlocked whatever is open.
 
 **The name stays hidden while he is locked.** The silhouette is the tease and the name is the
-reward: the rescue line reads "Tituba is free - a new wizard", and the rescued are people
+reward: the rescue line reads "Wizard freed - Tituba", and the rescued are people
 (`.ai/world-and-tone.md`), not a class a player could read off the coat. The starters never lock,
 so this only ever hides a rescued name.
 

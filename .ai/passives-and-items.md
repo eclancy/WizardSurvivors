@@ -327,7 +327,7 @@ without a percentage as the subject of the sentence - "slowed enemies are vulner
 
 | item | rarity | what it changes | reads |
 |---|---|---|---|
-| Cracked Prism | Uncommon | +1 projectile, all damage x0.75 | `Player.ApplyChestItemEffect` |
+| Cracked Prism (Split Lens) | Uncommon | +1 projectile, and x0.75 damage to the spells that projectile reaches - no others (0.9.3) | `Player.AmountFor`, `Player.GetSplitLensMultiplier` |
 | Duellist's Chalk | Uncommon | hits on unwounded enemies always crit | `Player.DealDamageToEnemy` |
 | Hoarfrost Nail | Rare (Ice) | slowed or rooted enemies take +25% from everything | `Enemy.IsSlowed` |
 | Wormwood Tithe | Relic (Darkness, Grass) | the gap between spawns drops to 0.72x (about 39% more enemies) and they move 10% faster; +30% XP, +5% bigger XP orbs (was +25% chests - section 8), +3 Luck | `Node2DGame` spawn clock and speed ramp |
@@ -337,6 +337,18 @@ Three things worth keeping in mind about this group:
 - **Cracked Prism is the only item in the game that makes a number go down.** More shots that each
   hit softer is better for wide spells and worse for single heavy ones, which makes it a decision
   rather than a pickup. The roster had no genuine trades before it.
+  **Since 0.9.3 both halves land on the same spells.** Eric, playing 0.9.2: *"there is a relic that adds
+  1 to projectile count but reduced spell damage. it should only reduce damage of spells that are
+  affected by the projectile count."* The +1 is the player-wide Amount (the shop's Twinstar Sigil reads
+  the same field), and only 16 of the 35 spells add Amount to anything - the rest (Hollow Star, Fireball,
+  Cinderbreath, the walls, the fields, Familiar, Spiritual Weapon...) paid 25% for nothing. Which spells
+  read it is `EvolutionStat.Amount` on each one's `EvolutionStatReaders` row, and that one row decides
+  both halves: `Player.AmountFor`, the only way a cast site reaches Amount, pays only a spell whose row
+  has it (and reports, once, a spell that asks without it), and `GetSplitLensMultiplier` charges only
+  the same spells. A milestone that stops a spell reading Amount is named on its row
+  (`ExceptAmountUnder`: Gravewell's Mass Grave, one grave whatever the count), and frees it from the
+  lens while held. `RegressionChecks.ValidateAmountReaders` gives a Player that never enters a tree the
+  lens and holds every spell form to "charged exactly when paid".
 - **Duellist's Chalk keys off the target, not the caster.** It rewards spreading damage onto fresh
   enemies, which is deliberately the opposite instinct to Deathbringer's execute - two items that
   pull a build in opposite directions are worth more than two that agree.
@@ -1042,7 +1054,109 @@ power increase at the margins as well as variety. Not done, and worth a look if 
 samey: flatter rarity weights, and a nudge toward pieces of a set the player has started (nothing
 steers toward finishing a set today); a reroll or banish on the chest screen.
 
+### 8i. The Gleaning Bell: the missed XP, called home (2026-10-30)
+
+Eric: "there should be an item or spell or boon or collectible item that collects all missed XP. (i
+dont want it to be required, so people take it every run)". Anything the player CHOOSES - a level-up
+card, a boon, a relic - would be taken every run, because collecting is never bad. So it is not a
+choice at all. It is the genre's answer, Vampire Survivors' Vacuum: a rare object that drops in a
+run and, when touched, calls every XP orb on the map to the player. Nobody builds around it; you are
+glad when you find one.
+
+**The name and the look.** In an English village the gleaning bell was rung, morning and evening, to
+say when the poor could go into the reaped fields and gather what the harvest had left behind. That
+is the mechanic exactly, and it is a found object of the land, which is what everything lying in a
+held place is (`.ai/world-and-tone.md`). ("Lodestone" was the obvious name and is already the
+Cabinet's pickup-radius relic.) `tools/art/sprite_bell.py` draws it to the pickup contract - 16x16,
+rendered at x2 - as the icon of a bell (loop, dome, straight flanks, flare, the clapper showing),
+because at 27 screen pixels in a swarm the shape has to say "bell" at a glance; a first pass that
+widened a pixel a row read as a cone. Bronze on the gold row, lit from the upper left, with the
+**small orb's green** light inside it - under the lip, in the clapper, and in two motes falling in
+- so it says "this is about the orbs" before it is ever touched, and stays clear of the secrets'
+breathing warm-gold tell (`.ai/stage-secrets.md` section 2). A soft additive glow of the same
+green round its foot. Code-only, no scene (`scripts/GleaningBell.cs`).
+
+**Where it comes from** (`Node2DGame.GleaningBell.cs`, numbers in `DropTable`):
+
+| rule | value | why |
+|---|---|---|
+| who carries one | the chest carriers: an elite, a Warden, the Sketchbook's ghost, rolled in `DropCarriedChest` whether or not the chest pays | the bodies the player kills on purpose (8b). Not `IsMiniBoss`, which Rockem wears in the Sketchbook's ordinary table |
+| the chance | **2% for the first carrier, +1.5% for each that paid none**, reset by a bell | a flat 7.5% over a run's ~19 carriers drops none one run in five and three or more one in five; the rising chance holds most runs to one or two |
+| spacing | never two on the field; never two within **90 run seconds** | a second bell straight after the first calls in an emptied field. A carrier killed while either holds is not counted |
+| the boss | none once it has arrived | the rule chests keep |
+| what raises it | **nothing** - no relic, boon or Luck | there must be nothing to build around |
+| landing | thrown 56 px from the body on a 0.45 s hop, 60 degrees off the line its chest is set out along, never nearer the player than 80 px, through `ReachablePoint` | an elite usually dies touching the player; a bell rung on the frame it appeared would be a sound and a stream with no idea where either came from |
+
+Simulated over 100,000 runs of the 8b carrier schedule (about 19 carriers a run; a bell assumed taken
+within ten seconds): **1.5 bells a run - none 4%, one 51%, two 39%, three 6%**; the first at a
+median of 8:30 (quartiles 6:15 / 11:05), the second, when there is one, at about 12:30 - the back
+half, when what lies uncollected is worth the most (XP is paced at pickup, `.ai/run-pacing.md` 10.2).
+
+**Measured** (`_BalanceHarness --fixed-fps 30 -- --minutes=15 --character=0 --immortal --all-unlocked
+--seed=1234 --timescale=1`, Pyromancer, Forest, one run each, the two running side by side):
+
+| run | carriers killed | bells | rung at | haul (orbs, raw XP, farthest) | what the minute it rang banked | level at 15:00 |
+|---|---|---|---|---|---|---|
+| `--policy=ordinary` (walks to the nearest orb) | 23 | 2 | 7:24 | 255, 594, 2.6k px - about 1.3 levels at level 18 | +1913 (the minutes either side +1382 / +1.5k) | **33** (the 10.4 reference: 31) |
+| | | | 13:44 | **724, 2664, 6.7k px** (the far bank) | **+8477, six level-ups in a row, 26 to 32** (a normal minute then: +1.5k) | |
+| `--survivor` (leaves an orb when a body is near it) | 20 | 2 | 6:29 | 271, 604, 2.8k px | +2456, four level-ups, 14 to 18 (+1009 the minute before) | 31 |
+| | | | 13:47 | 51, 116, 0.5k px | +1942 (no visible jump) | |
+
+**What that says about the level curve.** The bell adds no XP - it collects orbs that were dropped -
+but a bot that walks to every orb still leaves a great deal lying: the two bells recovered **27% of
+all the XP the ordinary bot dropped** (3,258 of 12,288 raw), most of it from the far bank and from
+ground it had moved on from. So the curve moves by exactly what lay uncollected when the bell rang:
+
+- **A bell before about minute ten is worth one to two levels** (and up to four at the cheap levels
+  around minute six). That can bring a gate about a minute early - the survivor crossed the Ascension
+  gate at 6.5 on the strength of its - which is inside the two-minute spread between wizards
+  (`.ai/run-pacing.md` 3.2), not a new floor.
+- **A late bell is a burst.** The ordinary bot's at 13:44 called in three-and-a-half minutes of drops
+  plus the far bank, paid at the late pace multiplier: six level-up screens one after another, and
+  the run ended two levels above the reference. They came one at a time, as designed (below). This is
+  the genre's vacuum moment and is what Eric asked for; whether it should happen just before the boss
+  is a playtest question (8f). If not, the one-line answer is a last pace second for a drop in
+  `TryDropGleaningBell` - which bounds how late, not how big: a FIRST bell late in a run (a quarter of
+  runs see their first after 11:05) hauls the same.
+
+**What it pulls: XP orbs, and nothing else.** Not a flask or a potion - a heal that came with it would
+make it a panic button worth holding off for - and never a chest. Every orb in the group however
+far, the far bank included (`Node2DGame.SweepFarXpOrbs`). `XPOrb.Glean` starts each at the magnet's
+200 px/s and adds 1800 px/s every second (capped at 3200), so the near ones land first and the far
+ones stream in behind: 1000 px in about a second, 5000 px in about two and a half. A gleaned orb is lifted
+to `DrawLayers.Air` for the flight, so the stream crosses over the crowd rather than sorting into it.
+It costs one float per orb and nothing per frame; ringing it walks the orb group once.
+
+**The moment.** `pickup_magnet` - generated for exactly this, "a vacuum pull beginning, once per pull"
+(`.ai/audio-manifest.md`), six accelerating blips - then each orb lands on its own streak-pitched
+`pickup_xp`, so the stream is heard arriving. On the player, `PickupFlourish.Kind.Glean`: one ring of
+the green running out (the call) and motes falling IN (the answer), the only flourish that gathers
+rather than scatters. No line of text: the orbs streaming in from off screen say what it did.
+
+**A haul worth several levels** queues them, one screen at a time (`ResumeOrOpenNextMenu`): the first
+orb over the line opens the level-up and pauses the run, the orbs still in flight freeze where they
+are, and they land and pay the next level once the screen closes. `Player.AddXp` pays at most one
+level per orb, so a haul can never put two screens up at once. Measured by `_UiShot --gleaning-probe`
+(under xvfb; it needs the draw callback): about 340 orbs strewn to 5200 px, a level-1 wizard, **level
+1 to 9, never more than one screen up**, the farthest orb (5193 px) in 2.36 s after the ring with the
+eight screens included, the flask beside him unmoved. (The probe also prints a play-only clock; it
+reads short - 1.56 s - because it skips every frame that begins paused, and some of those frames are
+ones the orbs did move in. The wall clock agrees with the acceleration.)
+
+**Checking it.** `_UiShot --gleaning-probe` (PASS/FAIL, exit code = failures) throws a bell from a body
+beside the wizard and checks it cannot be taken in the air, lands clear of him, calls nothing while it
+lies there, rings on contact, is answered by every orb, empties the map, leaves the flask, shows one
+screen at a time and resumes the run. `--gleaning-bell=DX,DY --glean-scatter=N [--glean-ring=K]`
+photographs it on the ground and the stream. `RegressionChecks` range-checks the `DropTable` numbers;
+`_BalanceHarness` counts it in the drop ledger ("gleaning bell"), and every ring logs a `GLEANING BELL`
+line with the haul.
+
 ### 8f. What needs playing
+
+- **The Gleaning Bell (8i)**: whether a 27-pixel bell is found in a real fight (it glows, but it is the
+  contract's pickup size); whether the stream reads as one moment at 60 fps (it was photographed at
+  xvfb frame rates); and above all **the late bell** - six level-up screens in a row at minute 14 on
+  the measured run. A treat before the boss, or a drop that should stop a few minutes before it?
 
 - Whether an elite at 65% feels like "elites carry chests" or like noise. The first elite always
   pays, to teach it; if it still reads as random, the next step is marking the carriers rather than
