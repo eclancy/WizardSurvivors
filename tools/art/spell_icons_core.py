@@ -178,20 +178,146 @@ def shadow_bolt():
     return c
 
 
+def _bezier(p0, p1, p2, p3, n):
+    """n + 1 points along a cubic Bezier, ends included."""
+    out = []
+    for i in range(n + 1):
+        t = i / float(n)
+        u = 1.0 - t
+        out.append((u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+                    u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]))
+    return out
+
+
+def _unit(dx, dy):
+    d = math.hypot(dx, dy) or 1.0
+    return dx / d, dy / d
+
+
+def _lash_path(root, into, at, out_ctrl, bend, tip, radius, loop_side, n=40):
+    """A whip's centreline with a loop rolled into it: out of `root` toward `at`, once round a loop of
+    `radius` on the `loop_side` (+1 left of the way it runs, -1 right) where it reaches `at`, and on to
+    `tip`. The same shape WhipStroke.Splice lays in the game: a circle on the lash at the bend, a little
+    long along it."""
+    head = _bezier(root, into, into, at, n // 3)
+    tx, ty = _unit(at[0] - into[0], at[1] - into[1])
+    nx, ny = (ty, -tx) if loop_side > 0 else (-ty, tx)
+    loop = []
+    for k in range(1, 25):
+        a = TAU * k / 24.0
+        loop.append((at[0] + tx * radius * 1.15 * math.sin(a) + nx * radius * (1.0 - math.cos(a)),
+                     at[1] + ty * radius * 1.15 * math.sin(a) + ny * radius * (1.0 - math.cos(a))))
+    tail = _bezier(at, out_ctrl, bend, tip, n)
+    return head + loop + tail[1:]
+
+
+def _lash_width(w0, w1, t):
+    """A whip's taper: thick for most of its length, thinning fast toward the tip."""
+    return w1 + (w0 - w1) * (1.0 - t) ** 0.6
+
+
+def _stamp_lash(c, path, w0, w1, tone_at, outline=OCC):
+    """Stamps a lash along `path`, `w0` px wide at its start thinning to `w1` at its end: an outline a pixel
+    wider all round first, then the body, each point's colour picked by tone_at(t, nx, ny) - t along it,
+    (nx, ny) the offset from the centreline - so a side can be lit and a stretch can change material."""
+    n = len(path)
+    lengths = [0.0]
+    for i in range(1, n):
+        lengths.append(lengths[-1] + math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]))
+    total = lengths[-1] or 1.0
+    body = {}
+    for i in range(n):
+        t = lengths[i] / total
+        r = _lash_width(w0, w1, t) * 0.5
+        cx, cy = path[i]
+        for y in range(int(cy - r - 2), int(cy + r + 3)):
+            for x in range(int(cx - r - 2), int(cx + r + 3)):
+                d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+                key = (x, y)
+                if d <= r + 0.15:
+                    if key not in body or body[key][0] > d - r:
+                        body[key] = (d - r, t, (x + 0.5 - cx), (y + 0.5 - cy))
+                elif d <= r + 1.15 and key not in body:
+                    c.set(x, y, outline)
+    for (x, y), (_, t, ox, oy) in body.items():
+        c.set(x, y, tone_at(t, ox, oy))
+    return lengths, total
+
+
 def thorn_vine():
-    """A barbed runner. Grass that pierces rather than grows."""
+    """The vine mid-crack (2026-10-31): "the vine lash spell icon is very basic and doesn't show action."
+
+    It was a straight barbed runner, a diagonal line with four spikes - a picture of a thing, not of what
+    the spell does. Now it is the whip stroke the game draws (scripts/WhipStroke.cs): the vine up out of
+    torn ground at the lower left, bark where it leaves the earth, a LOOP rolled into it as the wave runs
+    out along it, and the tip whipped round to the upper right where it CRACKS - a white-hot star of
+    grass-light and a spit of poison - with speed lines behind the tip along the way it came. Thorns are
+    raked back down the whole length. An occlusion line round all of it, as the game's vine has, holds it
+    on the cream card and the dark HUD alike. The root and the tip stay where the evolution cards expect
+    them (tools/art/evolution_icons.py, VINE_ROOT and tip)."""
     c = raster.Canvas(CELL, CELL, None)
     g = E("grass")
     p = E("poison")
-    pts = [(3, 26), (10, 20), (14, 14), (21, 9), (28, 5)]
-    for i in range(len(pts) - 1):
-        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
-        c.line(x0, y0, x1, y1, g[2])
-        c.line(x0, y0 - 1, x1, y1 - 1, g[1])
-    for (bx, by, dx, dy) in [(10, 20, -4, -2), (14, 14, 4, -3), (21, 9, -3, 4), (7, 23, 3, 3)]:
-        c.line(bx, by, bx + dx, by + dy, p[2])
-        c.set(bx + dx, by + dy, p[1])
-    c.set(28, 5, g[0])
+    e = E("earth")
+    root, tip = (3.5, 28.5), (27.5, 5.5)
+    into, at, out_ctrl, bend = (8.5, 28.5), (13.0, 23.5), (16.5, 9.0), (20.0, 4.0)
+    path = _lash_path(root, into, at, out_ctrl, bend, tip, 3.3, +1)
+
+    # The tip's swing: two arcs of speed lines under the hook it whipped over, round the way it came -
+    # from out to the right, up and over to where it cracks - in dashes, hottest by the tip.
+    for k, r in enumerate((7.5, 10.5)):
+        for d in range(-72, 6 - k * 12, 3):
+            if (d // 3 + k) % 4 == 3:
+                continue
+            a = math.radians(d)
+            heat = (d + 72) / 78.0
+            c.set(19.5 + math.cos(a) * r, 18.5 + math.sin(a) * r,
+                  g[1] if heat < 0.3 else (g[2] if heat < 0.65 else g[3]))
+
+    def tone(t, ox, oy):
+        lit = (ox + oy) < -0.4         # the side toward the key light, upper left
+        shade = (ox + oy) > 0.6
+        if t < 0.1:                     # bark where it leaves the ground
+            return e[2] if lit else e[3]
+        if t > 0.94:                    # the poisoned tip, white-hot as it cracks
+            return p[1] if t < 0.975 else p[0]
+        return g[1] if lit else (g[3] if shade else g[2])
+
+    w0, w1 = 3.4, 1.0
+    lengths, total = _stamp_lash(c, path, w0, w1, tone)
+
+    # Thorns raked back toward the root, alternating sides, along the whole of it but the very ends:
+    # each a pixel of the lit green with an occlusion pixel behind it, so it reads off the stem.
+    side = 1
+    for i in range(2, len(path) - 4):
+        t = lengths[i] / total
+        if not (0.1 < t < 0.9) or int(lengths[i] / 3.2) == int(lengths[i - 1] / 3.2):
+            continue
+        tx, ty = _unit(path[i + 1][0] - path[i - 1][0], path[i + 1][1] - path[i - 1][1])
+        nx, ny = -ty * side, tx * side
+        w = _lash_width(w0, w1, t) * 0.5
+        for (reach, col) in ((w + 0.9, OCC), (w + 1.9, g[1])):
+            bx, by = path[i][0] + nx * reach - tx * (reach - w) * 0.8, path[i][1] + ny * reach - ty * (reach - w) * 0.8
+            here = c.get(int(bx), int(by))
+            if here[3] == 0 or here[:3] == raster.rgb(OCC)[:3]:
+                c.set(bx, by, col)
+        side = -side
+
+    # Torn ground where it comes up.
+    for (x, y, tone_) in ((0, 30, e[3]), (1, 31, OCC), (6, 31, e[3]), (7, 30, e[2]), (2, 31, e[2]), (5, 31, OCC), (8, 31, e[3])):
+        c.set(x, y, tone_)
+
+    # The crack: a white-hot heart, four arms, the diagonals short, and poison spat the way it went.
+    tx_, ty_ = int(round(tip[0])), int(round(tip[1]))
+    for d in (1, 2, 3):
+        tone_ = g[0] if d == 1 else (g[1] if d == 2 else g[2])
+        for (dx, dy) in ((d, 0), (-d, 0), (0, d), (0, -d)):
+            c.set(tx_ + dx, ty_ + dy, tone_)
+    for (dx, dy) in ((1, 1), (-1, -1), (1, -1), (-1, 1)):
+        c.set(tx_ + dx, ty_ + dy, p[1])
+    c.set(tx_, ty_, g[0])
+    for (dx, dy, tone_) in ((-4, -3, p[2]), (3, -4, p[1]), (-5, 0, p[2]), (4, 2, p[3])):
+        c.set(tx_ + dx, ty_ + dy, tone_)
     return c
 
 

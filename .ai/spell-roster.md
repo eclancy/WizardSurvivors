@@ -491,7 +491,8 @@ more like a whip".* The first build drew a uniform zigzag polyline that slid dow
 and left five even lines behind it. The beats, their timing and the hit test above did not change; the
 picture did. Every frame the node poses each arc as a 17-point lash and
 `scenes/shaders/stormsweep_lash.gdshader` draws it as pixel art on the world's 2 px grid, half-width 4-8
-px at the hand (with the square root of Area) thinning fast to one art pixel at the tip:
+px at the hand (with the square root of Area) thinning fast to one art pixel at the tip. As first built
+(the leap and the sweep were redone on 2026-10-31 - "A whip crack, not a flick", below):
 
 - **Leap** - it unfurls along the band's starting edge: a loop rolls out from the hand to the tip, the
   part past it folded back a radius into the band (never out of it), shrinking until the lash lies
@@ -510,9 +511,35 @@ The colours are the arc's ramp (Lightning, or Metal on Iron Current), the crackl
 a Legendary's gold multiplies all of it. Iron Current keeps its look as a lash: beads of iron, long and
 square by turns with an `occ` seam between them, strung along it and thinning with it, with the storm
 crawling over them. Thunderclap's second pass, Cardinal Storm's cross and Amount's alternating sides are
-unchanged. Nothing is allocated per frame: every lash is one row of a 13 x 16 float image written in
+unchanged. Nothing is allocated per frame: every lash is one row of a 20 x 16 float image written in
 place and pushed with `ImageTexture.Update` (handing the shader uniform arrays every frame allocated a
 finalizable disposer per array on the C# side, 0.3 KB a frame - measured), and one quad per lash.
+
+**A whip crack, not a flick** (2026-10-31). Eric: *"the electric whip spell should look more like a whip
+crack as well."* The first whip swept with its far end LEADING and cracked at the START of the sweep -
+a stick slapped down, then a spark. The sweep is now a real whip stroke, from `scripts/WhipStroke.cs`, the
+motion model it shares with Thorned Vine: in the **leap** the lash is thrown out straight along the
+band's starting edge (no loop yet); in the **sweep** the HAND leads down to the far edge while the lash
+beyond still lies on the near one, and the bend between them - a diagonal across the band with a loop in
+its elbow - rolls out along the band to the tip; the tip, the last part to move and the fastest, lands on
+the far corner and **cracks** at the END of the pass: a white heart, a four-armed star with short
+diagonals, a broken ring of shock opening to just inside `BodyAllowance`, and sparks thrown the way the
+tip was travelling. The tip glows as it whips in (the last quarter of the pass) and stays white for
+`CrackSeconds` after. The **linger** is unchanged. Thunderclap cracks at the end of both passes (its clap
+lands on the crack); Cardinal Storm's four arms each roll a loop out and crack. The lash is 31 points
+now (17 of its own and the loop's 14), so the shader measures a point's place along it by run length.
+
+**What it hits did not change.** The hit test is `WhipStroke.Front` mapped onto the band
+(`Stormsweep.BandAcross`), the same curve the lash is drawn on, and it still covers exactly the band and
+its body allowance once a pass: every enemy in it is struck once a pass, as before. Only the ORDER across
+the band changed - the hand's end first, the far end last, as the wave rolls out - and the loop is drawn
+only over band the front has already crossed (`WhipStroke.Splice` holds it there). The beats' timing
+(0.07 / 0.08 / 0.16 s, Thunderclap's 0.05 s pause, `ArcGap`) and the cooldown are unchanged, so the
+loop rolls out over about five frames at 60 fps - visible in a frame sequence and at the game's own zoom
+on both canvases, but quick; if a playtest wants it slower, `SweepSeconds` is the knob, and it moves when
+the damage lands within the arc. Cost, the same harness flags as the 2026-10-28 whip row below (Iron
+Current + Cardinal Storm, seed 11): the `stormsweep` section 74-293 us a frame before and 99-175 after
+over minutes 2.4-6 - no change beyond the spread; attributed damage 68,925 before, 70,657 after.
 
 | milestone | branch | tags after | what it does |
 |---|---|---|---|
@@ -565,8 +592,10 @@ hold back. Two new catalog spells would close the final chapter on a save that h
 main's Familiar, the same kind of grant, and the two can be folded into one step); steps 10, 12 and 14
 leave them out of their counts (`SpellsAddedAtSchema16`).
 
-**Art:** card icons `stormsweep-lightning` (an arc of lightning swept a quarter-turn round a glowing sigil,
-two afterglow arcs inside it, on violet night - pale yellow vanished on the cream card) and
+**Art:** card icons `stormsweep-lightning` (since 2026-10-31 the whip crack the game draws: out of the
+glowing sigil the lash lies low, steps up through a loop to its high far part, and the far end snaps down
+into a white-hot star, speed lines beside the snap and streaks of the swept band under it, on violet
+night - pale yellow vanished on the cream card; it was an arc swept a quarter-turn round the sigil) and
 `sleet-runes-ice` (three of the game's own runes in flight on the wool row's night), both in
 `tools/art/spell_icons.py`; the rune sheet `assets/bonelight/effects/sleet-rune.png`. The arc draws itself
 (`scenes/shaders/stormsweep_lash.gdshader`, "Drawn as a whip" above).
@@ -839,6 +868,40 @@ the thing at the game's 2 px art grid, out of the number that decides what it hi
   fits it better than it fit the bolt: a sweep at a straggler swings through air. Its five default
   evolutions keep their ids, numbers and element gains and are re-worded for a vine (reach, snag
   count, tempo, more vines).
+
+  **A whip, not a stick (2026-10-31).** Eric: *"its animation just rotates, I want it to look more like
+  the real arc of a whip."* The lash was one limb turned about its root with a curl riding on it. It is
+  now a whip stroke from `scripts/WhipStroke.cs` (shared with Stormsweep): the root swings through the
+  arc first while the vine beyond trails about a radian behind; the bend between them, with a LOOP in
+  it, rolls out along the vine; the tip, last and fastest, whips round the end of the arc and **cracks**
+  - a white-hot star of grass-light, a ring of shock and a spit of poison thrown the way it went, inside
+  `BodyTolerance` - and the vine goes slack, springs back a little and withers. Three speed lines along
+  the rim show the arc the tip just cut (they replaced a dithered smear, which under Hydra Vine's three
+  heads closed into dotted arcs). **A snag no longer just stops it:** the vine out to the enemy it caught
+  on holds where it was, the rest of it WRAPS round that enemy (inside `BodyTolerance` of its centre,
+  pulling its own tail in) and the tip cracks on it - so in a dense pack, where most strokes snag, the
+  crack still comes. Snapback's return is a second stroke with its own loop and crack (it tears free of
+  a wrap first); Hydra Vine's heads each whip their own third; Thicket lays its brambles on the arc the
+  first stroke swept; Entangle's coils are unchanged. The vine is drawn on `DrawLayers.Air` and the soil
+  it tore on `DrawLayers.Ground` (it was all at relative z 1). **What it hits:** an enemy is struck when
+  the stroke's front - where the vine lies at the enemy's distance from the root, `WhipStroke.Front` -
+  has passed it, plus `BodyTolerance`; the vine is drawn from the same front and its loop only turns over
+  ground the front has crossed. The area an unsnagged stroke sweeps is the same fan as before (170
+  degrees, 130 a Hydra head, out to the vine's reach plus `BodyTolerance`), and a snagging stroke still
+  cuts exactly pierce + 1; only the order inside the fan changed (near the root first, the rim last), and
+  with it which enemies a snagging stroke reaches. Damage per cast is unchanged; the beats (0.22 grow,
+  0.14 coil, 0.20 lash, 0.14 hold, 0.10 Snapback recoil, 0.35 wither) and the cooldown are unchanged.
+  Icon (`thorn-vine-grass`, `tools/art/spell_icons_core.py`): the vine up out of torn ground, a loop in
+  it, the tip hooked over and cracking, speed lines under the hook - it was a straight barbed runner.
+  Cost: the FrameProfiler's new `vine` section (every vine's `_Process`, its strikes' damage included),
+  `_BalanceHarness --minutes=6 --timescale=2 --immortal --all-unlocked --character=0 --spell=thorn_vine
+  --solo --upgrade-chance=1 --branch4=thorn_vine_hyper_acceleration --branch8=thorn_vine_infinite_horizon
+  --force-ascension --seed=11 --profile=10`, Hydra Vine from 2.4 min in both runs, about seven vines
+  alive a frame: the turning limb 91-228 us a frame, the whip 135-255 us - about 9 us more a vine a frame
+  (the per-frame lash texture and the stroke's arithmetic; the shader parameters that hold still are now
+  set only when they change, which paid back most of it). Allocation unchanged, 0.2-0.7 KB a frame, the
+  damage path's. Attributed damage 57,802 before, 59,560 after. GPU fill is not measured: the quad is now
+  the vine's bounding box rather than the square of its reach, but each fragment walks 30 segments, not 12.
 
 Measured with the balance harness (`--spell=ID` and `--solo`, new) - see the commit for the tables.
 

@@ -1213,7 +1213,7 @@ SPELLS = {
     "familiar_dog":      dict(paint=image(lambda: familiar.portrait()), travel=(1, 0), tip=(27, 19), rows=()),
     "familiar_crow":     dict(paint=image(lambda: familiar.crow_portrait()), travel=(1, 0), tip=(30, 17), rows=()),
     "familiar_cat":      dict(paint=image(lambda: familiar.cat_portrait()), travel=None, tip=(16, 19), rows=()),
-    "stormsweep":        dict(paint=lambda: si.stormsweep(sky=False), travel=None, tip=(25, 20), rows=("lightning",)),
+    "stormsweep":        dict(paint=lambda: si.stormsweep(sky=False), travel=None, tip=(26, 20), rows=("lightning",)),
     "sleet_runes":       dict(paint=lambda: si.sleet_runes(sky=False), travel=(0.83, -0.56), tip=(22, 11), rows=("ice", "wind")),
 }
 

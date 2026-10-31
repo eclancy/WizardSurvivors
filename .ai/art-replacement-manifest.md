@@ -616,6 +616,29 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Thicket's brambles | **Failed** only while withering (lerp to the off-palette brown) | Each stamp dries to the earth row and the gold row's soil on its own beat |
 | Snapback, Hydra Vine | No parts of their own beyond the vine and smear | - |
 
+**2026-10-31, the whip pass (Thorned Vine and Stormsweep).** Eric: the vine's "animation just rotates, I
+want it to look more like the real arc of a whip", and Stormsweep "should look more like a whip crack".
+Both now move by one motion model, `scripts/WhipStroke.cs` (a static class, no scene, nothing allocated):
+the hand leads, a loop rolls out along the lash, the tip trails and cracks at the end of the stroke.
+`WhipStroke.Front` is the one authority on what a stroke has swept, read by the drawing and the hit
+test alike, and `WhipStroke.Splice` splices the loop in on ground already swept. The parts it changed,
+all still on the world's 2-unit cell in opaque ramp stops:
+
+| Part | Now |
+|---|---|
+| Thorned Vine's vine | `thorn_vine.gdshader` takes the vine as 31 points from a one-row float texture (Stormsweep's way) instead of rebuilding WhipLimb's five-number layout per fragment; place along the vine is measured by run length, so thorns and leaves ride round the loop. The quad is the vine's bounding box, not the square of its reach. On `DrawLayers.Air` |
+| Its torn soil | The same shader on a second quad on `DrawLayers.Ground`, picked by the quad's colour - under the bodies now |
+| Its sweep smear | Three one-pixel speed lines in dashes just inside the rim, between where the tip was a moment ago and where it is: a sliver while it trails, a streak as it whips round. The dithered field closed into dotted arcs under Hydra Vine |
+| Its crack (new) | Stamped on the grid at the tip as the stroke ends: Grass core heart and star, Poison diagonals, a broken ring of shock and Poison sparks (`ImpactDebris`, a fan the way it went), all inside `BodyTolerance` |
+| Its wrap on a snag (new) | The vine's own points, wound round the snagged enemy inside `BodyTolerance`; the shader skips the one segment (`break_at`) between the coil and the tail it pulls in |
+| Stormsweep's lash | 31 points (the loop's 14 added), run-length taper; the smear follows the new front (`whip` uniform repeats the shape) |
+| Stormsweep's crack | Moved from the start of the sweep to the end of each pass; a ring of shock and a forward fan of sparks added to the star, all inside `BodyAllowance`. On `DrawLayers.Air` (was z 4) |
+| Icons `thorn-vine-grass`, `stormsweep-lightning` and their nine derived evolution cards | Redrawn to show the stroke - `tools/art/spell_icons_core.py` `thorn_vine`, `tools/art/spell_icons.py` `stormsweep` (helpers `_lash_path`, `_stamp_lash`), cards regenerated with `evolution_icons.py --only=thorn_vine,stormsweep`; Cardinal Storm's card has its own painter and did not change |
+
+Checked in frame sequences (consecutive frames, `_UiShot --burst=N,1 --spell-stage`) at level 1 and at
+level 8 with both Ascensions of each, on the PC canvas at 1.0-1.6x and the phone canvas at the game's own
+zoom; not checked on the Sketchbook's paper or on a real phone.
+
 ### Bramble Seed
 
 | Part | Audit | Now |

@@ -62,6 +62,9 @@ public partial class FrameProfiler : Node
 		// Mirefoot's bog: the one surface that draws every pool of the trail, process and draw
 		// (scripts/MireSurface.cs). The pools' own damage ticks are LingeringZone's and are not in it.
 		Mirefoot,
+		// Thorned Vine: every vine's _Process - its whip stroke, its hit test and its paint
+		// (scripts/ThornVine.cs, the strikes' damage included).
+		ThornVine,
 		Harness,
 		Count,
 	}
@@ -69,7 +72,7 @@ public partial class FrameProfiler : Node
 	private static readonly string[] SectionNames =
 	{
 		"enemy", "separation", "move", "takeDamage", "death", "dmgText", "hitFx",
-		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "stormsweep", "runes", "mire", "harness",
+		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "stormsweep", "runes", "mire", "vine", "harness",
 	};
 
 	/// <summary>True while a profiler is attached and counting.</summary>

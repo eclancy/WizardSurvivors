@@ -1,54 +1,67 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace WizardSurvivors.scripts;
 
 // Thorned Vine (id thorn_vine, Grass + Poison). A thorned vine bursts out of the ground beside the
-// densest pack in range, coils, lashes across the pack in one wide sweep, and withers back into the
-// ground.
+// densest pack in range, coils, cracks across the pack like a whip in one wide stroke, and withers back
+// into the ground.
 //
 // "thorn vine looks ridiculous - it should be a whip animation that grows from the ground and then
 // slaps enemies in an area, like a tentacle. rename it 'Thorned Vine'." It was a homing bolt with a
 // green sprite on it. The display name changed; the id and every save key are still thorn_vine.
 //
-// **What it hits, and in what order.** The sweep reaches enemies in the order its line passes over
-// them, and it cuts through pierce + 1 of them (BasePierce plus the spell's Pierce) before it SNAGS
-// on the last one and stops there. That keeps the pierce the bolt had meaningful - "Pierce +1" is
-// still one more enemy a cast - and keeps the payload what it was: the bolt hit up to that many in
-// its line, the lash hits up to that many in its arc. Every one of them is poisoned as before.
+// A WHIP, NOT A STICK (2026-10-31). "its animation just rotates, I want it to look more like the real
+// arc of a whip." It was one limb turned about its root through the sweep, a little curl riding on it.
+// Now the lash is a whip stroke (WhipStroke, shared with Stormsweep): the root swings first while the
+// vine beyond trails where it was; the bend between them, with a loop in it, rolls out along the vine to
+// the tip, the vine behind it lying on the root's line; the tip, last and fastest, whips round the last
+// of the arc and CRACKS - a white-hot snap of grass-light, a few pixels of shock and a spray of poison
+// thrown the way it was going, no wider than a body. Then the vine goes slack, springs back a little,
+// and withers.
 //
-// **Drawn where it hurts.** The sweep is tested against the vine's own laid-out tip each frame
-// (WhipLimb): an enemy is struck when the line from the root to the drawn tip has swept past it and
-// it is within the drawn length, plus BodyTolerance for the body it is standing in. On a snag the
-// vine stops on the enemy it stopped on. Nothing is struck that the vine was not drawn across.
+// **What it hits, and in what order.** The stroke reaches enemies in the order the vine passes over
+// them, and it cuts through pierce + 1 of them (BasePierce plus the spell's Pierce) before it SNAGS on
+// the last one and stops there. That keeps the pierce the bolt had meaningful - "Pierce +1" is still
+// one more enemy a cast - and keeps the payload what it was: the bolt hit up to that many in its line,
+// the lash hits up to that many in its arc. Every one of them is poisoned as before.
+//
+// **Drawn where it hurts.** An enemy is struck when the vine's front (WhipStroke.Front: where the vine
+// lies, at the enemy's distance from the root, this frame) has swept past it, plus BodyTolerance for
+// the body it is standing in, and it is within the vine's reach. The vine is drawn from the same front,
+// sampled; its loop turns only over ground the front has already crossed. Nothing is struck that the
+// vine was not drawn across. On a snag the whole stroke stops dead where it was.
+// THE AREA IT SWEEPS IS THE SAME as before: the fan of SweepDegrees about the root, out to the vine's
+// length (plus BodyTolerance), all of it by the end of an unsnagged stroke. Only the order inside it
+// changed - near the root first, the rim last, as the wave rolls out - and with it which enemies a
+// snagging stroke reaches first.
 //
 // **Not Black Tentacles, and not Bramble Seed.** All three come out of the ground. Black Tentacles is
 // a dark rift that lingers, slows, and lashes single targets with many limbs; Bramble Seed is a
 // patch of roots that grows where it is sown and hurts by standing. This is ONE green limb, alive
-// for a second, whose verb is the sweep. It shares only the limb (WhipLimb) with the tentacles.
+// for a second, whose verb is the whip.
 //
-// Pixel art: the limb, its thorns and leaves, the soil it tore and the smear of its sweep are one shader
-// on one quad (scenes/shaders/thorn_vine.gdshader, 2026-10-29), which lays the vine out from the same five
-// numbers WhipLimb.Layout does and snaps every fragment to the world's 2 px cell - bark in the earth row at
-// the root, Grass with verdant shade above it, poison at the tip - every colour a ramp stop, Bayer the only
-// gradient, nothing translucent. It replaced WhipLimb's stamped squares, whose colours were LERPED bark to
-// grass down the vine and grass to a dry brown as it withered, and a dotted sweep arc at 85% alpha. The
-// coils and the poison where it strikes stay stamped on the grid here, in ramp stops that step down and
-// drop out cell by cell. Nothing allocates per frame.
+// Pixel art: the vine, its thorns and leaves and the arc its tip cut are one shader on one quad in the
+// air, and the soil it tore is the same shader on a second quad on the ground
+// (scenes/shaders/thorn_vine.gdshader). The node lays the vine out every frame as WhipStroke.Points
+// points and hands them over in a one-row float texture (Stormsweep's way: nothing allocates). Bark in
+// the earth row at the root, Grass with verdant shade above it, poison at the tip - every colour a ramp
+// stop, Bayer the only gradient, nothing translucent. The coils, the strikes and the crack are stamped on
+// the grid here, in ramp stops that step down and drop out cell by cell.
 //
-// **Its own five milestones (2026-10-29, .ai/spell-roster.md section 2e).** It wore the default
-// archetype's five names - Amplified Impact, Hyper Acceleration, Reactive Catalyst, Titan Cataclysm,
-// Infinite Horizon - and each was a number on the same lash. Each id now names something the vine
-// DOES, read here by id (SpellData.HasEvolution); the ids are unchanged, so saves and the Ascension
-// browser carry over:
+// **Its own five milestones (2026-10-29, .ai/spell-roster.md section 2e).** Each id names something the
+// vine DOES, read here by id (SpellData.HasEvolution); the ids are the old default archetype's, so saves
+// and the Ascension browser carry over. Each rides the whip stroke:
 //   - Barbed Lash: the thorns break off in what it cuts, and a barbed enemy tears itself open as it
 //     walks, leaving a trail of sap (ThornBarbs).
-//   - Snapback: the whip cracks out and back - a second stroke over the same arc, the other way.
+//   - Snapback: the whip cracks out and back - drawn back past where the first stroke landed, a second
+//     whip stroke over the same arc the other way, with its own loop and its own crack.
 //   - Entangle: what it cuts is rooted where it stands, the vine coiled round its feet.
-//   - Thicket: the swept arc is left a band of thorny brambles on the ground (ThornThicket).
-//   - Hydra Vine: one root rises in the thick of the pack and splits into three heads, each lashing a
-//     third of the ring round it (Player.FireThornVine, LaunchHead).
+//   - Thicket: the arc the first stroke swept is left a band of thorny brambles on the ground (ThornThicket).
+//   - Hydra Vine: one root rises in the thick of the pack and splits into three heads, each cracking
+//     across a third of the ring round it (Player.FireThornVine, LaunchHead).
 public partial class ThornVine : Node2D
 {
 	public const string BarbedLashId = "thorn_vine_amplified_impact";
@@ -80,8 +93,8 @@ public partial class ThornVine : Node2D
 	public float AreaMultiplier { get; set; } = 1f;
 	public Player PlayerRef { get; set; }
 
-	// Recoil is Snapback's: the vine drawn back off the snag before it cracks the other way. Done is
-	// a withered vine that has nothing left to draw but Entangle's coils, kept until the last root ends.
+	// Recoil is Snapback's: the vine drawn back past where it landed before it cracks the other way. Done
+	// is a withered vine that has nothing left to draw but Entangle's coils, kept until the last root ends.
 	private enum Stage { Grow, Coil, Lash, Hold, Recoil, Wither, Done }
 
 	private const float GrowSeconds = 0.22f;
@@ -93,6 +106,18 @@ public partial class ThornVine : Node2D
 	private const int MaxStrikes = 32;
 	// Entangle's coils, one per enemy rooted, drawn at its feet until the root ends.
 	private const int MaxCoils = 24;
+
+	// THE WHIP. The root swings through the arc over the first four fifths of the stroke; the vine beyond
+	// the bend trails it by a quarter of the stroke - about a radian, which a vine can bend through without
+	// looking stretched (in radians the lag grows with the arc, and Stormsweep's whole-band trail would be a
+	// spiral here); the bend leaves the root an eighth of the way in and is a fifth of the vine long.
+	private static readonly WhipStroke.Shape Whip = new(lag: 0.26f, handEnd: 0.8f, waveStart: 0.12f, bend: 0.2f);
+	private const int Samples = WhipStroke.Samples;
+	private const int LashPoints = WhipStroke.Points;
+	// The lash texture: the points two to a texel.
+	private const int LashTexels = (LashPoints + 1) / 2;
+	// How long the crack's flash lasts (its sparks run ImpactDebris's life).
+	private const float CrackFlashSeconds = 0.08f;
 
 	private int damage = 3;
 	private float length = 100f;
@@ -109,10 +134,6 @@ public partial class ThornVine : Node2D
 	private bool thicket;
 	// 0 for the first stroke, 1 for Snapback's return.
 	private int stroke;
-	// The arc the first stroke swept, for Thicket: where it started, which way, and how far.
-	private float firstStart;
-	private float firstSide;
-	private float firstSwept;
 
 	private Stage stage = Stage.Grow;
 	private float stageAge;
@@ -122,25 +143,38 @@ public partial class ThornVine : Node2D
 	private float startAngle;
 	private float sweep;
 	private float side = 1f;
-	private float swept;
 	private bool snagged;
 	private float snagProgress;
+	// The stroke's progress (0..1), held where it was when it snagged.
+	private float lashU;
 	private int hits;
-	private float poseAngle;
-	private float poseLength;
-	private float poseCurl;
-	private float poseWaveAmp;
-	private float poseWave;
 	private float seed;
 	private bool launched;
 
-	// The vine itself, drawn behind this node's own coils and strikes by thorn_vine.gdshader on one quad.
+	// THE POSE. The vine is Samples points evenly out from the root, each at its own angle - its progress
+	// along the stroke from startAngle, toward `side`, in radians - out to `ext` of its length, with a loop
+	// spliced in at loopAt of radius loopRadius px. Every stage writes these; Paint lays them out.
+	private readonly float[] theta = new float[Samples];
+	// WhipStroke.Front at each sample this frame, 0..1 of the way from the wind-up to the end of the arc.
+	private readonly float[] front = new float[Samples];
+	// The pose the stroke under way started from (its wind-up), and the one a stage after it starts from.
+	private readonly float[] theta0 = new float[Samples];
+	private readonly float[] held = new float[Samples];
+	private float ext;
+	private float ext0 = 0.6f;
+	private float heldExt;
+	private float loopAt;
+	private float loopRadius;
+	private float heldLoopAt;
+	private float heldLoopRadius;
+	private readonly Vector2[] strokeSpace = new Vector2[LashPoints];
+	private readonly Vector2[] lashPts = new Vector2[LashPoints];
+
+	// The vine itself, drawn behind this node's own coils, strikes and crack by thorn_vine.gdshader: one
+	// quad in the air for the vine and the arc its tip cut, one on the ground for the soil it tore.
 	private static Shader vineShader;
-	private static readonly StringName ParamAngle = "angle";
-	private static readonly StringName ParamLength = "vine_length";
-	private static readonly StringName ParamCurl = "curl";
-	private static readonly StringName ParamWaveAmp = "wave_amp";
-	private static readonly StringName ParamWavePhase = "wave_phase";
+	private static readonly StringName ParamLash = "lash";
+	private static readonly StringName ParamRootDir = "root_dir";
 	private static readonly StringName ParamBaseWidth = "base_width";
 	private static readonly StringName ParamDry = "dry";
 	private static readonly StringName ParamVenom = "venom";
@@ -148,14 +182,29 @@ public partial class ThornVine : Node2D
 	private static readonly StringName ParamSeed = "seed";
 	private static readonly StringName ParamTime = "time";
 	private static readonly StringName ParamSmear = "smear";
+	private static readonly StringName ParamSmearR = "smear_r";
 	private static readonly StringName ParamSmearFade = "smear_fade";
 	private static readonly StringName ParamSoil = "soil";
 	private static readonly StringName ParamGrowU = "grow_u";
 	private static readonly StringName ParamClodReach = "clod_reach";
+	private static readonly Color AirPass = Colors.White;
+	private static readonly Color GroundPass = Colors.Black;
 	private Node2D vineLayer;
+	private Node2D soilLayer;
 	private ShaderMaterial vineMaterial;
+	private Image lashImage;
+	private ImageTexture lashTexture;
+	private readonly byte[] lashBytes = new byte[LashTexels * 16];
+	private Rect2 vineQuad;
+	private float baseWidth = 10f;
+	// The values last handed to the shader (Paint sets a parameter only when it changes), NaN for never.
+	private bool painted;
+	private float lastDry = float.NaN, lastVenom = float.NaN, lastSoil = float.NaN, lastGrowU = float.NaN;
+	private float lastSmearFade = float.NaN, lastSmearR = float.NaN;
+	private int lastBreakAt = int.MinValue;
+	private Vector2 lastRootDir = new(float.NaN, float.NaN);
+	private Vector4 lastSmear = new(float.NaN, float.NaN, float.NaN, float.NaN);
 
-	private readonly WhipLimb limb = new WhipLimb();
 	private readonly List<Enemy> candidates = new List<Enemy>();
 	private readonly List<bool> struck = new List<bool>();
 	private readonly Vector2[] strikeAt = new Vector2[MaxStrikes];
@@ -165,6 +214,31 @@ public partial class ThornVine : Node2D
 	private readonly float[] coilUntil = new float[MaxCoils];
 	private int coilCount;
 	private float coilsEnd;
+	// The crack of each stroke: where the tip landed, the way it was going, and when (age; below 0, none yet).
+	private Vector2 crackAt;
+	private float crackHeading;
+	private float crackTime = -1f;
+	private uint crackSeed;
+	private bool cracked;
+
+	// THE WRAP. A stroke that snags stops dead - but a whip that catches on something does not just stop:
+	// the lash beyond the catch wraps round it and the tip cracks there. So on a snag the vine out to the
+	// enemy it caught on holds where it was, and the rest of it winds round that enemy, inside
+	// BodyTolerance of its centre - a body the stroke has struck - pulling its own tail in after it, and the
+	// tip cracks on the enemy as the last of it goes round. Nothing the stroke had not struck is drawn
+	// over. wrapS is where along the vine it caught (below 0: not wrapping), wrapCentre the enemy, root-local.
+	private const float WrapSeconds = 0.09f;
+	private const float WrapRadius = 9f;
+	private const float WrapTurns = 1.15f;
+	private const int CoilPoints = WhipStroke.LoopPoints - 2;
+	private float wrapS = -1f;
+	private Vector2 wrapCentre;
+	private float wrapOmega;
+	private float snagTime;
+	private Enemy snagEnemy;
+	// The segment the shader leaves out (the coil's end to the tail's start); below 0, none.
+	private int breakAt = -1;
+	private static readonly StringName ParamBreakAt = "break_at";
 
 	// The Grass ramp, Earth and the gold row's soil for what has dried, Poison for what it leaves in a
 	// wound (.ai/art-direction.md section 3). Opaque stops only: the coils and the strikes step down
@@ -176,10 +250,18 @@ public partial class ThornVine : Node2D
 	private static readonly Color GrassEdge = new Color(0.290f, 0.549f, 0.227f, 1f); // grass edge #4A8C3A
 	private static readonly Color GrassMid = new Color(0.608f, 0.831f, 0.333f, 1f);  // grass mid #9BD455
 	private static readonly Color GrassHot = new Color(0.812f, 0.933f, 0.580f, 1f);  // grass hot #CFEE94
+	private static readonly Color GrassCore = new Color(0.957f, 1.0f, 0.863f, 1f);   // grass core #F4FFDC
 	private static readonly Color PoisonCore = new Color(0.973f, 1.0f, 0.847f, 1f);  // poison core #F8FFD8
 	private static readonly Color PoisonHot = new Color(0.863f, 0.957f, 0.549f, 1f); // poison hot #DCF48C
 	private static readonly Color PoisonMid = new Color(0.706f, 0.878f, 0.290f, 1f); // poison mid #B4E04A
 	private static readonly Color PoisonEdge = new Color(0.420f, 0.580f, 0.125f, 1f);// poison edge #6B9420
+	private static readonly ElementColors.Ramp PoisonRamp = ElementColors.GetRamp(Element.Poison);
+	// The crack's star: four arms square, then four diagonal.
+	private static readonly Vector2[] CrackArms =
+	{
+		new(1f, 0f), new(0f, 1f), new(-1f, 0f), new(0f, -1f),
+		new(0.7071f, 0.7071f), new(-0.7071f, 0.7071f), new(-0.7071f, -0.7071f), new(0.7071f, -0.7071f),
+	};
 
 	public void SetSpellLevel(int level)
 	{
@@ -240,7 +322,7 @@ public partial class ThornVine : Node2D
 		side = rng.Randf() < 0.5f ? -1f : 1f;
 		sweep = sweepRadians;
 		startAngle = heading - side * sweep * 0.5f;
-		poseAngle = startAngle;
+		baseWidth = WhipLimb.SnapSize(Mathf.Clamp(length * 0.11f, 8f, 14f));
 		launched = true;
 		// The audio manifest's proposed trigger: something arrives out of the ground.
 		SfxPlayer.AtPosition(SfxCatalog.SpellSummon, GlobalPosition);
@@ -248,26 +330,43 @@ public partial class ThornVine : Node2D
 
 	public override void _Ready()
 	{
-		// Grows out of the floor, but lashes over the bodies it hits; under the status marks (3).
-		ZIndex = 1;
-		// The vine is a child drawn behind this node, so the coils and the strikes (drawn here) sit on it.
+		// The vine lashes through the air over the bodies it hits (DrawLayers): it, its coils, its strikes
+		// and its crack are drawn here and on the child behind it, and only the soil it tore lies on the
+		// ground, on a child of its own.
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		vineShader ??= GD.Load<Shader>("res://scenes/shaders/thorn_vine.gdshader");
 		vineMaterial = new ShaderMaterial { Shader = vineShader };
+		lashImage = Image.CreateEmpty(LashTexels, 1, false, Image.Format.Rgbaf);
+		lashTexture = ImageTexture.CreateFromImage(lashImage);
+		vineMaterial.SetShaderParameter(ParamLash, lashTexture);
 		vineLayer = new Node2D { Name = "Vine", ShowBehindParent = true, Material = vineMaterial };
 		AddChild(vineLayer);
 		vineLayer.Draw += DrawVine;
+		soilLayer = new Node2D { Name = "Soil", Material = vineMaterial, ZAsRelative = false, ZIndex = DrawLayers.Ground };
+		AddChild(soilLayer);
+		soilLayer.Draw += DrawSoil;
 	}
 
 	public override void _ExitTree()
 	{
 		if (vineLayer != null && IsInstanceValid(vineLayer))
 			vineLayer.Draw -= DrawVine;
+		if (soilLayer != null && IsInstanceValid(soilLayer))
+			soilLayer.Draw -= DrawSoil;
 	}
 
 	public override void _Process(double delta)
 	{
 		if (!launched)
 			return;
+		var perfStart = FrameProfiler.Begin();
+		Tick(delta);
+		FrameProfiler.End(FrameProfiler.Section.ThornVine, perfStart);
+	}
+
+	private void Tick(double delta)
+	{
 		float dt = (float)delta * tempo;
 		age += dt;
 		stageAge += dt;
@@ -278,16 +377,17 @@ public partial class ThornVine : Node2D
 				if (stageAge >= GrowSeconds) Enter(Stage.Coil);
 				break;
 			case Stage.Coil:
-				if (stageAge >= CoilSeconds) { Enter(Stage.Lash); CollectCandidates(); }
+				if (stageAge >= CoilSeconds) BeginStroke();
 				break;
 			case Stage.Lash:
-				if (stageAge >= LashSeconds) Enter(Stage.Hold);
+				if (stageAge >= LashSeconds) EndStroke();
 				break;
 			case Stage.Hold:
 				if (stageAge >= HoldSeconds)
 				{
 					if (stroke == 0)
 						EndFirstStroke();
+					Hold();
 					if (snapback && stroke == 0)
 						BeginReturnStroke();
 					else
@@ -295,7 +395,7 @@ public partial class ThornVine : Node2D
 				}
 				break;
 			case Stage.Recoil:
-				if (stageAge >= RecoilSeconds) { Enter(Stage.Lash); CollectCandidates(); }
+				if (stageAge >= RecoilSeconds) BeginStroke();
 				break;
 			case Stage.Wither:
 				if (stageAge >= WitherSeconds) Enter(Stage.Done);
@@ -308,31 +408,75 @@ public partial class ThornVine : Node2D
 		Pose();
 		if (stage == Stage.Lash)
 			Sweep();
-		PaintVine();
+		Paint();
 		QueueRedraw();
 		vineLayer?.QueueRedraw();
+		soilLayer?.QueueRedraw();
 	}
 
-	// The first stroke is over: remember the arc it swept, and leave Thicket's brambles on it.
+	// A stroke begins from wherever the wind-up left the vine: that pose is the one it whips out of.
+	private void BeginStroke()
+	{
+		Array.Copy(theta, theta0, Samples);
+		ext0 = ext;
+		lashU = 0f;
+		cracked = false;
+		wrapS = -1f;
+		Enter(Stage.Lash);
+		CollectCandidates();
+	}
+
+	// The stroke is over. Unless it snagged (and so cracks as its wrap closes), the tip has just landed
+	// at the end of the arc: the crack.
+	private void EndStroke()
+	{
+		if (!snagged)
+		{
+			lashU = 1f;
+			Pose();
+			Crack(lashPts[LashPoints - 1], startAngle + side * sweep + side * Mathf.Pi * 0.5f);
+		}
+		Hold();
+		Enter(Stage.Hold);
+	}
+
+	private void Crack(Vector2 at, float heading)
+	{
+		cracked = true;
+		crackAt = at;
+		crackHeading = heading;
+		crackTime = age;
+		crackSeed = (uint)(GetInstanceId() & 0xFFFF) + (uint)stroke * 7919u;
+	}
+
+	// Remembers the pose the vine is in, for a stage that starts from it.
+	private void Hold()
+	{
+		Array.Copy(theta, held, Samples);
+		heldExt = ext;
+		heldLoopAt = loopAt;
+		heldLoopRadius = loopRadius;
+	}
+
+	// The first stroke is over: leave Thicket's brambles on the arc it swept.
 	private void EndFirstStroke()
 	{
-		firstStart = startAngle;
-		firstSide = side;
-		firstSwept = snagged ? snagProgress : sweep;
 		if (!thicket || PlayerRef == null || !IsInstanceValid(PlayerRef) || GetParent() is not Node2D arena)
 			return;
-		ThornThicket.Lay(arena, GlobalPosition, length, firstStart, firstSide, firstSwept, damage, poisonTick, poisonSeconds, SpellData, PlayerRef);
+		ThornThicket.Lay(arena, GlobalPosition, length, startAngle, side, snagged ? snagProgress : sweep, damage, poisonTick, poisonSeconds, SpellData, PlayerRef);
 	}
 
-	// Snapback: the vine is drawn back off what it snagged on, and cracks back across the same arc the
-	// other way - a fresh stroke, cutting through as many again.
+	// Snapback: the vine is drawn back past where it landed and cracks back across the same arc the other
+	// way - a fresh stroke, cutting through as many again. The pose it holds is turned into the new
+	// stroke's terms (its progress from the new start, the other way), so the recoil starts where it is.
 	private void BeginReturnStroke()
 	{
-		float end = startAngle + side * (snagged ? snagProgress : sweep);
-		sweep = snagged ? snagProgress : sweep;
-		startAngle = end;
+		float end = snagged ? snagProgress : sweep;
+		startAngle += side * end;
+		sweep = end;
 		side = -side;
-		swept = 0f;
+		for (int i = 0; i < Samples; i++)
+			held[i] = end - held[i];
 		snagged = false;
 		snagProgress = 0f;
 		hits = 0;
@@ -346,69 +490,210 @@ public partial class ThornVine : Node2D
 		stageAge = 0f;
 	}
 
-	// Lays the vine out for this frame.
+	// Lays the vine out for this frame: theta, ext and the loop.
 	private void Pose()
 	{
-		float u;
-		float angle, len, curl, waveAmp;
 		float wave = age * 9f + seed;
 		switch (stage)
 		{
 			case Stage.Grow:
-				// Bursts out of the ground wound back past where the sweep will start.
-				u = Mathf.Clamp(stageAge / GrowSeconds, 0f, 1f);
-				angle = startAngle - side * 0.35f;
-				len = length * 0.55f * EaseOutBack(u);
-				curl = side * 1.2f * (1f - u) - side * 0.6f * u;
-				waveAmp = 0.5f;
+			{
+				// Bursts out of the ground wound back past where the stroke will start, unwinding as it rises.
+				float g = Mathf.Clamp(stageAge / GrowSeconds, 0f, 1f);
+				ext = 0.55f * EaseOutBack(g);
+				float curl = 0.6f * (1f - g) - 0.3f * g;
+				for (int i = 0; i < Samples; i++)
+				{
+					float s = i / (float)(Samples - 1);
+					theta[i] = -0.35f + curl * s * s + 0.25f * s * MathF.Sin(wave - s * 4.5f);
+				}
+				loopRadius = 0f;
 				break;
+			}
 			case Stage.Coil:
-				// Draws back and coils: the wind-up the player can read.
-				u = Smooth(stageAge / CoilSeconds);
-				angle = startAngle - side * (0.35f + 0.2f * u);
-				len = length * (0.55f + 0.05f * u);
-				curl = Mathf.Lerp(-side * 0.6f, -side * 1.5f, u);
-				waveAmp = 0.15f;
+			{
+				// The backswing: drawn back and curled against the way it is about to crack - the wind-up the
+				// player can read.
+				float c = Smooth(stageAge / CoilSeconds);
+				ext = 0.55f + 0.05f * c;
+				float curl = Mathf.Lerp(-0.3f, -0.75f, c);
+				for (int i = 0; i < Samples; i++)
+				{
+					float s = i / (float)(Samples - 1);
+					theta[i] = -(0.35f + 0.2f * c) + curl * s * s + 0.075f * s * MathF.Sin(wave - s * 4.5f);
+				}
+				loopRadius = 0f;
 				break;
+			}
 			case Stage.Lash:
-				// The whip: slow out of the coil, fast through the middle, reaching full length in
-				// the first third. Stops dead where it snags.
-				u = Mathf.Clamp(stageAge / LashSeconds, 0f, 1f);
-				float progress = snagged ? snagProgress : sweep * Smooth(u);
-				angle = startAngle + side * progress;
-				len = length * Mathf.Min(1f, 0.6f + 1.2f * u);
-				curl = snagged ? 0f : -side * 0.3f * MathF.Sin(Mathf.Pi * u) * (1f - u);
-				waveAmp = snagged ? 0f : 0.1f * (1f - u);
+			{
+				// The whip stroke: every point from its wind-up to the end of the arc, as far as the front has
+				// carried it. The vine flies out to its full length in the first quarter. Stops dead on a snag.
+				if (!snagged)
+					lashU = Mathf.Clamp(stageAge / LashSeconds, 0f, 1f);
+				ext = Mathf.Lerp(ext0, 1f, Mathf.Clamp(lashU / 0.25f, 0f, 1f));
+				WhipStroke.Lay(lashU, Whip, front);
+				for (int i = 0; i < Samples; i++)
+					theta[i] = theta0[i] + (sweep - theta0[i]) * front[i];
+				WhipStroke.Loop(lashU, Whip, out loopAt, out float size);
+				loopRadius = snagged ? 0f : size * LoopRadiusMax();
 				break;
+			}
 			case Stage.Hold:
-				angle = startAngle + side * (snagged ? snagProgress : sweep);
-				len = length;
-				curl = 0.06f * MathF.Sin(age * 40f);
-				waveAmp = 0.05f;
+			{
+				float h = Mathf.Clamp(stageAge / HoldSeconds, 0f, 1f);
+				if (snagged)
+				{
+					// Caught: held taut where it stopped, a shiver of tension running back from the snag.
+					for (int i = 0; i < Samples; i++)
+					{
+						float s = i / (float)(Samples - 1);
+						theta[i] = held[i] - 0.025f * s * (0.5f + 0.5f * MathF.Sin(age * 40f));
+					}
+					ext = heldExt;
+					loopAt = heldLoopAt;
+					loopRadius = heldLoopRadius * (1f - h);
+				}
+				else
+				{
+					// Spent: the vine goes slack back over the ground it cut and springs back a little, a ripple
+					// running up it from the tip - never past where it landed.
+					float sag = 0.16f * Smooth(h * 2.2f) * (1f - 0.4f * h);
+					for (int i = 0; i < Samples; i++)
+					{
+						float s = i / (float)(Samples - 1);
+						float ripple = 0.07f * (1f - h) * s * MathF.Abs(MathF.Sin(Mathf.Tau * (s * 1.3f - h * 2.4f)));
+						theta[i] = MathF.Min(held[i], sweep - sag * MathF.Sin(Mathf.Pi * s) - ripple);
+					}
+					ext = heldExt * (1f - 0.07f * Smooth(h));
+					loopRadius = 0f;
+				}
 				break;
+			}
 			case Stage.Recoil:
-				// Snapback: torn off the snag and drawn back, curling against the way it is about to crack.
-				u = Smooth(stageAge / RecoilSeconds);
-				angle = startAngle - side * 0.18f * u;
-				len = length * (1f - 0.12f * u);
-				curl = -side * 0.9f * u;
-				waveAmp = 0.12f;
+			{
+				// Snapback: torn free of what it wrapped and back past where it landed, curling against the
+				// way it is about to crack.
+				float r = Smooth(stageAge / RecoilSeconds);
+				for (int i = 0; i < Samples; i++)
+				{
+					float s = i / (float)(Samples - 1);
+					theta[i] = Mathf.Lerp(held[i], -0.18f - 0.5f * s * s, r);
+				}
+				ext = Mathf.Lerp(heldExt, 0.9f, r);
+				loopRadius = 0f;
 				break;
+			}
 			default:
-				// Wither: droops, dries and is drawn back into the ground.
-				u = Smooth(stageAge / WitherSeconds);
-				angle = startAngle + side * (snagged ? snagProgress : sweep);
-				len = length * (1f - u);
-				curl = side * 0.9f * u;
-				waveAmp = 0.2f * u;
+			{
+				// Wither: held as it was left - slack, or wound round what it caught - and below, after it is
+				// laid out, drooped, dried and drawn back into the ground.
+				Array.Copy(held, theta, Samples);
+				ext = heldExt;
+				loopAt = heldLoopAt;
+				loopRadius = heldLoopRadius;
 				break;
+			}
 		}
-		poseAngle = angle;
-		poseLength = len;
-		poseCurl = curl;
-		poseWaveAmp = waveAmp;
-		poseWave = wave;
-		limb.Layout(Vector2.Zero, angle, len, curl, waveAmp, wave);
+		Wrap();
+		Lay();
+		if (stage == Stage.Wither)
+			Wilt(Smooth(stageAge / WitherSeconds));
+		// A snagged stroke cracks as the last of it goes round what it caught.
+		if (wrapS >= 0f && wrapOmega >= 1f && !cracked && breakAt > 0)
+		{
+			Vector2 end = lashPts[breakAt];
+			Vector2 round = end - wrapCentre;
+			Crack(end, round.Angle() + side * Mathf.Pi * 0.5f);
+		}
+	}
+
+	// How far the wrap has wound, following what it caught while that still stands.
+	private void Wrap()
+	{
+		if (wrapS < 0f)
+		{
+			breakAt = -1;
+			return;
+		}
+		if (snagEnemy != null && IsInstanceValid(snagEnemy) && !snagEnemy.IsDying)
+			wrapCentre = snagEnemy.GlobalPosition - GlobalPosition;
+		wrapOmega = stage == Stage.Recoil
+			? 1f - Smooth(stageAge / RecoilSeconds)
+			: Smooth((age - snagTime) / WrapSeconds);
+	}
+
+	// The wither, on the laid-out points: each turned a little further the way it was going the farther
+	// out it is (a droop), and all drawn in toward the root.
+	private void Wilt(float d)
+	{
+		float reach = MathF.Max(1f, length * heldExt);
+		float keep = 1f - d;
+		for (int p = 0; p < LashPoints; p++)
+		{
+			Vector2 at = lashPts[p];
+			float f = at.Length() / reach;
+			lashPts[p] = at.Rotated(side * 0.9f * d * f * f) * keep;
+		}
+	}
+
+	// The stroke's front at s along the vine, in radians from startAngle: WhipStroke.Front carried from the
+	// wind-up to the end of the arc, laid into theta this frame (Pose) - the samples the vine is drawn
+	// through, so the hit test (Sweep) reads exactly the line on screen.
+	private float FrontAngle(float s) => WhipStroke.Sample(theta, s);
+
+	private float LoopRadiusMax() => Mathf.Clamp(length * 0.09f, 8f, 14f);
+
+	// The pose into points: the loop spliced in (in stroke space, held behind the vine), then each point
+	// turned round the root to its angle and set out to its distance.
+	private void Lay()
+	{
+		float reach = MathF.Max(1f, length * ext);
+		if (wrapS >= 0f)
+		{
+			LayWrapped(reach);
+			return;
+		}
+		WhipStroke.Splice(theta, loopAt, loopRadius, reach, reach, true, float.MinValue, strokeSpace);
+		for (int p = 0; p < LashPoints; p++)
+			lashPts[p] = Polar(strokeSpace[p].X, strokeSpace[p].Y, reach);
+	}
+
+	private Vector2 Polar(float s, float progress, float reach)
+	{
+		float a = startAngle + side * progress;
+		return new Vector2(MathF.Cos(a), MathF.Sin(a)) * (s * reach);
+	}
+
+	// Snagged: the vine out to where it caught, as the stroke left it; from there a coil wound round what
+	// it caught, wrapOmega of the way, closing in to two thirds of WrapRadius; and then - a break the
+	// shader leaves undrawn - the rest of the vine where it trailed, pulled in toward the catch as the coil
+	// takes it. The loop's points are the coil's; the count is the same.
+	private void LayWrapped(float reach)
+	{
+		int split = Math.Min(Samples, (int)(wrapS * (Samples - 1) + 1e-4f) + 1);
+		int o = 0;
+		for (int i = 0; i < split; i++)
+			lashPts[o++] = Polar(i / (float)(Samples - 1), theta[i], reach);
+		Vector2 caught = Polar(wrapS, WhipStroke.Sample(theta, wrapS), reach);
+		lashPts[o++] = caught;
+		Vector2 rel = caught - wrapCentre;
+		float r0 = MathF.Min(rel.Length(), BodyTolerance);
+		float a0 = rel.Angle();
+		for (int k = 1; k <= CoilPoints; k++)
+		{
+			float f = wrapOmega * k / CoilPoints;
+			float a = a0 + side * Mathf.Tau * WrapTurns * f;
+			lashPts[o++] = wrapCentre + new Vector2(MathF.Cos(a), MathF.Sin(a)) * Mathf.Lerp(r0, WrapRadius * 0.67f, f);
+		}
+		breakAt = o - 1;
+		lashPts[o++] = caught;
+		float end = wrapS + (1f - wrapOmega) * (1f - wrapS);
+		for (int i = split; i < Samples; i++)
+		{
+			float s = MathF.Min(i / (float)(Samples - 1), end);
+			lashPts[o++] = Polar(s, WhipStroke.Sample(theta, s), reach);
+		}
 	}
 
 	private void CollectCandidates()
@@ -427,18 +712,16 @@ public partial class ThornVine : Node2D
 		}
 	}
 
-	// How far along the sweep `angle` is, in radians from its start, in the direction it travels.
+	// How far along the stroke `angle` is, in radians from its start, in the direction it travels.
 	private float Progress(float angle) => side * Mathf.Wrap(angle - startAngle, -Mathf.Pi, Mathf.Pi);
 
-	// Strikes, in the order the line reaches them, everything the drawn vine has swept over.
+	// Strikes, in the order the stroke reaches them, everything the vine's front has swept over: at the
+	// enemy's distance from the root, the front's angle there (FrontAngle) has passed it.
 	private void Sweep()
 	{
 		if (snagged)
 			return;
-		Vector2 tip = limb.Tip;
-		if (tip.LengthSquared() > 1f)
-			swept = MathF.Max(swept, Progress(tip.Angle()));
-		float reach = tip.Length();
+		float reach = length * ext;
 
 		while (hits < maxHits)
 		{
@@ -455,7 +738,7 @@ public partial class ThornVine : Node2D
 					continue;
 				float slack = MathF.Atan2(BodyTolerance, distance);
 				float q = Progress(offset.Angle());
-				if (q < -slack || q > swept + slack)
+				if (q < -slack || q > MathF.Min(sweep, FrontAngle(MathF.Min(1f, distance / reach))) + slack)
 					continue;
 				if (q < nextProgress)
 				{
@@ -471,9 +754,17 @@ public partial class ThornVine : Node2D
 			hits++;
 			if (hits >= maxHits)
 			{
-				// Snagged: the vine stops on the last thing it cut through.
+				// Snagged: the stroke stops dead on the last thing it cut through, and what is left of the
+				// vine past it wraps round it (THE WRAP).
+				Enemy caught = candidates[next];
 				snagged = true;
 				snagProgress = Mathf.Clamp(nextProgress, 0f, sweep);
+				snagEnemy = caught;
+				snagTime = age;
+				wrapCentre = IsInstanceValid(caught) ? caught.GlobalPosition - GlobalPosition : wrapCentre;
+				wrapS = Mathf.Clamp(wrapCentre.Length() / MathF.Max(1f, reach), 0f, 1f);
+				wrapOmega = 0f;
+				loopRadius = 0f;
 				return;
 			}
 		}
@@ -520,44 +811,175 @@ public partial class ThornVine : Node2D
 		if (stage == Stage.Done)
 			return;
 		DrawStrikes();
+		DrawCrack();
 	}
 
-	// The vine's numbers for this frame, to thorn_vine.gdshader: the pose WhipLimb was just laid out from
-	// (so the drawn tip is the tested one), how dry it is, whether its tip carries the poison, the smear of
-	// ground its tip has just swept, and the soil it tore. Scalars only; nothing allocates.
-	private void PaintVine()
+	// The vine's numbers for this frame, to thorn_vine.gdshader: the points (written in place into the lash
+	// texture), how dry it is, whether its tip carries the poison, the arc its tip has just cut, and the
+	// soil it tore. Scalars and one texture update; nothing allocates.
+	private void Paint()
 	{
 		if (vineMaterial == null || stage == Stage.Done)
 			return;
+		Span<Vector4> texels = MemoryMarshal.Cast<byte, Vector4>(lashBytes.AsSpan());
+		float minX = 0f, minY = 0f, maxX = 0f, maxY = 0f;
+		for (int x = 0; x < LashTexels; x++)
+		{
+			Vector2 a = lashPts[2 * x];
+			Vector2 b = 2 * x + 1 < LashPoints ? lashPts[2 * x + 1] : a;
+			texels[x] = new Vector4(a.X, a.Y, b.X, b.Y);
+			minX = MathF.Min(minX, MathF.Min(a.X, b.X));
+			minY = MathF.Min(minY, MathF.Min(a.Y, b.Y));
+			maxX = MathF.Max(maxX, MathF.Max(a.X, b.X));
+			maxY = MathF.Max(maxY, MathF.Max(a.Y, b.Y));
+		}
+		lashImage.SetData(LashTexels, 1, false, Image.Format.Rgbaf, lashBytes);
+		lashTexture.Update(lashImage);
+
+		// What never changes over a vine's life goes over once; the rest only when it changes - a
+		// parameter set is a call into the rendering server, and most of these hold still for a whole stage.
+		if (!painted)
+		{
+			painted = true;
+			vineMaterial.SetShaderParameter(ParamBaseWidth, baseWidth);
+			vineMaterial.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
+			vineMaterial.SetShaderParameter(ParamSeed, seed);
+			vineMaterial.SetShaderParameter(ParamClodReach, length * 0.28f);
+		}
 		float dry = stage == Stage.Wither ? Smooth(stageAge / WitherSeconds) : 0f;
-		vineMaterial.SetShaderParameter(ParamAngle, poseAngle);
-		vineMaterial.SetShaderParameter(ParamLength, poseLength);
-		vineMaterial.SetShaderParameter(ParamCurl, poseCurl);
-		vineMaterial.SetShaderParameter(ParamWaveAmp, poseWaveAmp);
-		vineMaterial.SetShaderParameter(ParamWavePhase, poseWave);
-		vineMaterial.SetShaderParameter(ParamBaseWidth, WhipLimb.SnapSize(Mathf.Clamp(length * 0.11f, 8f, 14f)));
-		vineMaterial.SetShaderParameter(ParamDry, dry);
-		vineMaterial.SetShaderParameter(ParamVenom, stage == Stage.Lash || stage == Stage.Hold ? 1f : 0f);
-		vineMaterial.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
-		vineMaterial.SetShaderParameter(ParamSeed, seed);
-		vineMaterial.SetShaderParameter(ParamTime, realAge);
-		// The whip's smear, where the tip has swept, held for a moment through the hold.
-		float smearFade = stage == Stage.Lash ? 1f : stage == Stage.Hold ? 1f - stageAge / HoldSeconds : 0f;
-		vineMaterial.SetShaderParameter(ParamSmearFade, swept > 0f ? smearFade : 0f);
-		vineMaterial.SetShaderParameter(ParamSmear, new Vector4(startAngle, side, swept, MathF.Min(poseLength, length)));
-		vineMaterial.SetShaderParameter(ParamSoil, 1f - dry);
-		vineMaterial.SetShaderParameter(ParamGrowU, stage == Stage.Grow ? Mathf.Clamp(stageAge / GrowSeconds, 0f, 1f) : -1f);
-		vineMaterial.SetShaderParameter(ParamClodReach, length * 0.28f);
+		float a0 = startAngle + side * theta[1];
+		Param(ParamRootDir, new Vector2(MathF.Cos(a0), MathF.Sin(a0)), ref lastRootDir);
+		Param(ParamBreakAt, breakAt, ref lastBreakAt);
+		Param(ParamDry, dry, ref lastDry);
+		Param(ParamVenom, stage == Stage.Lash || stage == Stage.Hold ? 1f : 0f, ref lastVenom);
+
+		// The arc the tip cut: from where the tip was a moment ago to where it is, fading through the hold -
+		// so a sliver while the tip trails and a streak along the rim as it whips round. None on a snag:
+		// the tip never got there.
+		float fade = snagged ? 0f : stage == Stage.Lash ? 1f : stage == Stage.Hold ? 1f - stageAge / HoldSeconds : 0f;
+		float tipNow = 0f, tipThen = 0f, reach = length * ext;
+		if (fade > 0f)
+		{
+			tipNow = MathF.Max(0f, stage == Stage.Lash ? theta[Samples - 1] : sweep);
+			float u = stage == Stage.Lash ? lashU : 1f;
+			float from = theta0[Samples - 1];
+			tipThen = MathF.Max(0f, from + (sweep - from) * WhipStroke.Front(MathF.Max(0f, u - 0.18f), 1f, Whip));
+			reach = length * (stage == Stage.Lash ? ext : heldExt);
+			// The quad takes in the arc: its two ends and its middle on the rim.
+			for (int k = 0; k < 3; k++)
+			{
+				float a = startAngle + side * Mathf.Lerp(tipThen, tipNow, k * 0.5f);
+				var rim = new Vector2(MathF.Cos(a), MathF.Sin(a)) * reach;
+				minX = MathF.Min(minX, rim.X);
+				minY = MathF.Min(minY, rim.Y);
+				maxX = MathF.Max(maxX, rim.X);
+				maxY = MathF.Max(maxY, rim.Y);
+			}
+		}
+		float smearFade = tipNow > tipThen ? fade : 0f;
+		Param(ParamSmearFade, smearFade, ref lastSmearFade);
+		if (smearFade > 0f)
+		{
+			// The arc's streaks flicker on the clock; with no arc the shader never reads it.
+			vineMaterial.SetShaderParameter(ParamTime, realAge);
+			Param(ParamSmear, new Vector4(startAngle, side, tipThen, tipNow), ref lastSmear);
+			Param(ParamSmearR, reach, ref lastSmearR);
+		}
+		Param(ParamSoil, 1f - dry, ref lastSoil);
+		Param(ParamGrowU, stage == Stage.Grow ? Mathf.Clamp(stageAge / GrowSeconds, 0f, 1f) : -1f, ref lastGrowU);
+
+		// Only the ground the vine, its thorns and leaves and its arc can be on is shaded.
+		const float pad = 16f;
+		vineQuad = new Rect2(minX - pad, minY - pad, maxX - minX + pad * 2f, maxY - minY + pad * 2f);
 	}
 
-	// One quad over everything the vine can reach - its length, its thorns and its leaves - which the
-	// shader draws the vine, the smear and the soil inside and throws the rest away.
+	private void Param(StringName name, float value, ref float last)
+	{
+		if (value == last)
+			return;
+		last = value;
+		vineMaterial.SetShaderParameter(name, value);
+	}
+
+	private void Param(StringName name, int value, ref int last)
+	{
+		if (value == last)
+			return;
+		last = value;
+		vineMaterial.SetShaderParameter(name, value);
+	}
+
+	private void Param(StringName name, Vector2 value, ref Vector2 last)
+	{
+		if (value == last)
+			return;
+		last = value;
+		vineMaterial.SetShaderParameter(name, value);
+	}
+
+	private void Param(StringName name, Vector4 value, ref Vector4 last)
+	{
+		if (value == last)
+			return;
+		last = value;
+		vineMaterial.SetShaderParameter(name, value);
+	}
+
+	// The vine and the arc its tip cut, in the air: one quad over everything they can be on this frame.
 	private void DrawVine()
 	{
 		if (!launched || stage == Stage.Done)
 			return;
-		float reach = length + 16f;
-		vineLayer.DrawRect(new Rect2(-reach, -reach, reach * 2f, reach * 2f), Colors.White);
+		vineLayer.DrawRect(vineQuad, AirPass);
+	}
+
+	// The soil it tore, on the ground: one quad round the root and the clods it throws.
+	private void DrawSoil()
+	{
+		if (!launched || stage == Stage.Done)
+			return;
+		float r = baseWidth * 0.5f + 8f + length * 0.28f;
+		soilLayer.DrawRect(new Rect2(-r, -r, r * 2f, r * 2f), GroundPass);
+	}
+
+	// The crack of a stroke, where the tip landed: a white-hot snap of grass-light - a square heart and a
+	// four-armed star, the other four arms short - that shrinks over CrackFlashSeconds; a few pixels of
+	// shock opening round it; and poison thrown the way the tip was going. None of it wider than
+	// BodyTolerance, the reach the tip's hit is allowed past the vine's length.
+	private void DrawCrack()
+	{
+		if (crackTime < 0f)
+			return;
+		float since = age - crackTime;
+		if (since >= ImpactDebris.LifeSeconds)
+			return;
+		float g = WhipLimb.Grid;
+		ImpactDebris.Draw(this, crackAt, BodyTolerance, since, crackSeed, PoisonRamp, 9, Colors.White,
+			crackHeading - 1.2f, 2.4f);
+		if (since >= CrackFlashSeconds)
+			return;
+		float u = since / CrackFlashSeconds;
+		DrawRect(WhipLimb.Cell(crackAt, u < 0.35f ? 8f : 4f), u < 0.5f ? GrassCore : GrassHot);
+		float arm = MathF.Min(BodyTolerance - g, u < 0.4f ? 10f : 6f);
+		int first = (crackSeed & 1u) == 1u ? 4 : 0;
+		Color hot = u < 0.5f ? GrassCore : GrassHot;
+		for (int a = 0; a < 4; a++)
+		{
+			Vector2 dir = CrackArms[first + a];
+			for (float r = 4f; r <= arm; r += g)
+				DrawRect(WhipLimb.Cell(crackAt + dir * r, g), hot);
+			if (u < 0.5f)
+				DrawRect(WhipLimb.Cell(crackAt + CrackArms[(first + 4 + a) % 8] * 4f, g), PoisonHot);
+		}
+		float ring = Mathf.Lerp(5f, BodyTolerance - g, u);
+		Color shock = u < 0.5f ? GrassHot : GrassMid;
+		for (int a = 0; a < 8; a++)
+		{
+			if (u > 0.5f && a % 2 == 1)
+				continue;
+			float ang = crackHeading + a * Mathf.Tau / 8f + 0.39f;
+			DrawRect(WhipLimb.Cell(crackAt + new Vector2(MathF.Cos(ang), MathF.Sin(ang)) * ring, g), shock);
+		}
 	}
 
 	// A tone chosen per cell between the living one and the dried one: the wither eats the green cell by

@@ -10,18 +10,22 @@
 // from the element ramp, Bayer dithering the only gradient, as in riptide_wave.gdshader.
 //
 // THE BAND IS THE HIT. While the lash sweeps, the node lays it on exactly the curve the hit test
-// sweeps (Stormsweep.PassAcross, repeated below as pass_across), and the smear behind it is the band
-// between where the lash is and where it was - the ground just struck. Nothing is drawn outside the
-// band and its body allowance.
+// sweeps (Stormsweep.BandAcross: WhipStroke.Front, repeated below as front), and the smear behind it is
+// the band between where the lash is and where it was - the ground just struck. Nothing is drawn outside
+// the band and its body allowance.
+//
+// THE WHIP CRACK (2026-10-31). The lash now carries a loop where its bend is (WhipStroke.Splice), so a
+// point's place along the lash is measured by how much lash lies between it and the hand, not by its
+// index: the loop's points would otherwise take a third of the taper.
 //
 // THE LASHES ARRIVE AS A TEXTURE (Stormsweep, "THE LASHES GO TO THE GPU AS A TEXTURE"): one row of
 // four-float texels per lash, row = the index in the quad's UV.x:
-//   texels 0-8  its 17 points, node-local, hand first, two to a texel (xy, zw)
-//   texel 9     shape: x the half width at the hand, y at the tip, z heat (1 white-hot .. 0 cooled)
-//   texel 10    frame: xy the arc's direction (unit, node-local), z its reach, w its half band
-//   texel 11    smear, the swept ground behind the lash: x the across position of the pass's
+//   texels 0-15 its 31 points (WhipStroke.Points), node-local, hand first, two to a texel (xy, zw)
+//   texel 16    shape: x the half width at the hand, y at the tip, z heat (1 white-hot .. 0 cooled)
+//   texel 17    frame: xy the arc's direction (unit, node-local), z its reach, w its half band
+//   texel 18    smear, the swept ground behind the lash: x the across position of the pass's
 //               starting edge, y the pass's progress at the head (the lash), z at the tail, w strength
-//   texel 12    fx: x dissolve 0..1, y the crack's white heat on the tip 0..1
+//   texel 19    fx: x dissolve 0..1, y the crack's white heat on the tip 0..1
 shader_type canvas_item;
 render_mode unshaded;
 
@@ -40,10 +44,12 @@ uniform vec4 spark_hot : source_color = vec4(1.0, 0.973, 0.690, 1.0);
 uniform vec4 spark_mid : source_color = vec4(1.0, 0.941, 0.416, 1.0);
 // A legendary roll's gold, multiplied over every colour (Player.GetSpellVisualTint).
 uniform vec4 tint : source_color = vec4(1.0);
+// The whip's shape (Stormsweep.Whip, a WhipStroke.Shape): lag, hand end, wave start, bend.
+uniform vec4 whip = vec4(1.0, 0.35, 0.05, 0.3);
 
 const int MAX_DRAWN = 16;
-const int PTS = 17;
-const int POINT_TEXELS = 9;
+const int PTS = 31;
+const int POINT_TEXELS = 16;
 const float GRID = 2.0;
 const vec3 OCC = vec3(0.020, 0.027, 0.047);          // #05070C
 
@@ -77,11 +83,18 @@ float smooth01(float x) {
 	return x * x * (3.0 - 2.0 * x);
 }
 
-// Stormsweep.PassAcross: where a pass's arc lies across the band at fraction s along it, c of the way
-// through the pass. The far end leads.
+// WhipStroke.Front: how far across the stroke the lash is at s along it, u of the way through.
+float front(float u, float s) {
+	float hand = smooth01(u / whip.y);
+	float bend = pow(clamp((u - whip.z) / (1.0 - whip.z), 0.0, 1.0), 1.4);
+	float x = clamp((s - bend) / whip.w, 0.0, 1.0);
+	return max(0.0, hand - whip.x * (1.0 - (1.0 - x) * (1.0 - x)));
+}
+
+// Stormsweep.BandAcross: where a pass's lash lies across the band at fraction s along it, c of the way
+// through the pass. The hand's end leads.
 float pass_across(float from, float c, float s) {
-	float lead = smooth01(c * 1.35 - (1.0 - s) * 0.35);
-	return from - 2.0 * from * lead;
+	return from - 2.0 * from * front(c, s);
 }
 
 void fragment() {
@@ -90,7 +103,7 @@ void fragment() {
 	vec2 centre = cell * GRID + GRID * 0.5;
 	vec2 p = inverse(mat2(axis_x, axis_y)) * (centre - origin);
 	float b = bayer4(cell);
-	vec2 pts[17];
+	vec2 pts[31];
 	for (int x = 0; x < POINT_TEXELS; x++) {
 		vec4 t = texelFetch(lash_data, ivec2(x, me), 0);
 		pts[2 * x] = t.xy;
@@ -103,10 +116,9 @@ void fragment() {
 	vec4 f = texelFetch(lash_data, ivec2(POINT_TEXELS + 3, me), 0);
 	float flicker = floor(time / 0.035);
 
-	// The nearest point of the lash: how far off it this cell is, how far along it (0 hand, 1 tip),
-	// and how many px of lash lie between it and the hand.
+	// The nearest point of the lash: how far off it this cell is, how many px of lash lie between it
+	// and the hand, and so how far along it (0 hand, 1 tip).
 	float best = 1e6;
-	float best_t = 0.0;
 	float best_run = 0.0;
 	float run = 0.0;
 	for (int j = 0; j < PTS - 1; j++) {
@@ -118,11 +130,11 @@ void fragment() {
 		float seg = sqrt(len2);
 		if (d < best) {
 			best = d;
-			best_t = (float(j) + u) / float(PTS - 1);
 			best_run = run + seg * u;
 		}
 		run += seg;
 	}
+	float best_t = best_run / max(run, 1.0);
 	// Thick at the hand, thinning fast into a long lash, one art pixel at the tip.
 	float w = sh.y + (sh.x - sh.y) * pow(1.0 - best_t, 1.4);
 

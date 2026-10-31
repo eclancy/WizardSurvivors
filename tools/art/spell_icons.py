@@ -618,15 +618,18 @@ def _over(c, k):
 
 
 def stormsweep(sky=True):
-    """An arc of storm-light swept round a glowing sigil, over a patch of storm sky.
+    """A whip of storm-light cracking beside a glowing sigil, over a patch of storm sky (2026-10-31).
 
-    The spell is a band beside the caster swept by lightning, so the icon is the sweep itself: a jagged
-    arc of lightning a quarter-turn round the caster's sigil at the lower left, with two fainter arcs
-    inside it - the afterglow of where it has already passed - and a discharge at its far end. Lightning
-    is pale yellow, and on the level-up card's cream page a yellow arc vanishes (the lesson Starfall's
-    icon learned), so it is drawn on a disc of night in violet's deep and shade. `sky=False` leaves the
-    night off (tools/art/evolution_icons.py lays its own).
+    It was a jagged arc swept a quarter-turn round the sigil, two afterglow arcs inside it: a sweep, and
+    "the electric whip spell should look more like a whip crack." Now it is the stroke the game draws
+    (scripts/Stormsweep.cs, WhipStroke): out of the caster's hand at the lower left the lash lies low,
+    steps up through a LOOP to the far part still lying high, and the far end snaps down and CRACKS - a
+    white-hot star with sparks, speed lines beside the snap - while streaks of the band it has just swept
+    hang under it. Lightning is pale yellow, and on the level-up card's cream page a yellow stroke
+    vanishes (the lesson Starfall's icon learned), so it is drawn on a disc of night in violet's deep and
+    shade. `sky=False` leaves the night off (tools/art/evolution_icons.py lays its own).
     """
+    import spell_icons_core as sc
     c = raster.Canvas(CELL, CELL, None)
     core, hot, mid, edge = bl.ELEMENTS["lightning"]
     if sky:
@@ -635,44 +638,43 @@ def stormsweep(sky=True):
         c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
         c.disc(15.5, 15.5, 14.0, 14.0, sky_deep)
 
-    # The pivot: the caster's sigil, low on the left.
+    # The pivot: the caster's sigil, low on the left (the Thunderclap card turns copies about it).
     px, py = 7.0, 24.0
+    tip = (26.0, 20.5)
 
-    def arc(radius, a0, a1, n, jag):
-        pts = []
-        for i in range(n + 1):
-            t = i / float(n)
-            a = a0 + (a1 - a0) * t
-            r = radius + ((jag if i % 2 else -jag) if 0 < i < n else 0.0)
-            pts.append((px + math.cos(a) * r, py + math.sin(a) * r))
-        return pts
+    # The band just swept, under the high far part of the lash: streaks of it, broken.
+    for x in range(18, 26, 2):
+        for y in range(12, 20):
+            if (x * 3 + y) % 5 < 2:
+                c.set(x, y, edge if y > 16 else mid)
 
-    a0, a1 = math.radians(-100.0), math.radians(-8.0)
-    # The afterglow: two fainter arcs inside the swept quarter, broken into every other step.
-    for radius, tone in ((11.0, edge), (15.5, mid)):
-        pts = arc(radius, a0 + 0.15, a1 - 0.05, 14, 0.0)
-        for i in range(0, len(pts) - 1, 2):
-            c.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], tone)
-    # The arc: a glow a pixel outside it, a hot body, a white-hot core.
-    main = arc(20.0, a0, a1, 18, 1.0)
-    for i in range(len(main) - 1):
-        (x0, y0), (x1, y1) = main[i], main[i + 1]
-        c.line(x0 + 1, y0, x1 + 1, y1, edge)
-        c.line(x0, y0 - 1, x1, y1 - 1, edge)
-    for i in range(len(main) - 1):
-        (x0, y0), (x1, y1) = main[i], main[i + 1]
-        c.line(x0, y0, x1, y1, hot)
-    for i in range(2, len(main) - 3):
-        (x0, y0), (x1, y1) = main[i], main[i + 1]
-        c.line(x0, y0, x1, y1, core)
+    # The snap: a speed line beside the far end's drop, the way it went.
+    for y in range(9, 18):
+        if y % 3 != 2:
+            c.set(28, y, hot if y < 13 else mid)
 
-    # The discharge at the far end: four arms and a white heart.
-    tx, ty = int(round(main[-1][0])), int(round(main[-1][1]))
+    # The lash: a glow of the edge tone thrown down and right of it, then a hot body with a white-hot
+    # core, two pixels at the hand and one for the rest.
+    path = sc._lash_path((9.5, 22.0), (12.5, 22.5), (14.0, 19.5), (15.5, 7.5), (27.5, 5.0), tip, 3.4, +1)
+    glow = [(x + 1.0, y + 1.0) for (x, y) in path]
+    sc._stamp_lash(c, glow, 2.2, 1.0, lambda t, ox, oy: edge, outline=None)
+
+    def tone(t, ox, oy):
+        return core if abs(ox) + abs(oy) < 0.6 or t > 0.88 else hot
+
+    sc._stamp_lash(c, path, 2.2, 1.0, tone, outline=None)
+
+    # The crack at the far end: four arms, a white heart, the diagonals short, sparks thrown on.
+    tx, ty = int(round(tip[0])), int(round(tip[1]))
     for d in range(1, 4):
-        tone = core if d == 1 else (hot if d == 2 else mid)
+        t_ = core if d == 1 else (hot if d == 2 else mid)
         for (dx, dy) in ((d, 0), (-d, 0), (0, d), (0, -d)):
-            c.set(tx + dx, ty + dy, tone)
+            c.set(tx + dx, ty + dy, t_)
+    for (dx, dy) in ((1, 1), (-1, -1), (1, -1), (-1, 1)):
+        c.set(tx + dx, ty + dy, hot)
     c.set(tx, ty, core)
+    for (dx, dy, t_) in ((4, 3, mid), (-3, 4, hot), (2, 5, mid), (5, 0, hot)):
+        c.set(tx + dx, ty + dy, t_)
 
     # The sigil: a ring of the edge tone, a hot heart, four points - the hand the storm leaves.
     c.ring(px, py, 3.2, 3.2, mid)

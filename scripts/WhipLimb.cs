@@ -4,8 +4,9 @@ using System;
 namespace WizardSurvivors.scripts;
 
 /// <summary>
-/// One whip-like limb - a tentacle (BlackTentacles) or a thorned vine (ThornVine) - laid out along a
-/// heading that bends as it goes, and drawn as chunky pixel art.
+/// One whip-like limb - a tentacle (BlackTentacles) - laid out along a heading that bends as it goes,
+/// and drawn as chunky pixel art. Thorned Vine was laid out here too until it became a whip stroke
+/// (WhipStroke, 2026-10-31); it still uses the grid helpers (Grid, Cell, SnapSize).
 /// </summary>
 /// <remarks>
 /// <para><b>Layout.</b> The limb is integrated from its root: each segment turns a little further
