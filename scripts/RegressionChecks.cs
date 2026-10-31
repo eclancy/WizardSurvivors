@@ -1382,7 +1382,37 @@ public static class RegressionChecks
 				warnings.Add($"Ground: tree or bush '{s.Id}' has its ground line or trunk column outside its picture.");
 			if ((s.Kind == "tree") != (s.Trunk > 0))
 				warnings.Add($"Ground: '{s.Id}' is a {s.Kind} with a trunk of {s.Trunk} px: trees block at the trunk, bushes never.");
+			// Nothing cut off by its own box (0.9.3: "the art for the bushes and scorched sands all
+			// looked like the art got cut off due to box boundaries"). trees.py fits every canvas to its
+			// art with a clear pixel all round, so a twig, leaf or shade pool on the border is one a
+			// generator drew past its canvas and lost. tools/art/clip_check.py checks every set of
+			// world art; this holds the reported one in every run.
+			int cut = s.Texture == null ? 0 : OpaqueBorderPixels(s.Texture);
+			if (cut > 0)
+				warnings.Add($"Ground: tree or bush '{s.Id}' has {cut} opaque pixels on its border: its art runs past its box and is cut off there. Re-run: python tools/art/trees.py, then python tools/art/clip_check.py.");
 		}
+	}
+
+	/// <summary>How many pixels of a texture's outermost rows and columns are not transparent.</summary>
+	private static int OpaqueBorderPixels(Texture2D texture)
+	{
+		Image image = texture.GetImage();
+		if (image == null)
+			return 0;
+		if (image.IsCompressed())
+			image.Decompress();
+		int w = image.GetWidth(), h = image.GetHeight(), count = 0;
+		for (int x = 0; x < w; x++)
+		{
+			if (image.GetPixel(x, 0).A > 0f) count++;
+			if (h > 1 && image.GetPixel(x, h - 1).A > 0f) count++;
+		}
+		for (int y = 1; y < h - 1; y++)
+		{
+			if (image.GetPixel(0, y).A > 0f) count++;
+			if (w > 1 && image.GetPixel(w - 1, y).A > 0f) count++;
+		}
+		return count;
 	}
 
 	// The flower pen's fence in the navigation (.ai/terrain.md section 8). The fence used to stop
