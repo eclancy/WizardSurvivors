@@ -233,12 +233,123 @@ def side_caps(c, s, v, grow):
     for side in (-1, 1):
         bx = s.cx + side * (s.hw + 9)
         h = int(4 + 4 * grow)
+        if s.titan:
+            # Seen from above as the titan is: a short stem under a foreshortened cap.
+            rx = 4.5 * grow + 1
+            stem(c, int(bx), s.base, s.base - 4, 1.5)
+            cap_top(c, bx, s.base - 5 - rx * TOP_SQUASH, rx, rx * TOP_SQUASH, 1, v, spots=[(-0.2, -0.3, 0.7)])
+            continue
         stem(c, int(bx), s.base, s.base - h, 1.5)
         cap(c, bx, s.base - h - 1, 4.5 * grow + 1, 3.2 * grow + 1, v, spots=[(-0.2, -0.3, 0.7)])
 
 
+# --- the Doomcap, seen from above (2026-10-31) -----------------------------------------------
+# Eric: "doomcap should draw the mushroom sprite at an angle, it is odd to see something so large from
+# the side like that." A small cap drawn side-on reads as a mushroom; one the width of a pack, drawn the
+# same way, read as a cut-out stood on its edge. The titan is drawn in the game's own three-quarter view
+# instead: the cap's top as a foreshortened dome (TOP_SQUASH of its width), lit from the upper left, its
+# spots spread over the whole top; its thickness showing only at its front edge, with a sliver of the
+# glowing gills under that; a short stem below; and a shadow dithered on the ground under it all. The
+# small caps and Giant Caps keep their side view: Doomcap replaces the scatter and wins over Giant Caps,
+# so the two views are never on the ground together.
+
+TOP_SQUASH = 0.62
+TITAN_TOP_SPOTS = [(-0.5, -0.42, 2.4), (0.12, -0.6, 2.0), (0.52, -0.2, 2.2), (-0.12, 0.02, 1.8),
+                   (0.36, 0.34, 1.5), (-0.56, 0.28, 1.4), (0.74, 0.12, 1.1), (-0.26, -0.78, 1.2),
+                   (0.08, 0.58, 1.3)]
+
+
+def titan_layout(s, scale, swell=1.0, dx=0):
+    """Where the titan's parts go at `scale` of full size: the cap's centre and radii, its thickness,
+    the row its front rim comes down to, and the cap's centre x."""
+    rx = max(2.5, s.rx * scale * swell)
+    ry = rx * TOP_SQUASH
+    t = max(1, int(round(4 * scale * swell)))
+    rim = s.base - max(2, int(round(7 * scale)))
+    cy = rim - t - ry
+    return s.cx + dx, cy, rx, ry, t, rim
+
+
+def cap_top(c, cx, cy, rx, ry, t, v, glow=0.0, spots=(), cracks=0):
+    """A cap seen from above and in front: its side `t` px deep at the front, the gills a sliver
+    under that, and the dome's top over both. Every tone a stop of the element ramp, blended by dither."""
+    ramp = v["cap"]
+    under = v["under"]
+
+    def inside(x, y, ox, oy, ax, ay):
+        nx = (x + 0.5 - ox) / ax
+        ny = (y + 0.5 - oy) / ay
+        return nx * nx + ny * ny <= 1.0
+
+    x0, x1 = int(cx - rx) - 1, int(cx + rx) + 2
+    # The gills: under the front of the cap, glowing as the cap swells.
+    for y in range(int(cy), int(cy + ry + t) + 3):
+        for x in range(x0, x1):
+            if inside(x, y, cx, cy + t + 1, rx * 0.9, ry) and not inside(x, y, cx, cy + t, rx, ry):
+                lit = (x - int(cx)) % 2 == 0 and glow > 0.2 and abs(x - cx) < rx * 0.6
+                c.set(x, y, (ramp[1] if glow < 0.6 else ramp[0]) if lit else under[1])
+    # The cap's side, seen at its front edge.
+    for y in range(int(cy), int(cy + ry + t) + 2):
+        for x in range(x0, x1):
+            if inside(x, y, cx, cy + t, rx, ry) and not inside(x, y, cx, cy, rx, ry):
+                # A stop darker than the top's rim, so the edge between the top and the side reads.
+                lower = not inside(x, y + 1, cx, cy + t, rx, ry)
+                c.set(x, y, under[1] if lower else under[0])
+    # The top: lit from the upper left, the rim a band of the ramp's edge.
+    hx, hy = cx - rx * 0.36, cy - ry * 0.42
+    body = [ramp[1], ramp[2], ramp[2], ramp[3]]
+    for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
+        for x in range(x0, x1):
+            nx = (x + 0.5 - cx) / rx
+            ny = (y + 0.5 - cy) / ry
+            e = nx * nx + ny * ny
+            if e > 1.0:
+                continue
+            d = math.sqrt(((x - hx) / (rx * 1.25)) ** 2 + ((y - hy) / (ry * 1.25)) ** 2)
+            k = min(0.999, d) * (len(body) - 1)
+            i = int(k)
+            tone = body[i + 1] if (k - i) > dither(x, y) else body[i]
+            if e > 0.84:
+                tone = ramp[3]
+            c.set(x, y, tone)
+    # Spots over the whole top, foreshortened with it.
+    for (sx, sy, sr) in spots:
+        px, py = cx + sx * rx * 0.82, cy + sy * ry * 0.82
+        r = sr * (1.0 + glow * 0.5)
+        c.disc(px, py, r + 0.6, (r + 0.4) * TOP_SQUASH + 0.4, ramp[1])
+        c.disc(px, py, max(0.6, r * 0.6), max(0.6, r * 0.5 * TOP_SQUASH + 0.2), ramp[0])
+    # The warning: light splitting the top from the middle out.
+    for k in range(cracks):
+        a = TAU * (0.12 + k / float(max(1, cracks)))
+        for st in range(int(rx * 0.92)):
+            c.set(cx + math.cos(a) * st, cy + math.sin(a) * st * TOP_SQUASH, ramp[0])
+
+
+def ground_shadow(c, cx, base, rx, ry):
+    """The cap's shadow on the ground under it: occlusion, dithered to half, an ellipse at the foot."""
+    for y in range(int(base - ry) - 1, int(base + ry) + 2):
+        for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+            nx = (x + 0.5 - cx) / rx
+            ny = (y + 0.5 - base) / ry
+            # Only on bare ground: never over the roots and side caps drawn before it.
+            if nx * nx + ny * ny <= 1.0 and dither(x, y) < 0.5 and 0 <= y < c.h and 0 <= x < c.w \
+                    and not c.get(x, y)[3]:
+                c.set(x, y, OCC)
+
+
+def grown_titan(c, s, v, scale, glow=0.0, spots=True, cracks=0, dx=0, swell=1.0):
+    cx, cy, rx, ry, t, rim = titan_layout(s, scale, swell, dx)
+    ground_shadow(c, cx, s.base - 1, rx * 0.9, max(1.5, 4.0 * scale))
+    hw = max(1.0, s.hw * (0.45 + 0.55 * scale))
+    stem(c, cx, s.base, rim - 2, hw)
+    cap_top(c, cx, cy, rx, ry, t, v, glow=glow, spots=TITAN_TOP_SPOTS if spots else (), cracks=cracks)
+    return cx, cy, rx, ry
+
+
 def grown(c, s, v, scale, glow=0.0, spots=True, cracks=0, dx=0, swell=1.0):
     """The mushroom at `scale` of full size, standing on the cell's floor; `swell` inflates the cap."""
+    if s.titan:
+        return grown_titan(c, s, v, scale, glow=glow, spots=spots, cracks=cracks, dx=dx, swell=swell)
     h = max(2, s.stem_h * scale)
     hw = max(1.0, s.hw * (0.45 + 0.55 * scale))
     top = s.base - h
@@ -307,8 +418,11 @@ def burst_frame(s, v, i):
     cy = full_top - s.ry * 0.25
     if s.titan:
         roots(c, s, 12 - i)
+        # Seen from above: the flash and the spores where the cap was, over the short stem it tore off.
+        _cx, cy, _rx, _ry, _t, rim = titan_layout(s, 1.0)
+        full_top = rim - 2
     # What is left standing: a torn stem that withers back into the ground.
-    stem_top = [full_top, full_top + 1, full_top + 3, s.base - s.stem_h * 0.45, s.base - 3][i]
+    stem_top = [full_top, full_top + 1, full_top + 3, s.base - (s.base - full_top) * 0.45, s.base - 3][i]
     if i < 4:
         stem(c, s.cx, s.base, stem_top, s.hw * (1.0 - 0.12 * i), torn=True, under=v["under"])
     else:
