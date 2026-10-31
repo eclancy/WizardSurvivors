@@ -345,7 +345,9 @@ def pawprints(k):
         for (dx, dy) in ((2, 0), (2, 3), (3, 1), (3, 2)):
             c.set(x + dx, y + dy, OCC)
         c.set(x - 1, y + 1, GO[3])
-    steps = ((2, 2), (9, 6), (16, 1), (23, 5)) if k == 0 else ((3, 5), (11, 1), (19, 6), (26, 2))
+    # The second trail a pixel left of where it was: its last print ended on the canvas's last column
+    # (tools/art/clip_check.py).
+    steps = ((2, 2), (9, 6), (16, 1), (23, 5)) if k == 0 else ((2, 5), (10, 1), (18, 6), (25, 2))
     for (x, y) in steps:
         paw(x, y)
     return c
