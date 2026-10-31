@@ -1437,6 +1437,10 @@ public partial class _UiShot : Node
 			}
 			else if (arg == "--cover-mortal")
 				coverMortal = true;
+			// --area=X: the player's Area multiplied by X with the demo state - every Area boon, relic and
+			// shop level stacked at once, for a spell's worst case (Tidal Wall's ceiling, 2026-10-31).
+			else if (arg.StartsWith("--area="))
+				demoArea = float.Parse(arg.Substring("--area=".Length), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--stage-mortal")
 				stageMortal = true;
 			else if (arg.StartsWith("--demo-evolutions="))
@@ -2697,6 +2701,12 @@ public partial class _UiShot : Node
 					demo.CurrentLevel = demoPlayerLevel;
 				if (demoSpellLevel > 0)
 					demo.GetEquippedSpells()[0].CurrentLevel = demoSpellLevel;
+				if (demoArea > 0f && typeof(Player).GetField("areaMultiplier",
+						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) is { } areaField)
+				{
+					areaField.SetValue(demo, (float)areaField.GetValue(demo) * demoArea);
+					GD.Print($"_UiShot: player Area x{areaField.GetValue(demo)}");
+				}
 				ApplyDemoEvolutions(demo, demo.GetEquippedSpells()[0]);
 				foreach (string id in demoSpells)
 					if (!demo.TryAddOrLevelSpell(id.Trim()))
@@ -3389,6 +3399,7 @@ public partial class _UiShot : Node
 	// so a world node mistaken for a spell shows up at once.
 	private bool cover;
 	private bool coverMortal;
+	private float demoArea;
 	private int coverPhase;
 	private Image coverA;
 	private readonly System.Collections.Generic.List<CanvasItem> coverHidden = new();
