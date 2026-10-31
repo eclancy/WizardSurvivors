@@ -80,6 +80,11 @@ campaign order) and what the place holds.
 - **Not built yet** (`IsPlayable = false`; none today, both Phase 2 chapters shipped): the same fog,
   thicker, and the card's line is *"Not yet open - this chapter is still being built"*. It is part of
   the drawn world like everything else.
+- **Until it is drawn** (2026-10-30, the castle's plumbing, `.ai/endgame-castle.md` 11.4): an unbuilt
+  chapter may have no place in `PLACES` yet - the castle's three wait on piece C8. It is then left off
+  the screen quietly, "Chapter N of M" counts only the chapters shown, and `ValidateWorldMap` lists the
+  missing place on the chapter's campaign to-do line instead of as a fault. A **playable** chapter with
+  no place is still a fault, so nothing flips undrawn.
 
 ## 3. The route, the wizard and the camera
 

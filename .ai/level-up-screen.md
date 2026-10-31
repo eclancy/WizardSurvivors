@@ -692,7 +692,10 @@ and **Arcane Upgrades** was the Arcane Codex. The words live once, in `CodexRows
 so the main menu and the pause tabs cannot drift apart. Internal names - the panels
 (`SpellbookPanel`, `AchievementsPanel`), the lists, `BuildDeedRow`, achievement ids and every save
 key - kept the old words on purpose: the save is persisted and the rest was not worth the churn.
-The history below is written in the names the screens had at the time.
+The history below is written in the names the screens had at the time. **Unlocks is
+Achievements since 2026-10-30** (Eric's decision; `UnlocksTitle` keeps its name and holds the new
+word): one page built by `AchievementsPage` for the menu panel and the pause tab, with secrets on it,
+described in `.ai/achievements-and-secrets.md` section 4.
 
 Each list carries a one-line subtitle under its heading, in the panel's soft ink, saying what
 kind of page it is before the counts do ("Every spell, and how to find the ones you have not.";
@@ -899,13 +902,17 @@ a PC plate (6.9:1 against 3:1 at 24px).
 
 ## 4f. Arcane Upgrades: the shop is the same book
 
-**Two menus since 2026-10-28.** Eric: "let's separate powers (passive buffs we can buy) in a
-different menu from the other unlockables we can buy." The main menu's shop column holds two buttons
-over the purse they both spend: **Powers** (the scene's `ArcaneUpgradesButton`, relabelled, so
-`--press-late=ArcaneUpgradesButton` still opens it) - the stat upgrades, by section - and **Spells &
-Boons** (`SpellsBoonsButton`) - the one-off unlocks. One panel, one `BuildShop`; `shopMode` decides
-which sections it builds, the heading and the intro line. Everything below about cards, plates and
-the purse holds for both.
+**One menu, Powers, since 2026-10-30.** The shop sells no spells: every spell that is not a starter
+is earned through an achievement (`.ai/achievements-and-secrets.md` 2.4, decision 2). For two days
+(from 2026-10-28, Eric: "let's separate powers (passive buffs we can buy) in a different menu from
+the other unlockables we can buy") the shop was two menus, Powers and **Spells & Boons**; with the
+spells gone the second held three boons, so they were folded into Powers as its **last section,
+Boons**, and its button left the title menu (decision 5). The main menu's shop column holds one
+button over the purse again: **Powers** (the scene's `ArcaneUpgradesButton`, relabelled, so
+`--press-late=ArcaneUpgradesButton` still opens it), beside Achievements (`UnlocksButton`), half the
+row each. Every card in
+the shop is a stat or a boon. A spell anybody bought stays bought (`UnlockedSpellIds`; schema 19 takes
+nothing away), and no price moved.
 
 From the player: "arcane upgrade menu is unreadable. rebuild the whole menu making it legible,
 seperating all of the spells more and theming it like the game for upgrades. including animations,
@@ -922,10 +929,10 @@ a run, so it wears the same family (section 2c):
 
 | Entry | Object | What is on it |
 |---|---|---|
-| **Spell for sale** | the new spell's torn page (`ui-spell-page`) | the spell's own icon bare on the page, name, what it does, its element chips (tap to read, not focus stops), the price |
 | **Permanent upgrade** | the rubricated upgrade page | its icon in an **arcane socket**, name, the stat now **→ next level** in the rubric, what one level gives, the level pips, the price |
 | **Mastered** (an upgrade at its last level) | the same page **gilded** (`ui-spell-page-mastered`: old-gold outer rule, gold-leaf inner) | the **gold seal** in the top right, every pip full, "✓ Mastered" where the price was, no "→ next" |
-| **Owned** (a spell already bought) | the new spell's page | "✓ Owned" where the price was |
+| **Boon for sale** | the new spell's torn page (`ui-spell-page`), which spells for sale wore until schema 19 | the boon's own icon bare on the page, name, what it does led by its stat glyph, its flavour in the softer ink, its element chips (tap to read, not focus stops), the price over "Unlock" |
+| **Owned** (a boon already bought) | the same page | "✓ Owned" where the price was |
 | **Not open yet** (Redaction on a book under 13 spells) | the upgrade page | "Opens at 13 spells" and a lock where the price was |
 
 Red says "this can still be improved"; gold says it is finished. The seal is not the mutation's wax
@@ -934,11 +941,13 @@ seal: that is red wax and means ceremony in a run; this is a gold rosette and me
 **Layout.** The heading is the level-up screen's band (stone deep, gold rule) with the **purse on
 its right**: the energy orb at x4, the amount at the Title size in the prose face, "Arcane Energy"
 under it. It stays in view while the list scrolls. Then one line of intro, and **sections**,
-CodexRows' heading with a tally ("1 of 7 mastered", "1 of 5 owned") and one line of note: **New
-spells** first while any is for sale, last once all are owned; then **Power**, **Survival**,
-**Fortune** and **Level-ups**. An upgrade the code registers but no section names still gets a card,
-in a last "More" section, with a warning (`UpgradeSections`). One column on a phone, two on a PC
-(`CodexRows.ColumnsFor`), and the panel takes the codex lists' 1200-unit column.
+CodexRows' heading with a tally ("1 of 7 mastered", "1 of 3 owned") and one line of note: **Power**,
+**Survival**, **Fortune** and **Level-ups**, then **Boons**, last whether or not one is left to buy -
+a section that moved when its last card was bought would take the selection with it. (While the shop
+sold spells their section led until all were owned.) An upgrade the code registers but no section
+names still gets a card, in a "More" section before the boons, with a warning (`UpgradeSections`).
+One column on a phone, two on a PC (`CodexRows.ColumnsFor`), and the panel takes the codex lists'
+1200-unit column.
 
 A card reads top to bottom: name (Title, the strongest ink), stat line (Body, its glyph, "Spell
 damage x1.24 → x1.32"), "Each level: ..." (Label), then the foot: the pips over "Level 3/8" on the
@@ -950,7 +959,7 @@ not obvious:
 - **The price is in the foot on both canvases.** On a PC it was first a column of its own at the
   card's right, to save the foot row's height on a 720-tall canvas. That cost the words their width:
   half the stat lines and every spell description wrapped, and the cards came out taller than the
-  foot row had made them. Spell descriptions are the Label size for the same reason.
+  foot row had made them. A boon's description is the Label size for the same reason.
 - **The pips sit over "Level 3/8", not beside it.** The plate makes the foot 74 tall either way.
   Side by side, a ten-pip track, the words and the plate pushed one card's minimum width past half a
   PC panel, and the two columns came out different widths.
@@ -1016,10 +1025,14 @@ the plate in both states, the band and the stone panel - 0 below target. The wea
 section tally at 6.95:1; the weakest graphic is the pips at 3.8:1. Through `_UiShot --ink-report` on
 six photographs (top, Power, end, at both canvases): 163 labels, 0 below target. The weakest is the
 shared Earth element chip at 4.5:1; the weakest shop ink is "Locked" at 5.8:1.
+With the boons folded in (2026-10-30), no ink is new: `ui_contrast.py` 0 of 299 below target, and
+`--ink-report` on the top, the Boons heading, the foot and a boon bought, at both canvases, 126
+labels, 0 below. A pad walk (`--pad=down,a,down x18,a` on the phone, the same down the left column
+on a PC) reaches the boons card by card and A buys one.
 
 **What is still for a person to judge**: the feel of the purchase on a real mouse, pad and phone.
-How a held stick paces down twenty-five cards. Whether the breathing pips on every affordable card
-are calm or busy. That a finger drag over the list scrolls it on the phone: `_TouchProbe` proves the
+How a held stick paces down twenty-one cards (eighteen upgrades and the three boons). Whether the
+breathing pips on every affordable card are calm or busy. That a finger drag over the list scrolls it on the phone: `_TouchProbe` proves the
 drag reaches the list and buys nothing, and that a tap on a plate buys, but a desktop has no
 touchscreen, so the list cannot move there.
 
@@ -1096,9 +1109,13 @@ hand of three.
   The level 4 mutation page is photographed through `_UiShot --show-mutation`, and the level 8
   Ascension page through `--show-ascension`; both reach the private page builder by reflection.
   `--open-pause` opens the in-run pause screen, and `--press-late=EscapeTabSpellIndex` (or
-  `EscapeTabUnlocks`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
+  `EscapeTabAchievements`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
   lists are `--scene=res://scenes/TitleScreen.tscn --open-menu --press-late=SpellIndexButton` (or
-  `UnlocksButton`, or `ArcaneUpgradesButton` for the shop). `--scroll=N` holds every visible list N units down (a large N is the end),
+  `UnlocksButton` - it opens Achievements, the panel's name since 2026-10-30 - or `ArcaneUpgradesButton`
+  for the shop); `--press-late=UnlocksButton,AchievementsTabSecrets` opens one of the achievements
+  tabs (`All`, `Chapters`, `Feats`, `Secrets`). `--demo-achievements` puts in a save part way along
+  the road, and `--seen-secrets=id,id` and `--found-secrets=id,id` after it fill a hidden
+  achievement's three states (`.ai/achievements-and-secrets.md` 4.3). `--scroll=N` holds every visible list N units down (a large N is the end),
   `--demo-level=N`, `--demo-spell-level=N` and `--demo-spells=id,id` put the run in a state the
   ascension browser has something to say about (pair with `--grant-boons` for tags; the forced
   level-up adds one more level, so `--demo-level=16` photographs a player at 17), a trailing `*` on
@@ -1150,8 +1167,10 @@ hand of three.
   writes disabled, so the curation controls can be photographed.
   **The shop (section 4f):** `--demo-shop` replaces the save in memory with a known one: 155
   Arcane Energy, Runes of Ruin and Vitality at their last level, Eternal Wick one affordable level
-  from its last, a spread of affordable and unaffordable rows, Molten Shard owned, Redaction not yet
-  open. `--press-late` takes a comma list, one press per warmup, so
+  from its last, a spread of affordable and unaffordable rows, all three boons affordable (110 to
+  140), Redaction not yet open (it also owns Molten Shard, from when the shop sold spells; nothing
+  shows it now). `--press-late=ArcaneUpgradesButton,Buy_boon_quicksilver_bead --scroll=99999`
+  photographs a boon bought and the other two re-priced. `--press-late` takes a comma list, one press per warmup, so
   `--press-late=ArcaneUpgradesButton,Buy_duration --frames=3 --burst=3,6` photographs a purchase
   that masters an upgrade. `--focus-late=NAME` puts the selection on a control after the presses
   (a trailing `*` matches by prefix). `--pad=right,a,down,b` sends real pad presses, one per warmup,

@@ -15,9 +15,20 @@ using WizardSurvivors.scripts;
 // Deliberately NOT an Area2D. The hit is resolved by measuring, once, against the same shape the
 // player was shown - so a hazard cannot claim a pixel it never drew, and there is no collision
 // mask to get wrong. It also means a dozen of these cost a dozen draw calls and no physics.
+//
+// What the player sees (0.9.2: no translucent build-ups): the shape at its full reach as an opaque
+// dashed outline on the floor (GroundSlamAttack.Draw, TelegraphOutline), and in its middle the glyph
+// an attacker wears over its head (TelegraphIcon) - an arrow onto the ground - filling as the hit
+// comes, blinking with the outline in the last third, flashing as it lands. The icon is on a child at
+// DrawLayers.AttackIcon, so a hit marked under the swarm is still seen coming.
 public partial class TelegraphedGroundHit : Node2D
 {
+	// The icon's art pixel in world units: an ordinary body's, not a boss's - a volley lays several.
+	private const float IconPixelScale = TelegraphIcon.MinPixelScale;
+
 	private GroundSlamAttack shape;
+	private readonly TelegraphIcon iconState = new();
+	private Node2D icon;
 	private bool resolved;
 	// Time left before the node frees itself. Set once the hit lands, long enough for the impact
 	// flash GroundSlamAttack draws to finish - freeing on the resolve frame would show no impact.
@@ -56,9 +67,22 @@ public partial class TelegraphedGroundHit : Node2D
 		return hit;
 	}
 
+	public override void _Ready()
+	{
+		icon = new Node2D { Name = "Icon", ZAsRelative = false, ZIndex = DrawLayers.AttackIcon };
+		AddChild(icon);
+		icon.Draw += PaintIcon;
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
 		QueueRedraw();
+		// Read before the shape ticks, as Enemy reads its own: the icon trails the clock by a step and
+		// never touches it.
+		bool iconWasShowing = iconState.IsShowing;
+		iconState.Tick((float)delta, shape.IsWindingUp, shape.Glyph, shape.WindUpProgress);
+		if (iconWasShowing || iconState.IsShowing)
+			icon?.QueueRedraw();
 
 		if (teardownRemaining >= 0f)
 		{
@@ -91,4 +115,8 @@ public partial class TelegraphedGroundHit : Node2D
 	}
 
 	public override void _Draw() => shape?.Draw(this);
+
+	// Centred on the spot: the icon's middle is the point the hit is measured from.
+	private void PaintIcon() =>
+		iconState.Draw(icon, new Vector2(0f, TelegraphIcon.Cell * IconPixelScale * 0.5f), IconPixelScale);
 }

@@ -126,6 +126,21 @@ public static class MusicCatalog
 	/// <summary>The Broken Circle, planned: D Dorian in 5/4. The Ruins' set until rendered.</summary>
 	public static readonly MusicSet Heath = PlannedChapter("heath", Ruins);
 
+	// THE CASTLE (.ai/endgame-castle.md, piece C7; .ai/audio-manifest.md, "The castle's music"). Planned
+	// sets with the Emberdeep's as their stand-in. All three are rendered and imported already, so each
+	// plays its own the moment its row is here. The Cursed Dungeon keeps its own set when it moves in.
+	// The Throne's is never handed over to the boss loop (the whole chapter is the fight): that is
+	// ThroneRules' to arrange, not this table's - its Boss stays the shared loop for ValidateMusic.
+
+	/// <summary>The Last Bridge: a march under wind. A Aeolian, 2/4 at 120, 24.0 s.</summary>
+	public static readonly MusicSet Bridge = PlannedChapter("bridge", Emberdeep);
+
+	/// <summary>The Court: a court dance with no dancers. An A minor minuet in 3/4 at 112, 25.7 s.</summary>
+	public static readonly MusicSet Court = PlannedChapter("court", Emberdeep);
+
+	/// <summary>The Throne: the heaviest piece. A minor with B flat and G sharp, 4/4 at 104 in half time, 27.7 s.</summary>
+	public static readonly MusicSet Throne = PlannedChapter("throne", Emberdeep);
+
 	/// <summary>
 	/// The set any chapter without its own row plays. Every chapter has one today; the fallback
 	/// stays because a chapter in the wrong key is a better failure than a chapter in silence -
@@ -147,6 +162,9 @@ public static class MusicCatalog
 		[8] = Sketchbook,
 		[9] = Fields,
 		[10] = Heath,
+		[11] = Bridge,
+		[12] = Court,
+		[13] = Throne,
 	};
 
 	private static MusicSet PlannedChapter(string id, MusicSet standIn) => new(

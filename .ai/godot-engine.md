@@ -41,12 +41,14 @@ So every world effect picks a side from `scripts/DrawLayers.cs`, with `ZAsRelati
 | `GroundTell` | -1 | warnings and marks painted round a body's feet |
 | `Bodies` | 0 | the player, enemies, familiars that walk (the dog, the cat), chests, trees: y-sorted |
 | `Air` | 6 | projectiles, blasts, swung weapons, thrown sprays, the familiar that flies (the crow, the griffin) |
+| `AttackIcon` | 12 | the icon over an enemy winding up an attack (`TelegraphIcon`, made by `Enemy` for a class that overrides `ReadAttackTell`), and in the middle of a `TelegraphedGroundHit` |
 | `FloatingText` | 20 | damage numbers |
 
 One effect is often both, and is then two nodes: `SpiritualWeapon` (weapon in the air, cracks on the
 floor), `MeteorImpact` and `CraterLayer`, `Contagion` (spores up, carriers' marks down). An enemy's
 floor tells go in `Enemy.DrawGroundTells`, which paints on a ground node made once in `_Ready`; only
-what belongs to the body (a caster's gathering mote, the Long Coil's segments) stays in `_Draw`.
+what belongs to the body (a caster's aim tick, the Long Coil's segments) stays in `_Draw`. The icon
+over a wind-up is the third node, on `AttackIcon`.
 
 To find what is drawn among the bodies: `_UiShot --layer-census` prints a `LAYER` line per drawn
 node class with its effective z and whether a y-sorted parent sorts it.

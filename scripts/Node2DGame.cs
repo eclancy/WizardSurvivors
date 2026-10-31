@@ -55,7 +55,8 @@ public partial class Node2DGame : Node2D
 	public float RunPace => TimerVictorySeconds > 0f ? TimerVictorySeconds / ReferenceRunSeconds : 1f;
 
 	/// <summary>The run clock as a position on the reference run. Every pacing check reads this, not timeElapsed.</summary>
-	public float PaceSeconds => timeElapsed / RunPace;
+	/// <remarks>Hook 6: a chapter's rules may pin it (ChapterRules.PinnedPaceSeconds - the Throne's end state).</remarks>
+	public float PaceSeconds => chapterRules?.PinnedPaceSeconds ?? timeElapsed / RunPace;
 
 	private float PaceMinutes => Mathf.Max(0.0f, PaceSeconds / 60.0f);
 	// Fallbacks only. The spawn ring is measured from the visible rectangle now (see
@@ -256,6 +257,11 @@ public partial class Node2DGame : Node2D
 	private TerrainStreamer? terrainStreamer;
 	// Read-only, for the debug harnesses (_UiShot --shore) that need to find a shoreline.
 	public TerrainStreamer? Terrain => terrainStreamer;
+	// The chapter's own rules (ChapterRules, .ai/endgame-castle.md 1.9), or null for a chapter with none -
+	// every chapter of the road. Asked at seven hook points, each marked "Hook N" where it is asked.
+	private ChapterRules? chapterRules;
+	/// <summary>This run's chapter rules, for what belongs to the chapter (its boss, its rooms); null for none.</summary>
+	public ChapterRules? Rules => chapterRules;
 	private ulong terrainSeed;
 	private StageEnvironmentKind terrainKind;
 	private IReadOnlyList<string> terrainTerrainIds = System.Array.Empty<string>();
@@ -510,6 +516,8 @@ public partial class Node2DGame : Node2D
 		bestiary = LoadBestiaryForStage();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
+		// Before anything is placed: the terrain, the side event and the secrets all ask hook 3.
+		CreateChapterRules();
 		ApplyBalancePresetFromSave();
 		// After the preset, which scales the burst window itself, so the two compose.
 		MaxEnemies = Mathf.RoundToInt(MaxEnemies * WideViewEnemyCapScale);
@@ -726,9 +734,12 @@ public partial class Node2DGame : Node2D
 		SpawnKidDog();
 		// One side event per run, on the chapters that have one (.ai/side-events.md).
 		AddChild(new SideEventDirector { Name = "SideEventDirector", Game = this });
-		// The chapter's secrets (issue #20, .ai/stage-secrets.md): the keepsake is placed and its ground
-		// reserved here, before LoadInitialTerrain furnishes the first chunks, as the event's is.
-		AddChild(new SecretDirector { Name = "SecretDirector", Game = this });
+		// The chapter's secrets (issue #20, .ai/stage-secrets.md): the keepsake and the vault are placed and
+		// their ground reserved here, before LoadInitialTerrain furnishes the first chunks, as the event's is.
+		// Assigned before it is added: placing asks about the ground, which makes chunk data, which runs
+		// PlanChunkFeatures, which asks the director for the cells its sites make solid.
+		Secrets = new SecretDirector { Name = "SecretDirector", Game = this };
+		AddChild(Secrets);
 		BuildStageHazards();
 		BuildCuratedProps();
 		// After all three: on an endless stage they only recorded what to scatter, and this is where
@@ -736,6 +747,49 @@ public partial class Node2DGame : Node2D
 		LoadInitialTerrain();
 		ShowStageIntroLabel();
 		UpdateSpawnScaling();
+		StartChapterRules();
+	}
+
+	// The chapter's rules, if it has any (ChapterRulesCatalog). A Node under the run, so it can process
+	// and is freed with it; named for the log.
+	private void CreateChapterRules()
+	{
+		StageDefinition? stage = StageCatalog.GetByIndex(Global.SelectedStageIdx);
+		Func<ChapterRules>? create = stage != null ? ChapterRulesCatalog.ForStage(stage.Id) : null;
+		if (create == null)
+			return;
+		chapterRules = create();
+		chapterRules.Name = "ChapterRules";
+		chapterRules.Game = this;
+		chapterRules.Stage = stage;
+		AddChild(chapterRules);
+		GD.Print($"Node2DGame: {stage!.DisplayName} plays by its own rules ({chapterRules.GetType().Name}).");
+	}
+
+	// Hooks 1 and 7: run start, and the objective line under the run timer.
+	private void StartChapterRules()
+	{
+		if (chapterRules == null)
+			return;
+		chapterRules.RunStarted();
+		Control? objective = chapterRules.CreateObjective();
+		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
+		if (objective == null || uiOverlay == null)
+		{
+			objective?.QueueFree();
+			return;
+		}
+		objective.Name = "ChapterObjective";
+		objective.MouseFilter = Control.MouseFilterEnum.Ignore;
+		objective.AnchorLeft = 0f;
+		objective.AnchorRight = 1f;
+		objective.OffsetLeft = 0f;
+		objective.OffsetRight = 0f;
+		objective.OffsetTop = ChapterRules.ObjectiveTop;
+		objective.OffsetBottom = ChapterRules.ObjectiveBottom;
+		uiOverlay.AddChild(objective);
+		// Added after the HUD's SafeArea.Apply, so inset on its own (the side event's line had to learn this).
+		SafeArea.ApplyTo(objective);
 	}
 
 	// THE ONLY PLACE THE PLAYER'S HEALTH IS SHOWN.
@@ -1249,10 +1303,15 @@ public partial class Node2DGame : Node2D
 		// Which water art (tools/art/water.py): a forest pond, swamp murk, the Frozen Waste's black
 		// water with an ice shelf, or a stone pool. Each chapter's profile says which.
 		levelPainter.WaterStyle = StageEnvironmentCatalog.Get(kind).WaterStyle;
+		// Which wall art the chapter's walls are drawn with: the jail set unless it has its own
+		// (StageEnvironmentProfile.WallSet, .ai/endgame-castle.md 1.9).
+		levelPainter.WallArtSet = StageEnvironmentCatalog.Get(kind).WallSet;
 		levelPainter.GroundTerrain = layout.GroundTerrain;
 		levelPainter.BaseTerrain = layout.BaseTerrain;
 
-		bool isMaze = layout.Topology == StageTopology.Maze;
+		// The maze's rules for any walled ground: the Cursed Dungeon's maze, and any topology built in a
+		// partial file of LevelGenerator's that says it has walls (LevelLayout.Walled).
+		bool isMaze = layout.Walled;
 		// THE STAGE HAS NO EDGE (issue #35). It used to be one 181x181 grid painted here, with the
 		// player clamped three tiles inside it. Now the ground is streamed in chunks round wherever
 		// the player is (TerrainStreamer, .ai/terrain.md "Chunk streaming"); nothing is painted yet,
@@ -1826,6 +1885,14 @@ public partial class Node2DGame : Node2D
 				CreateDecorSet(forestGroundAccents, 50, 0.86f, 1.06f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
 			}
+			case StageEnvironmentKind.Bridge:
+			case StageEnvironmentKind.Court:
+			case StageEnvironmentKind.Throne:
+				// THE CASTLE (.ai/endgame-castle.md): nothing from the shared decor sets - no rock, bramble
+				// or dead tree on a laid floor. A castle chapter's furniture is its own (the bridge's parapet
+				// and gatehouses, the Court's rooms, the throne) and is placed by its ChapterRules, so its
+				// agent never edits this switch.
+				break;
 			default:
 				// Today that is the Cave (and the placeholder room). Crystals and rubble as before;
 				// what grows underground is bramble and the odd dead tree where the roof has fallen
@@ -2448,6 +2515,8 @@ public partial class Node2DGame : Node2D
 		if (index == decorSets)
 		{
 			FurnishCuratedProps(chunk, parent, rect, decorShare);
+			// The secrets' far tells: decor thickening toward a vault (SecretFarTell), the same rules.
+			Secrets?.FurnishChunk(chunk, parent, rect);
 			return false;
 		}
 
@@ -2498,6 +2567,8 @@ public partial class Node2DGame : Node2D
 	/// </summary>
 	private void PlanChunkFeatures(TerrainChunk chunk)
 	{
+		// A secret that stands solid (the Geode Heart) is in the grid the way a fence is.
+		Secrets?.StampChunk(chunk);
 		if (LandmarkCells(chunk) is not Rect2I cells)
 			return;
 		const int n = TerrainStreamer.ChunkTiles;
@@ -4717,7 +4788,8 @@ public partial class Node2DGame : Node2D
 			Icon = icon ?? FallbackSpellHudIcon,
 			IconSilhouette = true,
 			Meta = UnlockCatalog.GetLockedHint(id, UnlockKind.Spell),
-			MetaGlyph = StatIcons.Load("lock"),
+			// The main menu's glyph: a vault's spell is led by the secret's glint, the rest by the lock.
+			MetaGlyph = CodexRows.SpellHintGlyph(id),
 			Quiet = true,
 			// A stop for the stick, as on the main menu: the pad scrolls the list by moving the
 			// selection through it, and B still closes the pause from any row (MenuBackListener).
@@ -4725,44 +4797,46 @@ public partial class Node2DGame : Node2D
 		}, CodexRows.Stone);
 	}
 
+	// The achievements page over a run (.ai/achievements-and-secrets.md 4.6): the main menu's page,
+	// built by the same AchievementsPage, as one list - this chapter first, with this run's progress,
+	// then everything else not done, then Done behind a toggle. It used to build the list a second way
+	// from the save alone, so nothing measured over a run (Survivor's clock, the Coursing's hares) ever
+	// showed the run being played. The pause screen pauses the tree, so the touch stick's full-screen
+	// STOP control cannot take the tab's taps.
+	private AchievementsPage.Result escapeAchievements;
+	private bool escapeAchievementsPadYWired;
+
 	private void ShowEscapeAchievements()
 	{
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		WireEscapeAchievementsPadY();
 		ShowStructuredEscapeDetail(CodexRows.UnlocksTitle, sections =>
 		{
-			AchievementContext context = AchievementContext.ForSave(data);
-			var open = new List<(AchievementDefinition, AchievementProgress)>();
-			var done = new List<AchievementDefinition>();
-			foreach (AchievementDefinition deed in AchievementDefinitions.Listed)
-			{
-				if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
-					done.Add(deed);
-				else
-					open.Add((deed, deed.GetProgress(context)));
-			}
-
-			Texture2D SpellIcon(string spellId)
-			{
-				foreach (var (id, path) in SpellbookResources)
-					if (id.Equals(spellId, StringComparison.OrdinalIgnoreCase))
-						return ResourceLoader.Load<SpellData>(path)?.Icon;
-				return null;
-			}
-
-			int total = open.Count + done.Count;
-			int columns = CodexRows.ColumnsFor(this);
+			// In the tree before it is built: one column or two is read from where it sits.
 			var list = CodexRows.BuildList();
-			list.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSubtitle + "\n" + CodexRows.UnlocksSummary(done.Count, total),
-				CodexRows.Stone, total > 0 ? done.Count / (float)total : 0f));
-			// In progress first: the player is mid-run and wants to know what this attempt could finish.
-			if (open.Count > 0)
-				CodexRows.AddSection(list, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
-					CodexRows.OrderInProgress(open).Select(p => (Control)CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone, focusStop: true)));
-			if (done.Count > 0)
-				CodexRows.AddSection(list, "Done", $"{done.Count}", CodexRows.Stone, columns,
-					done.Select(d => (Control)CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone, focusStop: true)));
 			sections.AddChild(list);
+			RunResult snapshot = SnapshotRunResult();
+			escapeAchievements = AchievementsPage.Build(list, AchievementContext.ForRun(data, snapshot),
+				AchievementsPage.PageMode.Pause, AchievementsPage.Filter.All, snapshot.StageId);
 		});
+	}
+
+	// Pad Y on this tab opens and closes Done (4.8), as it opens the spell details on the Run tab. The
+	// escape menu's MenuBackListener has one PadY; it is wrapped here once, the first time the tab is
+	// shown, and hands every other tab to what it did before.
+	private void WireEscapeAchievementsPadY()
+	{
+		if (escapeAchievementsPadYWired || escapeMenu?.GetNodeOrNull<MenuBackListener>(MenuBackListener.NodeName) is not MenuBackListener back)
+			return;
+		Action before = back.PadY;
+		back.PadY = () =>
+		{
+			if (escapeActiveTitle == CodexRows.UnlocksTitle)
+				escapeAchievements?.ToggleDone();
+			else
+				before?.Invoke();
+		};
+		escapeAchievementsPadYWired = true;
 	}
 
 	private void AppendCharacterPassive(StringBuilder builder)
@@ -5330,6 +5404,18 @@ public partial class Node2DGame : Node2D
 	public ulong TerrainSeed => terrainSeed;
 	public Vector2 StageOrigin => stageOrigin;
 
+	/// <summary>This run's stage secrets (SecretDirector), made at stage start.</summary>
+	public SecretDirector? Secrets { get; private set; }
+
+	/// <summary>
+	/// True where a scattered sprite may stand: the tests every decor set's sprite passes
+	/// (FurnishDecorSet) - out of the spawn clearing, not on water, a wall or a hazard, not in a landmark,
+	/// a side event's or secret's footprint, or a planned hazard. For a secret's far tell (SecretFarTell).
+	/// </summary>
+	public bool IsDecorSpotOpen(Vector2 position) =>
+		position.DistanceTo(stageOrigin) >= DecorPlayerSafeRadius && !IsPropAvoidedAt(position) && !IsInLandmark(position)
+		&& !IsInExploreReserve(position) && !IsNearPlannedHazard(position);
+
 	/// <summary>A placer for this run's points of interest. <paramref name="stream"/> separates independent layouts.</summary>
 	public ExplorePlacer CreateExplorePlacer(int stream, float eventMinChunks, float eventMaxChunks)
 	{
@@ -5744,7 +5830,8 @@ public partial class Node2DGame : Node2D
 		// Health rides the balance preset the same way elites do, so hardcore keeps its teeth and
 		// casual does not turn the fight into a ten-minute chore.
 		boss.Health = Mathf.RoundToInt(definition.Health * presetElitePowerScale * healthScale);
-		boss.Position = FindBossSpawnPosition();
+		// Hook 4: a chapter whose boss has a place of its own (the bridge's gate).
+		boss.Position = chapterRules?.BossSpawnPoint(definition) ?? FindBossSpawnPosition();
 		boss.Connect(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated)));
 		AddChild(boss);
 		bossInstance = boss;
@@ -5990,7 +6077,8 @@ public partial class Node2DGame : Node2D
 	{
 		Vector2 away = fellAt - (player?.GlobalPosition ?? fellAt);
 		Vector2 direction = away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up;
-		Vector2 at = ReachablePoint(fellAt + direction * VictoryPortalPastFall);
+		// Hook 5: a chapter whose way home is a place (the castle gate, the throne room doors).
+		Vector2 at = chapterRules?.VictoryPortalPoint(fellAt) ?? ReachablePoint(fellAt + direction * VictoryPortalPastFall);
 		victoryPortal = new ArcanePortal { Name = "VictoryPortal", Position = at };
 		CallDeferred(Node.MethodName.AddChild, victoryPortal);
 		SfxPlayer.Global(SfxCatalog.MetaUnlock);
@@ -6077,6 +6165,10 @@ public partial class Node2DGame : Node2D
 		// The boss fight hands out nothing mid-duel, the rule the chest clock kept (_Process).
 		if (carrier == null || player == null || !IsInstanceValid(player) || bossFightActive || runFinished)
 			return;
+
+		// The Gleaning Bell rides on the same bodies, rolled on its own whether or not the chest pays
+		// (Node2DGame.GleaningBell.cs).
+		TryDropGleaningBell(carrier.GlobalPosition);
 
 		if (carrier.ChestSource == ChestSourceElite)
 		{
@@ -6341,6 +6433,9 @@ public partial class Node2DGame : Node2D
 	/// </remarks>
 	private bool IsImpassablePosition(Vector2 position)
 	{
+		// Hook 3: ground the chapter has closed (the fallen deck behind the bridge's front).
+		if (chapterRules != null && chapterRules.IsPlacementBlocked(position))
+			return true;
 		if (terrainStreamer == null)
 			return false;
 
@@ -6391,6 +6486,10 @@ public partial class Node2DGame : Node2D
 
 	private Vector2 GetRandomSpawnPositionAroundPlayer()
 	{
+		// Hook 2: a chapter that chooses its own spawn points (the bridge's band). Vetted by the caller
+		// as any point off the ring is.
+		if (chapterRules != null && chapterRules.TryPickSpawnPoint(player.GlobalPosition, out Vector2 chosen))
+			return ClampPositionToStageBounds(chosen);
 		float angle = PickSpawnBearing();
 		var direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
 		float radius = GetSpawnRadiusForDirection(direction);
@@ -6836,6 +6935,31 @@ public partial class Node2DGame : Node2D
 			EquippedSpells = BuildSpellSnapshot(),
 			CharacterId = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx)?.Id ?? string.Empty
 		};
+	}
+
+	/// <summary>
+	/// The run so far, as the RunResult its end would write - what <see cref="BuildRunResult"/> fills,
+	/// and the telemetry and run events <see cref="FinishRunAndReward"/> folds in - without ending
+	/// anything. The pause screen's achievements tab measures against it, so a deed measured over one
+	/// run shows this run (.ai/achievements-and-secrets.md 4.4).
+	/// </summary>
+	/// <remarks>
+	/// A defeat with no boss, on purpose: a snapshot is not a victory and has beaten no one, so it can
+	/// never make a chapter's deed or Veteran read as done before the run has earned it. Nothing is
+	/// written - FinishRunAndReward records the loadout's element counts as a last peak before it reads
+	/// them, and a snapshot folds them into its own copy instead.
+	/// </remarks>
+	private RunResult SnapshotRunResult()
+	{
+		RunResult snapshot = BuildRunResult(RunOutcome.Defeat, string.Empty);
+		GameStats.ApplyTelemetryToRunResult(snapshot);
+		RunEvents.ApplyToRunResult(snapshot, timeElapsed);
+		foreach (KeyValuePair<string, int> held in snapshot.ElementCounts)
+		{
+			if (!snapshot.PeakElementCounts.TryGetValue(held.Key, out int peak) || held.Value > peak)
+				snapshot.PeakElementCounts[held.Key] = held.Value;
+		}
+		return snapshot;
 	}
 
 	private void UpdateOnboardingTips(float deltaSeconds)

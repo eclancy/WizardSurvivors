@@ -68,6 +68,8 @@ public partial class ArchivistBoss : BossEnemy
 		{
 			Shape = TelegraphShape.Cone,
 			HalfAngleDegrees = SweepHalfAngle,
+			// A beam that is always on is not a slam: the "!" over it fills to each discharge.
+			GlyphOverride = TelegraphGlyph.Alert,
 		};
 
 	protected override void OnPhaseEntered(int phase)
@@ -149,7 +151,7 @@ public partial class ArchivistBoss : BossEnemy
 		}
 
 		float angle = GD.Randf() * Mathf.Tau;
-		Vector2 destination = target.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ResurfaceDistance;
+		Vector2 destination = SurfacingPoint(target.GlobalPosition, angle);
 		burrow.Begin(GlobalPosition, destination);
 
 		// The exit is telegraphed on the ground before it gets there. A boss that surfaced unseen
@@ -158,6 +160,24 @@ public partial class ArchivistBoss : BossEnemy
 		TelegraphedGroundHit.Place(GetParent(), destination,
 			Mathf.Max(0.2f, Mathf.Min(ResurfaceTellSeconds, BurrowTravelSeconds - 0.1f)),
 			ResurfaceRadius, ScaleOutgoingDamage(ResurfaceDamage), ArchiveColor);
+	}
+
+	// Where it comes up: ResurfaceDistance from the player at the rolled bearing - or, on walled ground,
+	// the nearest bearing round the player that is ground it could stand on. The Mystic Ruins are broken
+	// walls now (.ai/endgame-castle.md 7.3), and about one surfacing in eight landed on a wall, where a
+	// boss that never takes a step would stand inside the stone until its next dive. Searched twelve
+	// steps either way; if none is open, the spot it dived from, which it was already standing on.
+	private Vector2 SurfacingPoint(Vector2 around, float angle)
+	{
+		MazeNavigation nav = MazeNavigation.Active;
+		for (int step = 0; step < 24; step++)
+		{
+			float turn = (step + 1) / 2 * (Mathf.Tau / 24f) * (step % 2 == 0 ? 1f : -1f);
+			Vector2 at = around + Vector2.FromAngle(angle + turn) * ResurfaceDistance;
+			if (nav == null || nav.IsReachable(at))
+				return at;
+		}
+		return GlobalPosition;
 	}
 
 	protected override void StartDeath()

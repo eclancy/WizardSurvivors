@@ -21,6 +21,9 @@ cell at x2, which is the contract's render scale, art-direction.md section 1):
   spirit-greataxe.png    96 cell, 32 headings (double-bitted, so one row).
   spirit-maul.png        96 cell, 32 headings.
   spirit-greatsword.png  96 cell, 32 headings.
+  spirit-dagger.png      32 cell, 32 headings, one row: Twin Blades' dagger (2026-10-30, Eric: "Twin sword
+                         mutation should create a second smaller dagger"), the sword's make on the
+                         projectile cell. Its grip is 8.5 art px behind the centre and its head 7.5 ahead.
 
 Cell i points at i x 11.25 degrees, measured the way Godot measures an angle (0 = +X, clockwise on screen
 since y is down). The cell count, the cell sizes and two distances are an API, read by SpiritualWeapon:
@@ -225,6 +228,21 @@ def sword():
     return parts, 22.0
 
 
+def dagger():
+    """Twin Blades' dagger, on the projectile cell (u from -13 to +13, grip at -8.5, head at +7.5): the
+    sword's make, smaller - a gold pommel, a violet grip with one gold band, a short straight gold guard,
+    and a leaf blade of light with a white-hot fuller."""
+    parts = []
+    parts.append(Part(lambda u, v: sd_circle(u, v, -11.5, 0.0, 1.4), "gold", 2, (-12.9, -10.1, -1.4, 1.4)))
+    parts.append(Part(lambda u, v: sd_capsule(u, v, -10.2, -7.0, 1.2), "violet", 1, (-11.4, -5.8, -1.2, 1.2)))
+    _grip(parts, [(-8.8, -8.4)], 1.35, mat="gold", layer=3)
+    parts.append(Part(lambda u, v: sd_vcapsule(u, v, -6.2, -3.6, 3.6, 0.95), "gold", 4, (-7.2, -5.2, -4.6, 4.6)))
+    blade = [(-5.4, -1.8), (5.0, -1.9), (12.8, 0.0), (5.0, 1.9), (-5.4, 1.8)]
+    parts.append(Part(lambda u, v: sd_poly(u, v, blade), "glow", 3, _box_of(blade),
+                      edge=lambda u, v: -4.5 < u < 8.5 and abs(v) < 0.5))
+    return parts, 14.5
+
+
 def greataxe():
     """Executioner's Greataxe: double-bitted, white-hot along both edges, a jewelled gold collar, a rune
     on each cheek, a spike of light on top and one at the butt, the haft banded and wound."""
@@ -323,10 +341,13 @@ MODELS = {
     "greataxe": lambda mirror: greataxe(),
     "maul": lambda mirror: maul(),
     "greatsword": lambda mirror: greatsword(),
+    "dagger": lambda mirror: dagger(),
 }
 
-CELLS = {"axe": 48, "hammer": 48, "sword": 48, "greataxe": 96, "maul": 96, "greatsword": 96}
+CELLS = {"axe": 48, "hammer": 48, "sword": 48, "greataxe": 96, "maul": 96, "greatsword": 96, "dagger": 32}
 ROWS = {"axe": 2}
+# How far behind the cell's centre the grip is, in art px, where it is not the elite or boss cell's.
+GRIP_BACK = {"dagger": 8.5}
 
 
 # =============================================================================================
@@ -475,7 +496,8 @@ def sheet(kind):
 ICON = 32
 # How big each weapon is drawn on a card: the elite-cell forms nearly fill it on the diagonal, the
 # colossal ones are drawn at the same length, so they are visibly the same weapon made heavier.
-ICON_SCALE = {"axe": 0.86, "hammer": 0.86, "sword": 0.86, "greataxe": 0.42, "maul": 0.42, "greatsword": 0.42}
+ICON_SCALE = {"axe": 0.86, "hammer": 0.86, "sword": 0.86, "greataxe": 0.42, "maul": 0.42, "greatsword": 0.42,
+              "dagger": 0.86}
 
 
 def night(c, r=14.5):
@@ -504,7 +526,7 @@ def _bbox(k):
 
 def at_grip(kind, angle, scale, grip):
     """The centre a weapon must be drawn at for its grip to land on `grip`."""
-    back = 28.0 if CELLS[kind] > 48 else 13.0
+    back = GRIP_BACK.get(kind, 28.0 if CELLS[kind] > 48 else 13.0)
     a = math.radians(angle)
     return (grip[0] + math.cos(a) * back * scale, grip[1] + math.sin(a) * back * scale)
 
@@ -594,7 +616,7 @@ def main(argv):
             only = set(a[len("--only="):].split(","))
     ok = True
     sheets = {}
-    for kind in ("axe", "hammer", "sword", "greataxe", "maul", "greatsword"):
+    for kind in ("axe", "hammer", "sword", "greataxe", "maul", "greatsword", "dagger"):
         if only and kind not in only:
             continue
         s = sheet(kind)

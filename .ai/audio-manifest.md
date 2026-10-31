@@ -5,13 +5,15 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
-**2026-10-30: 84 files, three of them not yet played.** The secret stings (piece A14 of
+**2026-10-30: 84 files, all wired.** The secret stings (piece A14 of
 `.ai/achievements-and-secrets.md`): `secret_seen`, `secret_found` and `secret_shatter`, generated,
-allowlisted in `SfxCatalog` and **not wired** - the secret agents build the sites that play them.
-Each is in the table under "Secrets" below with the trigger site proposed for it; `SfxPlayer` will
-report `84 sounds preloaded`. Also on 2026-10-30, three castle sets were rendered for the music
-(the Last Bridge, the Court, the Throne; "The castle's music" at the end) and are not yet in
-`MusicCatalog`. And the generators now run under Python 3 (the container has only 3.13) as well as
+allowlisted in `SfxCatalog` and - since piece A4 the same day - played where the table under
+"Secrets" below proposed: `secret_seen` at the site by `SecretDirector`'s seen mark, once per secret
+per save; `secret_found` by `SecretDirector.Found` for a secret found again (`event_reward` is a side
+event's chest again); `secret_shatter` by the Geode Heart (`GeodeHeart.OnBroke`). `SfxPlayer` reports
+`84 sounds preloaded`. Also on 2026-10-30, three castle sets were rendered for the music
+(the Last Bridge, the Court, the Throne; "The castle's music" at the end), and the castle's plumbing
+(C0) put them in `MusicCatalog` the same day; their chapters are not playable yet. And the generators now run under Python 3 (the container has only 3.13) as well as
 2.7, writing the same bytes under either: all 81 earlier effects and the heath's three stems
 re-rendered byte-identical under 3.13 (`.ai/audio-direction.md` section 3).
 
@@ -242,7 +244,7 @@ death animation plays. The death sound is not gating anything and may outlast th
 |---|---|---|---|
 | `pickup_xp.wav` | 0.09 s | −23.0 dBFS | `XPOrb.OnBodyEntered` (`scripts/XPOrb.cs:82`) — ramp `PitchScale` upward with the collection streak, reset when it breaks |
 | `pickup_health.wav` | 0.42 s | −13.0 dBFS | `PickupBase.OnBodyEntered` (`scripts/PickupBase.cs:78`) for `HealthPickup` |
-| `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | a vacuum or `FortunesFavor` pull beginning — once per pull, not per orb |
+| `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | **wired**, `GleaningBell.Ring` (2026-10-30): the Gleaning Bell rung, every XP orb on the map called in - the vacuum it was made for, played `Global`, once per pull and never per orb; each orb then lands on its own streak-pitched `pickup_xp`. Also played by `SecretSeed` when the Fenced Bloom's seed is taken |
 | `pickup_haste.wav` | 0.38 s | −12.0 dBFS | **wired**, `BuffItem.OnPickedUp` (the speed potion). A double gust and a climbing triangle shimmer; hf 11%, nearest neighbour in the whole set `pickup_magnet` at 0.157. About one kill in a hundred drops a potion, so it sits a dB over `pickup_health` |
 | `event_reward.wav` | 1.45 s | −8.0 dBFS | **wired**, `SideEvent.Succeed` when the event pays a chest: a formant breath swelling into one glass tone with vibrato, under the chest rising as a ghost. Not played on a discovery, which keeps `meta_unlock`. hf 3%, nearest neighbour `spell_evolve` at 0.135 |
 | `bearing_found.wav` | 1.58 s | −8.0 dBFS | **wired**, `WayfinderPickup.Take`: the chapter's wayfinder taken and every point of interest marked. Five decelerating ticks (a needle settling; `pickup_magnet` accelerates, which is the difference between found and pulled) then an open fifth. hf 2% |
@@ -302,8 +304,8 @@ way. Tier Normal: they never duck anything. The caption carries the words; these
 The secrets of `.ai/stage-secrets.md` and `.ai/achievements-and-secrets.md`: the soft shimmer and
 the found sting section 7.7 of the first asked for, and the Geode Heart's shatter (8.4.1 of the
 second). Generated 2026-10-30 (`tools/audio/sfx.py`, "secrets"), allowlisted in `SfxCatalog`
-(`SecretSeen`, `SecretFound`, `SecretShatter`) and **not yet played anywhere**: every Trigger below
-is a proposal for the agents building `SecretDirector` (A4) and the Sunken Cave's secrets (A5-A13).
+(`SecretSeen`, `SecretFound`, `SecretShatter`) and wired by piece A4 the same day, each at the
+Trigger below (the first reading of `secret_seen`: once per secret per save, at the site).
 
 They are the near tell in sound. A secret's tell is a warm glint that breathes (stage-secrets
 section 2), so the shimmer and the sting are a cloud of soft sine grains - each a Hann swell, the
@@ -450,7 +452,7 @@ full tables.
 - **Inside each stem:** `music.py --balance` prints every voice's level; no ostinato is more than
   7 dB under its bed, no snare or tek more than 22 dB under its pulse.
 
-### The castle's music (2026-10-30: rendered, not yet wired)
+### The castle's music (2026-10-30: rendered, and wired in `MusicCatalog` by C0)
 
 Piece C7 of `.ai/endgame-castle.md`: a set for each of the three new castle chapters, scored in its
 own `tools/audio/music_<chapter>.py` (which `music.py` picks up by name) and rendered once into
@@ -469,11 +471,11 @@ written before the first import with `edit/loop_mode=2` (Forward) and `compress/
 
 **Where they are wired, and by whom:**
 
-- **`MusicCatalog`: the castle's plumbing agent (C0).** Three planned sets with the Emberdeep's as
-  their stand-in, under these ids - `PlannedChapter("bridge", Emberdeep)`, `("court", ...)`,
-  `("throne", ...)` - and rows `[11]`, `[12]`, `[13]` in `PerStage`. A planned set switches itself
-  on when its bed is imported, so the moment C0's rows land these play; `ValidateMusic` checks the
-  three stems are the same length (they are, to the sample) and loop.
+- **`MusicCatalog`: the castle's plumbing agent (C0). Done** (`wip/castle-plumbing`): three planned
+  sets with the Emberdeep's as their stand-in, under these ids - `PlannedChapter("bridge", Emberdeep)`,
+  `("court", ...)`, `("throne", ...)` - and rows `[11]`, `[12]`, `[13]` in `PerStage`. A planned set
+  switches itself on when its bed is imported, so these play now; `ValidateMusic` checks the three
+  stems are the same length (they are, to the sample) and loop, and reports nothing.
 - **The Last Bridge and the Court play as every chapter does** (`Node2DGame.PlayRunMusic`, the
   pulse and lead thresholds, the shared boss loop for the Constable and the Seneschal). Nothing more.
 - **The Throne does not.** Whoever builds `ThroneRules` (C4) and the dark wizard (C5) between them:

@@ -166,6 +166,46 @@ public static class BossCatalog
 			StandInScenePath = "res://scenes/ForestTreantBoss.tscn",
 			Health = 5000,
 			ArcaneVictoryBonus = 175
+		},
+		// THE CASTLE'S BOSSES (.ai/endgame-castle.md 3.6, 5.6, 6.4). Designed, not built: each fights as
+		// the Warden of the Deep under its own id and name until its piece (C5) creates the scene at
+		// ScenePath, so each chapter's deed and opening are its own from the first day. Health is the
+		// doc's first guess, after the Warden's 11000; the bonus climbs from the Gaoler's castle 375
+		// (4.3). Each block below is its own boss's to tune, numbers only, and none is in the Boss Rush:
+		// a boss on its stand-in never joins the rush's roster (BossRushCatalog), and the rush is held to
+		// the road's ten (1.8).
+		[11] = new BossDefinition
+		{
+			Id = "bridge_constable",
+			DisplayName = "The Constable",
+			Tagline = "He holds the gate from the wall. Get to the gate.",
+			ScenePath = "res://scenes/BridgeConstableBoss.tscn",
+			StandInScenePath = "res://scenes/DeepWardenBoss.tscn",
+			Health = 11800,
+			ArcaneVictoryBonus = 360
+		},
+		[12] = new BossDefinition
+		{
+			Id = "court_seneschal",
+			DisplayName = "The Seneschal",
+			Tagline = "He leaves when it suits him. Follow.",
+			ScenePath = "res://scenes/CourtSeneschalBoss.tscn",
+			StandInScenePath = "res://scenes/DeepWardenBoss.tscn",
+			Health = 13000,
+			ArcaneVictoryBonus = 390
+		},
+		// Never named on screen (.ai/endgame-castle.md 6.4): "the dark wizard" is what he is, not a name,
+		// and the banner's line is the tagline. Fought after the procession (ThroneRules, C4), not on the
+		// survival clock.
+		[13] = new BossDefinition
+		{
+			Id = "throne_dark_wizard",
+			DisplayName = "The Dark Wizard",
+			Tagline = "He takes what you have. Take it back.",
+			ScenePath = "res://scenes/ThroneDarkWizardBoss.tscn",
+			StandInScenePath = "res://scenes/DeepWardenBoss.tscn",
+			Health = 18000,
+			ArcaneVictoryBonus = 450
 		}
 	};
 

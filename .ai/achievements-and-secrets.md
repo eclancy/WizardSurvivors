@@ -10,10 +10,14 @@ Eric, 2026-10-29:
 > Let's add significantly more secrets, like a giant crystal that needs to be destroyed to find a
 > related spell, etc."
 
-**Status: design, decided 2026-10-30, not built.** Eric accepted every recommendation (section 10),
-confirming three directly: the final gate is **every wizard freed and the Long Coil beaten**; the shop
-stops selling spells and Arcane Energy keeps the stat upgrades and the boons; Fireball goes to the
-Long Coil. The unlock core (piece A1, section 9) is being built now. Its sister doc,
+**Status: design, decided 2026-10-30; the unlock core (A1), the achievements page (A2), the shop (A3)
+and the secret core (A4, with the first vault, the Geode Heart - section 12) built; the chapters'
+secrets (A5-A13) not.** Eric accepted every
+recommendation (section 10), confirming three directly: the final gate is **every wizard freed and the
+Long Coil beaten**; the shop stops selling spells and Arcane Energy keeps the stat upgrades and the
+boons; Fireball goes to the Long Coil. The unlock core (piece A1, section 9) is built on branch
+`wip/achievements-core`; **section 11 says what it built and where it departs from this design** -
+read it before building A2, A3 or A4 against it. Its sister doc,
 `.ai/endgame-castle.md`, designs the castle chapters from the same message - and there Eric chose to
 **move the Cursed Dungeon into the castle**, which this doc now follows: the Dungeon, its deed, its
 key event and Tituba, and its spell vault are past the gate (8.5). Castle secrets are listed here
@@ -195,7 +199,8 @@ Shard's shatter is the better story anyway.
 ### 2.3 Wizards and boons
 
 - **Tituba, Väinämöinen, Wishing Coin and Gilded Mote become Road deeds** with their side events as
-  triggers ("Tituba Freed", "Out of the Ice", "The Last Coin", "The Circle Relit"), granted at once as
+  triggers ("Tituba Freed" - built as **"The Open Cell"**, section 11 - "Out of the Ice", "The Last
+  Coin", "The Circle Relit"), granted at once as
   now. Their reveal rules are unchanged: a deed that frees a secret wizard is a sealed row until his
   chapter opens. Tituba's chapter is the castle's dungeon now, so on a new save her row stays sealed
   until late; how the gates treat her is `.ai/endgame-castle.md` 1.6.
@@ -220,6 +225,15 @@ id, and `ValidateUnlockCatalog` requires that **every spell's source is `Starter
 - **Arcane Energy does not buy a skip.** No achievement can be bought outright: that would make the
   secrets a price list. A hint for a hidden achievement could be sold (decision 10), but is not
   recommended for the first version.
+
+**Built (A3, 2026-10-30, `wip/shop-no-spells`).** The shop is one menu, Powers: Power, Survival,
+Fortune and Level-ups, then **Boons** (Quicksilver Bead, Deepwater Pearl, Saltbound Chain), last
+whether or not one is left to buy, so nothing moves under the selection when the last is bought. The
+title menu's row is Powers and Achievements, half each, as before the 2026-10-28 split; Spells & Boons and
+its button are gone. In code: `MainMenu.Shop.cs` lost `ShopMode` and the spell shelf, `MainMenu`'s
+`UpgradeDefinition` lost `IsSpellUnlock`/`SpellId` (a boon is the one thing sold once), and
+`UnlockCatalog.PurchasableSpells` is retired. No price moved, and a bought spell stays bought.
+Layout, inks and the pad walk are recorded in `.ai/level-up-screen.md` 4f.
 
 ### 2.5 The final chapter's gate (decided: wizards, not spells)
 
@@ -614,6 +628,18 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | F6 | **The Struck Oak** | **new** | mid | **strike**: about 500 landed near a lightning-split oak; it falls open | scorch on the ground round it; an ember breathing in the split | a chest |
 | F7 | **The Woodcutter's Clearing** | **new** | mid | **reach**: a clearing ringed by trunks with one gap, found by walking the ring (trunks block, `.ai/terrain.md` 10) | the ring itself: nothing else in the scatter is a perfect ring of trees | a flask and 20 Arcane Energy in a hollow log |
 
+**F5 built (2026-10-30, `wip/vaults-a`):** `PaleHart.cs`, art `tools/art/secret_forest.py` (the hart's ten
+48-cell frames in gold and the Light ramp, no rim, its standing breath a two-frame slow swap; the high seat
+with and without its bow; the prints and the bent bracken). The hart is a `SecretMover` subclass that draws
+itself on the world grid through the dither material; six bounds of 380 to 440 px laid in `LayOut`
+(`SecretMover.LayPath`, each stand on 120 px of open ground), startle 250, leash 1500. The seat is the last
+stand, y-sorted among the bodies and walked under - nothing solid. Touching the seat before the hart stands
+under it takes nothing. The seen mark is taken from the hart wherever it is. Far tell: prints and bracken
+leaning toward it (`LeanToward`). Probed on seed 4242 fresh and `--all-unlocked` (a chest): all pass, the
+seat 1002 px from home, followed in about 6 s by the probe. The same file redraws the First Tree's
+clearing and sapling as pixel art (the secrets' pixel pass, `edc8253`). Needs eyes: whether a player
+follows a hart that runs from him at all, and whether 250 lets him catch up on the phone.
+
 ### 8.2 The Fallow Fields (`stage_9`) - event: the well (defend)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -624,6 +650,15 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | FF4 | **The Tithe Barn** | **new, keepsake** | 10-12 chunks | **carry** the last sheaf into the empty tithe barn: his tithe, given back | the barn's doors stand open on nothing; chaff drifts toward it from three chunks | full heal; **150 Arcane Energy**, once |
 | FF5 | **The Scarecrow's Post** | **new** | mid, once a run | **risk**: touch the empty cross where the scarecrow stood and a Haymaker pair walks out of the stubble | the empty cross | a chest |
 
+**FF1 built (2026-10-30, `wip/vaults-a`):** `Pinfold.cs`, art `tools/art/secret_fields.py` (the pound in three
+layers - behind, the front with the gate shut, open - so the hound lies between them, seen through the bars;
+the hound's fourteen 40-cell frames; the hurdles and the prints). Its walls are solid (a body on the terrain
+layer and a stamped footprint). Within 420 px it wakes a Rick and a Haymaker (the Wall and Slammer roles of
+the Fields' roster - not two Haymakers, which FF5 has) at 10x spawn health as elites, through
+`SpawnEventEnemy`; both down, the latch takes the glint and walking to it lifts it; the hound runs to him.
+Probed on seed 4242 fresh and `--all-unlocked`: all pass. Needs eyes: whether two elites at 10x are a fair
+ask at minute three and at minute twelve, since `spawnHealth` scales them with the run.
+
 ### 8.3 The Broken Circle (`stage_10`) - event: relight the moot (follow the runes)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -632,6 +667,15 @@ far tell named. Every new art piece is generated (`tools/art/secret_<chapter>.py
 | BC2 | **The Hare's Form** | **new** | near | **linger** 2 s in a hare-shaped hollow pressed into the heather | the form, and Black Hares scattering from it as he comes | 60 s of +15% move speed; page |
 | BC3 | **The Shepherd's Bothy** | **new** | mid | **linger** 2 s at the cold hearth of a roofless hut | a thin warm thread of smoke | heal 50%; the hearth heals within 160 px for the run |
 | BC4 | **The Speaker's Stone** | **new, keepsake** | 10-12 chunks | **sequence**: nine cup-marks round the moot's old speaking-stone, touched smallest to largest | lichen thinning toward it; the cups catch the light | full heal; **150 Arcane Energy**, once |
+
+**BC1 built (2026-10-30, `wip/vaults-a`):** `FallenStar.cs`, art `tools/art/secret_circle.py`. The trail runs
+2300 to 2800 px from the crater on the bearing back toward the start, turned up to 50 degrees by the seed,
+so a player walking out tends to cross it; a burn mark every 42 px along it (rolled before the ground is
+asked, kept only on open heath), seven shards strewn along it (`SecretGather.AlongTrail`). The trail is the
+tell, so the seen mark is taken from the point of it nearest the player. Each shard taken lights a point on
+the crater's rim; with all seven, two seconds in the crater (80 px) raises the light, and stepping out lets
+it sink as fast as it rose. Nothing solid. Probed on seed 4242 fresh and `--all-unlocked`: all pass, shards
+taken out of order. Needs eyes: whether a dotted line of char reads as a trail in a crowd on the phone.
 
 ### 8.4 Sunken Cave (`stage_2`) - no event
 
@@ -684,6 +728,18 @@ it keeps its design.
 | D6 | **The Empty Cell** | **new** | mid | **untouched**: stand in the one cell whose door stands open for 4 s without being struck | a cell door open in a corridor of shut ones; the name scratched off the lintel | heal 50%; page. Absence, never a body |
 | D7 | **The Oubliette** | **new** | mid, in a dead-end hall room | **untouched** for 5 s on a grate in the floor | a draught of cold motes rising through the grate; a voice below | 150 Arcane Energy, once; when Merlin is built, his card turns from a sealed blank to a silhouette here (`.ai/endgame-castle.md`, decision 11) |
 
+**D5 built (2026-10-30, `wip/vaults-a`, in the Dungeon as it is now):** `ColdForge.cs`, art
+`tools/art/secret_dungeon.py`. The placer snaps a maze site to a corridor cell, where a 360 px ring does not
+fit, so `LayOut` moves it to the nearest hall (a removed post, no wall on circles of 200 and 290 px round it, searched outward
+up to eight cells, a pure function of the seed; with none, it stays where the placer put it, at a corridor crossing, and says so) and reserves it. The ring of hearth bricks is drawn at
+`RingRadius` (180) round the node and the cull counts a kill whose body fell inside it
+(`Player.EnemyKilled`, listened to only within 1400 px); forty light forty embers in the coal bed, one art
+pixel of the Fire ramp each, in a fixed order, and the forge roars. The hearth is solid; the ring and the
+anvil are walked over. The seen mark is taken from the smithy's middle. Probed on seed 4242 fresh and
+`--all-unlocked`: all pass, a kill outside the ring lighting nothing. Kills by damage over time that do not
+pass through `Player.DealDamageToEnemy` do not raise `EnemyKilled` and so do not count. Needs eyes: whether
+forty on the hearth is twenty seconds in a real swarm, and whether the ring reads as a place to stand.
+
 ### 8.6 Blighted Swamp (`stage_3`) - event: snuff the lanterns (explore)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -695,6 +751,18 @@ it keeps its design.
 | S5 | **The Swallow-Hole** | **new, vault** | 5-7 chunks | **lure**: a sinkhole of black mud about 160 px across. Any enemy whose feet enter it sinks and is gone (counted, no XP); thirty sunk and the hole gives up what it took. It is not blocking ground - enemies must be able to walk in, and they mask the same layer his feet do - so it is a hazard to him instead: wading in slows him to a crawl and costs 1 HP a second. The flow field runs straight through it, so a horde chasing a wizard who stands at the rim walks into it; standing at the edge and letting them come is the whole ask | far: reeds lean toward it, the ground goes from bog to black mud over two chunks; near: bubbles, and the glint at the bottom | **Gravewell**; later runs a chest |
 | S6 | **The Peat Bank** | **new** | mid | **strike**: about 400 landed near a cut peat bank; a bog-oak chest comes loose | a straight cut face in the bog, the only straight thing there | a chest |
 
+**S5 built (2026-10-30, `wip/vaults-b`):** `SwallowHole.cs` on `SecretLure` (radius 80, thirty), its mud
+`scenes/shaders/swallow_hole.gdshader` (the mire's way: one quad on the 2-unit cell, the bank only inward
+of the trigger, a log-spiral pull in Darkness's edge that speeds as it fills, bubbles, a ring where each
+one went in, the glint at the bottom brightening as it fills - the one progress cue), its reeds
+`tools/art/secret_swamp.py`. Not solid; wading slows him to 0.3 of his step and costs 1 HP a second
+through `Player.TakeDamage`, until it is sated. Full, it heaves into a dome, breaks, and the light comes to
+him (`VaultLight`). **One shared edit:** `SecretFarTell.LeanToward` (off by default), so the far tell's
+reeds lean toward it. Walked by `--secret-probe --stage=3` (`_UiShot.VaultWalk.cs`): all pass on seeds
+4242 and 777 fresh, and 4242 `--all-unlocked` (a chest instead); thirty lured across in 9 to 11 s of a
+chasing pack, no kills, no XP. Needs eyes: whether thirty is right in a real horde, and whether the glint
+reads at the bottom on the phone.
+
 ### 8.7 Mystic Ruins (`stage_4`) - no event
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -704,6 +772,19 @@ it keeps its design.
 | R3 | The Sundial Vault | planned, keepsake | 10-12 | hour | a sundial whose shadow turns with the pace clock | a chest, full heal; Movespeed, once |
 | R4 | The Statue's Eye | planned | mid | strike | a gem eye | a flask |
 | R5 | **The Lecture Hall** | **new** | mid | **cull** 25 inside a ring of broken stone benches | the benches face an empty lectern | 60 s of +15% damage; page |
+
+**R1 built (2026-10-30, `wip/vaults-b`):** `BrokenWard.cs`, art `tools/art/secret_ruins.py` (the stones in
+the heath's granite family, pale enough to stand off the ruins' stone floor). Five solid stones on a
+190 px circle round a flat heart-stone with the glint in its cup; the ring's turn and the order of the
+notch counts round it are the seed's, and `LayOut` turns the ring until every stone stands on open
+ground, so the ruins' walls (`wip/variety-walls`, not merged when this was built) can never take one. He
+touches a stone by walking up to it (50 px); a wrong one sends the notches to embers and resets. The
+fifth raises the ward for 30 s: a wall of Light's ramp on a 214 px circle (drawn and tested as one
+circle) that throws whatever has its feet inside back out by `ApplyKnockback`; then it breaks and the
+light goes to him. It breaks at once if the boss comes. Walked on seed 4242, fresh save, all pass: the
+wrong-stone resets, the sequence, three bodies inside thrown out, a pack of fourteen held at 213 px for
+6 s. Needs eyes: whether the notch counts read at a glance in a crowd on the phone, and whether thirty
+seconds of sanctuary is too much late in a run.
 
 ### 8.8 Frozen Waste (`stage_5`) - event: the thaw (fight near)
 
@@ -716,6 +797,18 @@ No *strike* here: it is the thaw's.
 | I3 | The Watch-Fire | planned, keepsake | 10-12 | guarded, then linger | a cold brazier on a ridge | a chest; 150 Arcane Energy, once |
 | I4 | **The Ice Window** | **new** | mid | **circle** a clear pane of lake ice with something warm frozen under it | the one clear patch in white ice | a flask and 25 Arcane Energy |
 
+**I2 built (2026-10-30, `wip/vaults-b`):** `BuriedRunes.cs`, the blowing snow and the calm
+`scenes/shaders/drift_field.gdshader` (two quads: streaks in the air with the wind, dense in a 640 px
+field and thinning out over two chunks; on the ground, the calm - clear ground ringed by the drift the
+wind dropped, solid cells, never a dithered wash), art `tools/art/secret_frost.py` (three flat stones
+each cut with the Sleet Rune diamond and a different mark in it; drifts that all lie one way). Stillness
+is `Player.StillSeconds`: in the field the calm grows from his feet as he holds, and at 2 s every stone
+within 400 px shows, with the warm glint on its cut, and stays shown; walking on lets the wind back. He
+digs each by walking onto it, any order; the third sends the light to him. Nothing solid. Walked on seed
+4242, fresh save, all pass (moving shows nothing, a 1.3 s stop grows the calm and shows nothing and
+resets, 2 s at the middle shows all three, the three dug). Needs eyes: whether a player in a horde
+thinks to stop, and whether the streaks over the bodies are too thick in a crowd.
+
 ### 8.9 Scorched Sands (`stage_6`) - event: the caravan master (catch)
 
 | id | secret | status | where | how it is found | tell | pays |
@@ -725,6 +818,20 @@ No *strike* here: it is the thaw's.
 | A3 | The Hidden Water | planned, keepsake | 10-12 | linger | cracked earth to scrub to reeds | full heal, a well; Recovery, once |
 | A4 | The Mirage | planned | - | stillness | a pool always ahead | 60 s of +20% speed |
 | A5 | **The Fulgurite** | **new, vault** | 5-7 chunks | **storm**: a branching tree of glass stands in the dunes where lightning struck. A dry storm passes over it every 90 pace seconds (clouds gather for 10 s, then six telegraphed strikes land round it over 6 s - `TelegraphedGroundHit`, 3 damage each, which also hit enemies). Stand within 120 px of the glass through the strikes: it draws the last one into itself and rings | far: glass beads in the sand and a dark sky over one place, visible from two chunks; near: the glass tree with the glint in its root | **Stormsweep**; later runs a chest |
+
+**A5 built (2026-10-30, `wip/vaults-b`):** `Fulgurite.cs`, art `tools/art/secret_sands.py` (the glass in
+Wind's ramp with Lightning's seams - Stormsweep is both - still, charged and ringing; beads and twigs of
+the same glass for the far tell). Storms on `Node2DGame.PaceSeconds`: the first at 60, then every 90;
+the cloud (stamped puffs of the violet row, always over the glass, the only one in the Sands' sky)
+spreads and darkens for 10 s, then six bolts a second apart, each warned by the shared
+`TelegraphedGroundHit` (3 to him) and dealing 3 to every enemy under it; two are called at his feet,
+so holding the 120 px circle means moving inside it. Held through all six, the last is drawn into the
+glass with no warning, it rings, and the light comes out of its root to him. Solid foot. No storm while
+the boss is up. Walked on seed 4242, fresh save, all pass: no storm before pace 60 and one at 60.0, six
+called, the three that landed on bodies hit them, he held the circle stepping out from under the two at
+his feet, and it rang. Needs eyes: the wait for a storm (up to 90 s) in play, whether the cloud over
+the top of the screen hides too much of a crowd, and whether the glass reads apart from the Sands'
+bleached dead trees.
 
 ### 8.10 The Emberdeep (`stage_7`) - no event
 
@@ -763,10 +870,10 @@ own plan; the two meet only at `SecretCatalog`'s castle files and the achievemen
 
 | piece | what | files it owns | depends on |
 |---|---|---|---|
-| **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it | decided; **in progress** |
-| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them) |
-| **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods) | A1 |
-| **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | A1 |
+| **A1 Unlock and achievement core** | 2.6 and section 3: the new `AchievementDefinition` fields, `Kind`/`Visibility`, derived secret and event deeds, `CompleteNow`, `Reconcile`, the moves of 2.2, the gate (2.5, as decided), schema 19, `LifetimeStats.EventsWon`, `GlimpsedSecretIds`, every validator in 2.6 and `ValidateAchievementMigration` | `UnlockCatalog.cs`, `AchievementDefinition.cs`, `AchievementManager.cs`, `GlobalStatsManager.cs`, `SaveData.cs`, `LifetimeStats.cs`, `DiscoveryRewards.cs`, `StageCatalog.cs` (the gate value only), `RegressionChecks.cs` (its own validators). The gate rule per gate chapter (2.5), so the castle's Throne can use it. **Also touched, section 11:** `SecretCatalog.cs` (additive), `WorldMap.cs`, `_UiShot.cs`, `_BalanceHarness.cs` | **built** (`wip/achievements-core`, section 11) |
+| **A2 The achievements page** | section 4: `AchievementsPage.cs`, its two call sites, the run snapshot for the pause tab, the name (decision 4), the Spell Index's vault hint | `AchievementsPage.cs` (new), `CodexRows.cs`, `MainMenu.cs` (the Unlocks panel only), `Node2DGame.cs` (`ShowEscapeAchievements` and a `SnapshotRunResult` beside `BuildRunResult` only) | A1's fields (the doc fixes their names, so A2 can start against them); **built** on `wip/achievements-page`, over A1 - the secret's steps (4.4) wait for A4's `SecretRunState` (A4 built it as `SecretDirector.StateOf`, section 12; the steps are not on the page yet) |
+| **A3 The shop** | 2.4: the spell shelf out, the three boons folded into Powers (decision 5) | `MainMenu.Shop.cs`, the title menu's button in `MainMenu.cs` (coordinate with A2: different methods). **Also touched:** `UnlockCatalog.cs` (`PurchasableSpells` retired) | A1; **built** on `wip/shop-no-spells` (2.4, "Built") |
+| **A4 Secret core** | the vault class (6.4), `SecretMetaReward.Spell`, seen-tracking, `StrikeListener` and `Breakable` extracted from the thaw, `SecretMover`, the gather and lure primitives, and **`SecretCatalog` split into one partial file per chapter** with an empty block each (`SecretCatalog.Forest.cs` and so on, the `StageBestiary.<Chapter>.cs` pattern), so the chapter agents never edit a shared file | `SecretCatalog*.cs`, `SecretDirector.cs`, new primitive files, `ThawEvent.cs` (the extraction only) | **built** (`wip/secret-core`, section 12), with the Geode Heart as its proof |
 | **A5-A13 One chapter's secrets each** | that chapter's rows of section 8: its vault first, then the rest; art in `tools/art/secret_<chapter>.py` | its own `SecretCatalog.<Chapter>.cs`, its own secret scripts and generator | A4 |
 | **A14 Sounds** | the shimmer (seen) and found stings `.ai/stage-secrets.md` 7.7 asked for, and the crystal's shatter | `tools/audio/`, `SfxCatalog.cs` | none |
 
@@ -816,3 +923,216 @@ Every recommendation stands. The first three were confirmed directly.
 **Raised since, and answered in the castle doc** (`.ai/endgame-castle.md` 10.2): whether the Throne
 also needs every wizard freed (recommended yes, so Tituba is counted where he is), and the schema 20
 step that moves the Dungeon, which follows this doc's schema 19.
+
+---
+
+## 11. What A1 built (2026-10-30, `wip/achievements-core`)
+
+The unlock and achievement core: sections 2.1-2.6 and 3. Nothing of section 4 (the page, A2), 2.4's
+shop (A3) or the vaults in the world (A4 and the chapter agents) is built.
+
+### 11.1 Where it lives
+
+| piece | where |
+|---|---|
+| the new fields | `AchievementDefinition`: `Kind` (`AchievementKind`: Feat, Road, Secret, Collection), `StageId`, `Visibility` (`AchievementVisibility`: Always, ChapterOpen, Hidden), `CompletesInRun`, `SiteId`, `SecretId`, as 2.6 names them, plus **`SeenLine`** and **`SealedLine`** (4.3's words, so the page invents nothing) |
+| deed ids | a side event's deed is `event_<site id>` (`AchievementDefinitions.EventDeedId`), a secret's `secret_<secret id>` (`SecretDeedId`), made from the id so neither can drift or collide with a hand-written deed. The Collection deed is `grimoire_restored` |
+| derived event deeds | `AchievementDefinitions.SideEventDeeds`: one per site in `SideEventDirector.ForStage`, its reward read from `UnlockCatalog.ForDiscoverySite`, its words from `SideEventWords` (the one hand-written part; `ValidateAchievements` ties them together both ways) |
+| derived secret deeds | `SecretCatalog.AsAchievement`, one per secret in `SecretCatalog.Defined`. Hidden, `CompletesInRun`, measured by `SaveData.FoundSecretIds` |
+| the unlocks | `UnlockCatalog`: every spell is `Starter` or `Achievement`. A side event's unlock is `Achievement`-sourced from its event deed and keeps the site on **`UnlockDefinition.SiteId`**. `UnlockSource.Discovery` is still in the enum and nothing uses it; `ValidateUnlockCatalog` refuses it. `PurchasableSpells` is empty (the shop's shelf draws nothing until A3 removes it; A3 retired it, 2.4) |
+| in-run completion | `AchievementManager.CompleteNow(saveManager, id)` (complete, grant, save, named entries) over `Complete(save, id)` (records the deed **and the fact it measures** - the event won, the secret found - so the two can never disagree; pays its Arcane Energy only the first time; grants what is not owned). `DiscoveryRewards.GrantSite` is a call to it now, with an in-memory overload the validators use |
+| reconciling | `AchievementManager.Reconcile(save)`: every recorded deed's current spell, boon or wizard, if not owned. Never currency. Runs in the schema 19 step and at the end of every `ApplyRunAchievements` |
+| the gate | `StageGate.PreviousBossAndWizards` (it replaced `CampaignComplete`) on the Emberdeep. `GlobalStatsManager.GateWizardIds(gate)` / `CountsTowardGate(wizard, gate)` / `IsGateMet(save, gate)` / `RemainingGateWizardCount`. `StageCatalog.GateChapter` (the first), `GateChapters` (all), `IsBossGated` |
+| the save | `SaveData.CurrentSchemaVersion` 19, `MigrateToAchievementUnlocks`; `SaveData.GlimpsedSecretIds` (`HasGlimpsedSecret`, `RecordSecretGlimpsed`); `LifetimeStats.EventsWon` (`HasWonEvent`, `RecordEventWon`) |
+| listing | `AchievementDefinitions.IsListed(deed, save)` and `ListedFor(save)` hold 4.2's rules; `IsSealed(deed, save)` is the sealed-row test; `ForStage(stageId)` groups a chapter |
+
+### 11.2 Where it departs from this doc, and why
+
+1. **The nine vaults are written in `SecretCatalog` now, as planned entries** (`IsBuilt = false`),
+   with their deeds, words and spells - not left for A4. Every vault spell has to point at a deed
+   that exists, or `ValidateUnlockCatalog` fails; and the doc's own wording ("a secret that pays a
+   spell names it in `SecretDefinition.SpellUnlockId`", `SecretCatalog.AsAchievement`) puts that in
+   the secret catalog. The edit is additive: `SecretDefinition` gained `SeenLine`, `IsVault`,
+   `IsBuilt`, `SpellUnlockId` and `SpellName`; `SecretVerb` gained `Gather` and `Lure`;
+   `SecretMetaReward` gained `Spell`; `SecretCatalog.Defined` is every secret written down and
+   `SecretCatalog.All` only the built ones (what the Secrets list and the world map count, so no
+   screen names a vault that is not in the world). **A4 moves each vault into its chapter's partial
+   file; each chapter agent flips `IsBuilt` when its vault is placed.**
+2. **Until a vault is built, its spell cannot be earned on a new save.** That is nine spells (the
+   eight shop spells and Frost Shard). Every copy anyone bought stays; but A1 alone should not ship
+   to players before the vaults do. The Spell Index already says where each is hidden (decision 7:
+   the unlock's `LockedHint` is the deed's sealed line, "Hidden somewhere in the Sunken Cave").
+3. **A secret's deed carries the vault's spell and nothing else.** A keepsake's found level or Arcane
+   lump stays `SecretDirector.Found`'s to pay, on the first find, never the deed's - so a deed
+   reconciled or completed twice can never pay it twice.
+4. **`SecretDirector.Found` does not call `CompleteNow` yet** - it is A4's file. Until it does, a
+   found secret's deed is recorded at the run's end by `ApplyRunAchievements` (its measure reads
+   `FoundSecretIds`), and a vault's spell would be granted then, not at once. **Decision 9 ("at once")
+   needs A4's one call**: `AchievementManager.CompleteNow(saveManager, AchievementDefinitions.SecretDeedId(id))`.
+   The level-up pool already reads the save live (`Player.GetLevelUpOptions`), so nothing else is
+   needed for the spell to be offered from the next level-up. A deed completed in the run that only
+   reaches the run's end (as these do) is recorded silently there unless it grants something - its
+   own beat already announced it.
+5. **The Cursed Dungeon's event deed is "The Open Cell", not "Tituba Freed".** A rescued wizard's
+   name is his reward and stays hidden while he is locked (`.ai/side-events.md`, "Secret wizards"),
+   and the deed is listed from the day the Dungeon opens. Its reward line still says "Frees Tituba",
+   as the Coursing's says "Frees Laelaps": **A2 should show a locked secret wizard's reward without
+   his name** (the deed's `CharacterUnlockId` and `GlobalStatsManager.IsCharacterUnlocked` say when).
+6. **The old Unlocks list hides some rows until A2.** `AchievementDefinitions.Listed` (no save) is
+   `ListedFor(null)`, which reveals nothing secret: no Hidden deed, and no deed that frees a secret
+   wizard - The Open Cell, Out of the Ice and **the Coursing**, which the old list did show (naming
+   Laelaps on a fresh save). A2's page calls `ListedFor(save)` and draws `IsSealed` rows.
+7. **The gate is written per chapter and counts Tituba today.** "Every wizard whose rescue comes
+   before *this* chapter": the Cursed Dungeon is still fifth in `CampaignOrder`, so the Emberdeep
+   counts all seven wizards now. When schema 20 moves the Dungeon past the gate she drops out of the
+   Emberdeep's count by herself and into the Throne's, with no edit to the gate.
+8. **Met gates are written into the opened list** (`GlobalStatsManager.RecordMetGates`, at every
+   run's end and in the schema 19 step), so a wizard added before a gate later can never close it to
+   a save that had it open - the cost schemas 10, 12, 14, 15 and 16 each paid for a new spell or
+   wizard. A gate met at a run's end is shown on the results screen as a new chapter.
+9. **The old migration steps read frozen lists.** Steps 8, 10, 12, 14, 15 and 16 read
+   `UnlockCatalog.AllSpellIds`, `AllWizardIds` and `Source == Discovery` live. With the discoveries
+   turned into deeds, step 8 would have handed Tituba and Vainamoinen to every pre-campaign save, and
+   step 10 would have stopped crediting the discoveries; and every future spell would have changed
+   what they did. They read the schema-18 lists frozen in `SaveData` now, so a new spell or wizard
+   needs no migration at all.
+10. **Step 2 also records done, quietly, every event and secret deed whose fact the save holds**, so
+    the first run after the update does not announce as new an event won long ago. A save that owns
+    Wishing Coin or Gilded Mote from schema 9's payback has those events' deeds done: it owns what
+    they pay.
+11. **Kinds of the existing deeds**: the Coursing is a Road deed of the Broken Circle (it names the
+    chapter and frees a wizard secret until it opens); Relic Hunter, Attuned and the Grimoire are
+    Collection; the rest of the hand-written non-boss deeds are Feats. John Dee's Mortlake deed is a
+    Feat with no chapter, so every gate counts him.
+12. **The reveal rule is generalised**: a wizard a gate counts must be revealed by a chapter before
+    that gate (`ValidateSecret`), as `.ai/endgame-castle.md` 1.6 asks.
+13. **Outside the file list, forced by the gate**: `WorldMap` (the finale card read the old enum, and
+    its "Still held" line counted spells; it counts the gate's wizards now), `_UiShot --campaign-complete`
+    (it must beat the gate's boss as well), and `_BalanceHarness` (a "new spells offered" report line,
+    to show a `--fresh-save` pool is the starters).
+
+### 11.3 What the element check found
+
+The second pass of `ValidateElementReachability` (6.3, item 5: starters, the shop's boons, Feats and
+chapter deeds before the gate, no secrets) passes for all twelve, as measured on the branch:
+
+| element | on the road (spells + boons) | everything |
+|---|---|---|
+| Light | 7 + 4 = 11 | 13 + 4 |
+| **Wind** | **5 + 1 = 6** | 9 + 1 |
+| Ice | 5 + 3 = 8 | 11 + 3 |
+| every other | 10 or more | |
+
+**Light is comfortable; Wind is the one at the floor.** Two of its spells are vaults (Sleet Runes,
+Hunter's Draw), which leaves Cyclone Slash, Gale Blade and Shadegrease. Any change that takes one more
+Wind carrier off the road trips the check.
+
+### 11.4 Verified, and not
+
+- `dotnet build`; the validator run (0 errors, the one standing test_wizard warning); every check
+  above was shown to fire by breaking what it guards (a reward line, a wizard's chapter past the
+  gate, the per-chapter rule, `Reconcile`, schema 8's frozen list).
+- `ValidateGateReachability` walks a new save in memory through every chapter before the gate - each
+  boss beaten as a run's end records it, each side event won, each built secret found, each Feat done
+  - and it enters the Emberdeep; without the Long Coil, or without any one wizard the gate counts, it
+  does not.
+- `ValidateAchievementMigration`: the doc's seven samples, a Long Coil-only save, a pre-campaign save
+  and a schema-9 save that had everything, each migrated twice.
+- **Not verified by play**: nothing here was seen on a screen - the old Unlocks list with the new
+  rows, the world map's finale card, a won event's line. A2's photographs cover the page.
+
+---
+
+## 12. What A4 built (2026-10-30, `wip/secret-core`)
+
+The secret core of section 9's A4 row, and one vault end to end as its proof: the Sunken Cave's Geode
+Heart (8.4.1), Eric's crystal, which pays Frost Shard. **`.ai/stage-secrets.md` section 13 is the
+record of each piece and the recipe a chapter agent follows**; this section is what changed against
+this doc.
+
+### 12.1 What it is
+
+- **`SecretCatalog` is one partial a chapter** (`SecretCatalog.<Chapter>.cs`, the `StageBestiary`
+  names - `SecretCatalog.EnchantedForest.cs`, `.SunkenCave.cs` and so on, fourteen, one for each chapter
+  in `StageCatalog` including the castle's `Bridge`, `Court` and `Throne`, so the castle agents never
+  edit the shared file either; only a new chapter adds a file and a line to the list). A1's
+  vault entries moved into their chapters' files, unchanged but for the Geode Heart's, which is built.
+  `SecretDefinition` is a record now, so a chapter builds A1's entry with `Vault(...) with { IsBuilt =
+  true, CreateSite = ... }`.
+- **Placement by kind** (`SecretPlacement`: `Anchor`, `Keepsake`, `Vault`, `Custom`), done by
+  `SecretDirector` for every built secret of the chapter: 6.4's vault band and bearing rule (five to
+  seven chunks, at least 90 degrees from the side event's and the keepsake's bearings), on its own
+  placer stream (8), its footprint reserved (`SecretCatalog.VaultFootprint`, 420 px).
+- **The seen mark** (4.3) is the director's: within 450 px of a site's near tell, once, recorded on
+  `GlimpsedSecretIds` and saved with the next save; `secret_seen` at the site the first time per save.
+- **`SecretDirector.Found` calls `AchievementManager.CompleteNow`** (11.2, item 4): a vault's spell is
+  granted and saved at once and offered from the next level-up of the same run (decision 9). The
+  results screen lists it with the run's discoveries. A vault whose spell was bought says "you already
+  had it" (4.5). `secret_found` plays for a find again, `meta_unlock` for the first.
+- **`SecretVault`** (6.4's class): `Open` pays the deed the first time ever and a chest from the run's
+  secret budget (two) in a later run.
+- **The far tell is built** (stage-secrets section 2, which section 12 there said was not):
+  `SecretFarTell`, furnished into each chunk as it streams in through one new call in
+  `Node2DGame.FurnishChunk`.
+- **Solid ground**: a site's footprint is stamped into the navigation flags as a fence is, through one
+  call in `Node2DGame.PlanChunkFeatures`, so the flow field routes round the crystal (8.4.1).
+- **The primitives**: `StrikeListener` and `Breakable` (extracted from the thaw, which counts and
+  draws its cracks through them exactly as before), `SecretMover` (follow), `SecretGather`,
+  `SecretLure`.
+
+### 12.2 Where it departs from this doc, and why
+
+1. **Three hooks in `Node2DGame`**, outside section 9's file list: `Secrets` (the director, assigned
+   before it is added, because placing it makes chunk data, which asks it for solid cells),
+   `Secrets?.FurnishChunk` beside the curated props, `Secrets?.StampChunk` at the top of
+   `PlanChunkFeatures`, and `IsDecorSpotOpen` (the tests a scattered sprite passes, for the far tell).
+   They are why no chapter has to touch the furnishing.
+2. **The far tell's crystals have no collision.** They are a direction to walk in; with collision, a
+   gradient thickening toward the vault would clutter the very pocket the vault asks him to fight in.
+3. **The seen mark is not taken while the secrets stand down** (the boss), and a site with many
+   instances (every flower pen) is seen once for its id.
+4. **The Geode Heart's first crack shows on the first hit that counts**, not at a quarter: four drawn
+   stages over 2,000 with the hairline at the first point says at once that fighting here does
+   something - the only feedback it gives besides a one-pixel jolt per counted hit. Nothing on screen
+   says how far along it is.
+5. **Its frost ring is drawn** (a one-shot ring of its own light ending on the freeze radius, with its
+   shards flying to it) - an animation, which `.ai/art-direction.md` "The player's spells carry no area
+   markers" allows, not a marker.
+6. **`_UiShot` is touched** (the tool, not the game): `--secret=<id>` (stage-secrets 7.8),
+   `--secret-stage=N[@F]`, `--goto=secret`, and `--secret-probe` runs `VaultProbe` on a chapter with a
+   built vault.
+7. **Not built:** the per-chunk scatter of stage-secrets 7.2 (common secrets at a probability per
+   super-cell). The first chapter that needs one adds it in `SecretDirector.FurnishChunk` - the one
+   shared edit still to come. And `SecretSeed` is still the Forest's carry, not extracted.
+
+### 12.3 Verified, and not
+
+- `dotnet build`; the validator run (0 errors, the one standing test_wizard warning) with the Geode
+  Heart built and the new `ValidateSecretCatalog` rules in.
+- **The thaw behaves as before**: `_ExploreProbe --stage=5` (seed 4242), 22 of 22 before the
+  extraction and after it, the event finished in 15.3 s and 15.4 s of game time after arriving.
+- **The Forest's two secrets still work**: `_UiShot --secret-probe --stage=0` all pass before and after
+  (the lap opens the bloom and heals half, the seed drops and is carried, the First Tree is placed ten
+  to twelve chunks out on stream 7, planted, found, and pays its found level of Vitality).
+- **The Geode Heart, walked and broken on a fixed seed** (`--secret-probe --stage=2 --terrain-seed=4242`):
+  on a fresh save, 23 of 23 - placed 5.2 chunks out, never a target, its foot solid in the grid, unseen
+  on the way in and seen at its foot, the far tell 109 crystals within a chunk (43 of them cracked)
+  against 69 from one to two chunks out (none cracked), a hit beyond its reach counting nothing, the
+  four stages at 54, 702, 1,350 and 2,000 landed, both witnesses in the ring frozen, then found, its deed
+  recorded, Frost Shard owned, in the level-up pool and not in the loadout, and no chest. With
+  `--all-unlocked` (a later run), 22 of 22: the same, and a chest from the budget instead.
+- **Photographed** beside the spawn (`--secret=geode_heart`) on both canvases: every stage, the shatter
+  in flight with the crowd frozen in its ring, the first find's toast and a later one's, and the far
+  tell zoomed out.
+- `_BalanceHarness --seek-apotheosis --all-unlocked --immortal --stage=2 --minutes=15` (6.3, item 7),
+  after merging A2, A3 and C0: the Apotheosis offered and taken at 10.8 minutes (the Ascensions at 6.6
+  and 12.6, level 30 at the clock), above the 7.5-minute floor. With every spell owned nothing in the
+  pool can move, and the immortal bot holds its ground, so it never walks to the vault - which is the
+  check that nothing else moved.
+- After that merge, again: the validator (0 errors; 6 warnings, the standing one and C0's five castle
+  to-dos), the thaw 22 of 22, the Forest all pass, and the Geode Heart 23 of 23 on seed 4242 and on
+  seed 777 (6.2 chunks out there, 94 far-tell crystals within a chunk against 53 beyond).
+- **Not verified by play**: whether the crystal reads in a crowd on the phone in the real light, whether
+  anyone follows the cracked clusters to it, whether 2,000 is the right amount (`.ai/achievements-and-
+  secrets.md` 9, "What no harness checks"), and whether `secret_seen` is audible at 450 px. The
+  sounds were wired, not listened to.

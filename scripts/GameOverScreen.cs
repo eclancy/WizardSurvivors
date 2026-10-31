@@ -733,7 +733,10 @@ public partial class GameOverScreen : CanvasLayer
 		if (data == null)
 			return null;
 		AchievementContext context = AchievementContext.ForSave(data);
-		var open = AchievementDefinitions.All
+		// ListedFor, not All: the nearest deed must be one this save is shown in full, or the results
+		// screen names a secret, or a deed of a wizard nobody has met yet (the Coursing before the
+		// Broken Circle opens), that the achievements page still keeps sealed.
+		var open = AchievementDefinitions.ListedFor(data)
 			.Where(d => !GlobalStatsManager.IsAchievementUnlocked(data, d.Id))
 			.Select(d => (Deed: d, Progress: d.GetProgress(context)))
 			.Where(p => !string.IsNullOrEmpty(p.Progress?.Display) && p.Progress.Fraction < 1f);

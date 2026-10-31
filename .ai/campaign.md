@@ -43,7 +43,9 @@ line in the order (section 9, decision 1).
 \* While the two new chapters are not playable, Elderbark opens the Sunken Cave.
 
 The Emberdeep is still gated on **every spell recovered and every wizard freed**, not on a boss,
-and is still last. The Sketchbook is still outside the campaign: open from the first run, in no
+and is still last. (Since schema 19 it is a gate chapter instead, `StageGate.PreviousBossAndWizards`:
+the Long Coil beaten and every wizard whose rescue comes before it - `.ai/achievements-and-secrets.md`
+2.5 and section 11.) The Sketchbook is still outside the campaign: open from the first run, in no
 order, gating nothing. The table mean is the spawn table's shares times their health multipliers
 (the Forest's wolves and wisps included), the measure `.ai/run-pacing.md` section 10.1 uses.
 
@@ -103,7 +105,8 @@ Everything that used to encode the order now reads it:
 | the locked hint | `StageDefinition.LockedHint`, derived (`StageCatalog.LockedHintFor`) | a literal per chapter ("clear the Cursed Dungeon") |
 | the stage select's order | `StageCatalog.InDisplayOrder` (campaign, then the chapters outside it) | roster order, so the Dungeon was second |
 | the deeds page's order | `AchievementDefinitions.All` puts the chapter clears in campaign order in their own slots | written order |
-| the final chapter | `StageCatalog.FinalChapter` (last in the order, the one `CampaignComplete` gate) | implied |
+| the final chapter | `StageCatalog.FinalChapter` (last in the order: the castle's Throne since `.ai/endgame-castle.md`'s plumbing, a gate chapter) | implied |
+| the gate chapter | `StageCatalog.GateChapter` (the first `PreviousBossAndWizards` chapter, the Emberdeep): what Boss Rush's arena and the migration checks read | `FinalChapter`, until the castle came after it |
 
 **Not playable means skipped.** `PreviousChapter` and `ChapterOpenedBy` step over a chapter whose
 `IsPlayable` is false, so the order is live before the new chapters exist: Elderbark opens the Cave
@@ -137,7 +140,9 @@ A boss-gated chapter is earned by any one of three things, and each only ever ad
    old order wrote down.
 
 `IsStageAvailable` is `IsPlayable && IsStageEarned`. The finale stays `CampaignComplete` (every spell
-recovered and every wizard freed, live); the Sketchbook stays `Open`.
+recovered and every wizard freed, live); the Sketchbook stays `Open`. **Since schema 19** the finale is
+`PreviousBossAndWizards`: rules 1 and 2 as above, and in place of rule 3 its previous boss beaten AND
+every wizard whose rescue comes before it (`GlobalStatsManager.IsGateMet`).
 
 ### Stand-ins, so Phase 2 creates files rather than editing shared ones
 

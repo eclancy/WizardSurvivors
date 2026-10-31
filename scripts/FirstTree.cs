@@ -12,39 +12,47 @@ using WizardSurvivors.scripts;
 // he has the right thing (and the seed itself leans this way - SecretSeed). Placed once at stage start by
 // the SecretDirector, its ground reserved so no tree or rock is ever furnished on it.
 //
-// It draws itself - the stumps, the bed and the sapling - on the art grid in the forest's own browns and
-// the contract's gold, the way the side events' sites do (GaolersKeyEvent's cell), so it needs no sheet.
-public partial class FirstTree : Node2D
+// Its clearing - the dry ground, the stumps and the bed - and the sapling are two strips drawn by
+// tools/art/secret_forest.py, on the world's 2-unit grid (the secrets' pixel-art pass, 2026-10-30: it
+// used to draw them in code, with a translucent disc of ground, antialiased polygons and smooth circles).
+// The glint and the grown tree's light are drawn here, as opaque gold stops (SecretSite.DrawGlint).
+//
+// Placed by the SecretDirector as the Forest's keepsake (SecretPlacement.Keepsake, stream 7 - the same
+// draw it has always had), from its catalog entry in SecretCatalog.EnchantedForest.
+public partial class FirstTree : SecretSite
 {
-	public SecretDirector Director { get; set; }
-
 	/// <summary>The ground kept clear for it: the stump ring and a margin.</summary>
 	public const float Footprint = 220f;
 
 	private const float BedRadius = 46f;
 	private const float GrowSeconds = 6f;
-	private const float RingRadius = 170f;
-	private const int Stumps = 9;
-	private const float GlintPeriod = 2.4f;
 
-	private static readonly Color Bark = new Color(0.36f, 0.26f, 0.18f);
-	private static readonly Color BarkDark = new Color(0.20f, 0.14f, 0.10f);
-	private static readonly Color Heartwood = new Color(0.62f, 0.50f, 0.34f);
-	private static readonly Color Earth = new Color(0.17f, 0.13f, 0.10f, 0.92f);
-	private static readonly Color DryGround = new Color(0.30f, 0.24f, 0.17f, 0.28f);
-	private static readonly Color Crack = new Color(0.07f, 0.05f, 0.04f);
-	private static readonly Color Leaf = new Color(0.45f, 0.72f, 0.36f);
-	private static readonly Color LeafLit = new Color(0.66f, 0.86f, 0.48f);
-	private static readonly Color GoldHi = new Color(1.0f, 0.941f, 0.753f);
+	// The strips (secret_forest.py, saved at x2): the clearing's two frames (barren, planted), 440 x 280,
+	// the bed's middle at (220, 156); the sapling's six (one a second of its growth), 96 x 120, its foot
+	// at (48, 114). Its stem stands STEM art pixels tall at each frame - the crown's middle, where the
+	// grown tree's light is.
+	private const string ClearingPath = "res://assets/bonelight/world/forest/first-tree-clearing.png";
+	private const string SaplingPath = "res://assets/bonelight/world/forest/first-tree-sapling.png";
+	private static readonly Vector2 ClearingCell = new(440f, 280f);
+	private static readonly Vector2 ClearingAnchor = new(-220f, -156f);
+	private static readonly Vector2 SaplingCell = new(96f, 120f);
+	private static readonly Vector2 SaplingAnchor = new(-48f, -114f);
+	private static readonly int[] Stem = { 3, 8, 15, 22, 29, 35 };
 
 	private enum Step { Barren, Growing, Grown }
 	private Step step = Step.Barren;
 	private float grown;
 	private float clock;
+	private Texture2D clearing;
+	private Texture2D sapling;
 
 	public override void _Ready()
 	{
 		ZIndex = -5; // on the ground, under the actors, as an event's site is
+		clearing = ResourceLoader.Exists(ClearingPath) ? GD.Load<Texture2D>(ClearingPath) : null;
+		sapling = ResourceLoader.Exists(SaplingPath) ? GD.Load<Texture2D>(SaplingPath) : null;
+		if (clearing == null || sapling == null)
+			GD.PushError("FirstTree: its art is missing; re-run python tools/art/secret_forest.py, then import.");
 	}
 
 	public override void _Process(double delta)
@@ -80,96 +88,30 @@ public partial class FirstTree : Node2D
 
 	public override void _Draw()
 	{
-		// The clearing: a faint disc of dry ground, so the ring reads as a place and not as scatter.
-		DrawSetTransform(Vector2.Zero, 0f, new Vector2(1f, 0.6f));
-		DrawCircle(Vector2.Zero, RingRadius + 40f, DryGround);
-		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-
-		// The stump ring: each a cut trunk flaring to its roots, its top showing the rings - wood, not
-		// rock - in sizes that vary round the ring so it reads as old growth, not as a fence.
-		for (int i = 0; i < Stumps; i++)
-		{
-			float angle = i * Mathf.Tau / Stumps + 0.3f;
-			Vector2 at = (Vector2.FromAngle(angle) * new Vector2(RingRadius, RingRadius * 0.62f)).Round();
-			DrawStump(at, 26f + (i * 7 % 3) * 6f, 20f + (i * 5 % 4) * 5f);
-		}
-
-		// The seed-bed: a patch of dark earth, cracked dry until the sapling is in it.
-		DrawSetTransform(Vector2.Zero, 0f, new Vector2(1f, 0.5f));
-		DrawCircle(Vector2.Zero, BedRadius, Earth);
-		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-		if (step == Step.Barren)
-		{
-			DrawLine(new Vector2(-30f, -4f), new Vector2(-8f, 2f), Crack, 2f);
-			DrawLine(new Vector2(-8f, 2f), new Vector2(6f, -8f), Crack, 2f);
-			DrawLine(new Vector2(6f, -8f), new Vector2(28f, 4f), Crack, 2f);
-			DrawLine(new Vector2(-4f, 2f), new Vector2(-2f, 14f), Crack, 2f);
-		}
-
+		// The clearing and the sapling: the strips, their art pixels on the world's 2-unit grid wherever
+		// the seed put the clearing (AlignToWorldGrid shifts the drawing by under a pixel; nothing that is
+		// tested moves). The clearing's second frame is the bed turned over, once the seed is in it.
+		SpellInk.AlignToWorldGrid(this);
+		if (clearing != null)
+			DrawTextureRectRegion(clearing, new Rect2(ClearingAnchor, ClearingCell),
+				new Rect2(new Vector2(step == Step.Barren ? 0f : ClearingCell.X, 0f), ClearingCell));
 		float t = step == Step.Grown ? 1f : grown;
-		if (step != Step.Barren)
-			DrawSapling(t);
+		// One frame a second of its growth: a sprout, a stem, leaves, then a crown filling out.
+		int frame = Math.Min(Stem.Length - 1, (int)(t * Stem.Length));
+		if (step != Step.Barren && sapling != null)
+			DrawTextureRectRegion(sapling, new Rect2(SaplingAnchor, SaplingCell),
+				new Rect2(new Vector2(frame * SaplingCell.X, 0f), SaplingCell));
+		DrawSetTransform(Vector2.Zero);
 
 		// The near tell: dim while he has nothing to plant, bright while he carries a seed, and a
-		// steady glow in the grown tree's crown.
-		Vector2 head = step == Step.Barren ? new Vector2(0f, -6f) : new Vector2(0f, -SaplingHeight(t));
+		// steady light in the grown tree's crown. Opaque gold stops on the world's grid; DrawGlint finds
+		// the grid itself.
+		Vector2 head = step == Step.Barren ? new Vector2(0f, -6f) : new Vector2(0f, -Stem[frame] * 2f);
 		if (step == Step.Grown)
 		{
-			DrawCircle(head, 34f, new Color(GoldHi, 0.12f));
-			DrawRect(new Rect2(head - new Vector2(2f, 2f), new Vector2(4f, 4f)), GoldHi);
+			DrawLight(this, head, 10f, 0.6f);
 			return;
 		}
-		bool carrying = Director?.Carried != null;
-		float breath = 0.5f - 0.5f * MathF.Cos(clock * Mathf.Tau / GlintPeriod);
-		float strength = carrying ? 1f : 0.45f;
-		DrawRect(new Rect2(head - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color(GoldHi, (0.12f + 0.2f * breath) * strength));
-		DrawRect(new Rect2(head - new Vector2(2f, 2f), new Vector2(4f, 4f)), new Color(GoldHi, (0.35f + 0.65f * breath) * strength));
-	}
-
-	private void DrawStump(Vector2 foot, float width, float height)
-	{
-		float top = foot.Y - height;
-		float half = width * 0.5f;
-		// Roots spreading off the base on both sides.
-		DrawColoredPolygon(new[]
-		{
-			new Vector2(foot.X - half - 8f, foot.Y), new Vector2(foot.X - half + 2f, foot.Y - 8f),
-			new Vector2(foot.X + half - 2f, foot.Y - 8f), new Vector2(foot.X + half + 8f, foot.Y),
-		}, BarkDark);
-		// The trunk, a little narrower at the cut than at the ground.
-		DrawColoredPolygon(new[]
-		{
-			new Vector2(foot.X - half, foot.Y - 2f), new Vector2(foot.X - half + 3f, top),
-			new Vector2(foot.X + half - 3f, top), new Vector2(foot.X + half, foot.Y - 2f),
-		}, Bark);
-		DrawRect(new Rect2(foot.X - half + 2f, top + 2f, 4f, height - 4f), BarkDark);
-		// The cut: heartwood, with one ring and a dark heart.
-		DrawSetTransform(new Vector2(foot.X, top), 0f, new Vector2(1f, 0.4f));
-		DrawCircle(Vector2.Zero, half - 3f, Heartwood);
-		DrawArc(Vector2.Zero, (half - 3f) * 0.6f, 0f, Mathf.Tau, 16, Bark, 2f);
-		DrawCircle(Vector2.Zero, 2.5f, BarkDark);
-		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-	}
-
-	private static float SaplingHeight(float t) => 20f + 70f * t;
-
-	// The sapling over its six seconds: a stem rising, two leaves, then a small crown.
-	private void DrawSapling(float t)
-	{
-		float height = SaplingHeight(t);
-		DrawRect(new Rect2(new Vector2(-3f, -height), new Vector2(6f, height)), Bark);
-		DrawRect(new Rect2(new Vector2(-3f, -height), new Vector2(2f, height)), BarkDark);
-		if (t > 0.25f)
-		{
-			DrawRect(new Rect2(new Vector2(-14f, -height * 0.5f), new Vector2(11f, 5f)), Leaf);
-			DrawRect(new Rect2(new Vector2(3f, -height * 0.66f), new Vector2(11f, 5f)), Leaf);
-		}
-		if (t > 0.55f)
-		{
-			float crown = 12f + 22f * (t - 0.55f) / 0.45f;
-			DrawCircle(new Vector2(0f, -height), crown, Leaf);
-			DrawCircle(new Vector2(-crown * 0.4f, -height - crown * 0.3f), crown * 0.55f, LeafLit);
-			DrawCircle(new Vector2(crown * 0.45f, -height + crown * 0.2f), crown * 0.45f, Leaf);
-		}
+		DrawGlint(this, head, clock, Director?.Carried != null ? 1f : 0.45f);
 	}
 }
