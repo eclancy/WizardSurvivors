@@ -38,6 +38,20 @@ manifest, in pixels of the saved PNG. Node2DGame sorts and collides every tree a
 the middle of the sprite, which is what lets the wizard pass behind a crown and in front of a trunk.
 `trunk` is the width of the trunk's foot in world pixels: the only part of a tree that stops
 anything (on the ground's physics layer, so it meets his boots; see `.ai/terrain.md` section 10).
+
+NOTHING IS CUT BY ITS BOX (0.9.3). Reported on 0.9.2: "the art for the bushes and scorched sands
+all looked like the art got cut off due to box boundaries". `raster.Canvas.set` silently drops a
+pixel outside the canvas, so a twig, a crown cluster or a shade pool drawn past the box the sprite
+was given was not an error anywhere - it was simply sliced off with a straight edge. The Sands' dead
+bushes lost their twigs on three sides, a third of the trees their outer limbs or the foot of their
+shade pool, and the widest Forest bush its top. Every painter now draws on a `Bleed` canvas, which
+keeps what lands outside the box, and `fit` grows the box to the art plus a clear pixel on every
+side - growing only, so a sprite that was never cut comes out exactly as it was. The twig bushes are
+the exception: grown, their fans would be twice the bush they were meant to be, so `twig_bush`
+shortens its twigs until the fan fits its box instead. `tools/art/clip_check.py` checks the PNGs.
+
+PYTHON 2 AND 3. `Rng` and `round2` keep Python 2's `randrange`, `choice` and `round` on both, so the
+same seed draws the same tree on either interpreter.
 """
 
 import io
@@ -57,8 +71,88 @@ OUT = os.path.join(ROOT, "assets", "bonelight", "world", "trees")
 TAU = math.pi * 2.0
 SCALE = 2
 # How far below the trunk's foot each canvas runs, in authored pixels: room for the contact shadow
-# and the near half of the shade pool.
+# and the near half of the shade pool. Where the pool reaches further, `fit` grows the canvas.
 FOOT = 6
+# How far past its box a painter may draw before it is an error, in authored pixels.
+BLEED = 64
+# The clear border `fit` leaves round the art, in authored pixels (two on screen).
+MARGIN = 1
+# The lowest a twig bush's fork may point, in radians above horizontal (`twig_bush`).
+TWIG_RISE = 0.3
+
+
+class Rng(random.Random):
+    """random.Random with Python 2's randrange and choice, on Python 2 and 3 alike.
+
+    random() is the same stream on both, but Python 3 rewrote randrange and choice on getrandbits,
+    so the same seed scattered different leaves, berries and twigs there. These are Python 2's
+    formulas, which is what the shipped sprites were drawn with.
+    """
+
+    def randrange(self, start, stop=None, step=1):
+        if stop is None:
+            start, stop = 0, start
+        return int(start + int(self.random() * (stop - start)))
+
+    def choice(self, seq):
+        return seq[int(self.random() * len(seq))]
+
+
+def round2(v):
+    """Python 2's round: halves away from zero. Python 3 rounds them to even, which moved trunk
+    edges by a pixel."""
+    return math.floor(v + 0.5) if v >= 0 else math.ceil(v - 0.5)
+
+
+class Bleed(raster.Canvas):
+    """A canvas that keeps what is drawn past its edges, up to BLEED pixels out.
+
+    `w` and `h` are the box the sprite was designed in and painters draw in its coordinates exactly
+    as on a plain Canvas; the image is BLEED larger on every side. `fit` turns it into the canvas
+    that is saved."""
+
+    def __init__(self, w, h, bg=None):
+        raster.Canvas.__init__(self, w + 2 * BLEED, h + 2 * BLEED, bg)
+        self.w, self.h = w, h
+
+    def set(self, x, y, c):
+        if c is None:
+            return
+        if -BLEED <= x < self.w + BLEED and -BLEED <= y < self.h + BLEED:
+            self.px[x + BLEED, y + BLEED] = raster.rgb(c) if isinstance(c, str) else c
+
+    def get(self, x, y):
+        if -BLEED <= x < self.w + BLEED and -BLEED <= y < self.h + BLEED:
+            return self.px[x + BLEED, y + BLEED]
+        return (0, 0, 0, 0)
+
+    def art_box(self):
+        """(x0, y0, x1, y1) of the opaque pixels in box coordinates, x1 and y1 exclusive."""
+        bb = self.img.getchannel("A").getbbox()
+        if bb is None:
+            return None
+        return (bb[0] - BLEED, bb[1] - BLEED, bb[2] - BLEED, bb[3] - BLEED)
+
+
+def fit(c):
+    """The saved canvas for a Bleed: its box, grown wherever the art reaches past it so the art has
+    MARGIN clear pixels on that side. Returns (canvas, ox, oy): a box coordinate x is ox + x in it.
+    Never shrinks, so art that fitted is returned pixel for pixel. Carries `anchor_x` across."""
+    ab = c.art_box()
+    x0, y0, x1, y1 = 0, 0, c.w, c.h
+    if ab is not None:
+        x0 = min(x0, ab[0] - MARGIN)
+        y0 = min(y0, ab[1] - MARGIN)
+        x1 = max(x1, ab[2] + MARGIN)
+        y1 = max(y1, ab[3] + MARGIN)
+    if x0 < -BLEED or y0 < -BLEED or x1 > c.w + BLEED or y1 > c.h + BLEED:
+        raise ValueError("drawn more than %d px past its box: %r" % (BLEED, ab))
+    out = raster.Canvas(x1 - x0, y1 - y0, None)
+    out.img = c.img.crop((x0 + BLEED, y0 + BLEED, x1 + BLEED, y1 + BLEED))
+    out.px = out.img.load()
+    if hasattr(c, "anchor_x"):
+        out.anchor_x = c.anchor_x - x0
+    return out, -x0, -y0
 
 
 def ramp(mat):
@@ -138,7 +232,7 @@ def shade_pool(c, cx, base, rx, ry, density=0.5):
 def trunk(c, cx, base, top, w0, w1, bark, seed, flare=3, lean=0.0, marks=None):
     """A tapering trunk from `base` up to `top`, lit on the left, with bark streaks and a root
     flare. `bark` is a five-tone ramp; `marks` (birch) is a colour for horizontal lenticels."""
-    rnd = random.Random(seed)
+    rnd = Rng(seed)
     hgt = max(1, base - top)
     for y in range(int(top), int(base) + 1):
         t = (base - y) / float(hgt)                 # 0 at the foot, 1 at the top
@@ -146,7 +240,7 @@ def trunk(c, cx, base, top, w0, w1, bark, seed, flare=3, lean=0.0, marks=None):
         if t < 0.18:                                # the root flare
             half += flare * (1.0 - t / 0.18) ** 2
         mid = cx + lean * t * t * hgt * 0.1
-        x0, x1 = int(round(mid - half)), int(round(mid + half))
+        x0, x1 = int(round2(mid - half)), int(round2(mid + half))
         for x in range(x0, x1 + 1):
             u = (x - x0) / float(max(1, x1 - x0))  # 0 left (lit) .. 1 right
             v = 0.82 - u * 0.78
@@ -163,9 +257,14 @@ def trunk(c, cx, base, top, w0, w1, bark, seed, flare=3, lean=0.0, marks=None):
     return lambda yy: cx + lean * ((base - yy) / float(hgt)) ** 2 * hgt * 0.1
 
 
-def limb(c, x, y, ang, length, width, bark, depth, rnd, tips=None, droop=0.0):
+def limb(c, x, y, ang, length, width, bark, depth, rnd, tips=None, droop=0.0, rise=None, thin=False):
     """A branch and its forks, as a stroke that thins toward its tip. `tips` collects where the
-    twigs end, for the crown to hang leaf clusters on."""
+    twigs end, for the crown to hang leaf clusters on. `rise`, in radians, keeps every fork pointing
+    at least that far above horizontal (a twig bush's outer forks otherwise hang below its root).
+    `thin` draws the thinnest strokes one pixel wide rather than two, which a tree's limbs never
+    show but a knee-high bush's twigs need, or a fan of them is a solid smudge."""
+    if rise is not None:
+        ang = max(-math.pi + rise, min(-rise, ang))
     steps = max(2, int(length))
     px, py = x, y
     for k in range(steps):
@@ -174,11 +273,12 @@ def limb(c, x, y, ang, length, width, bark, depth, rnd, tips=None, droop=0.0):
         nx = px + math.cos(a)
         ny = py + math.sin(a)
         wd = max(1.0, width * (1.0 - t * 0.6))
-        for j in range(int(-wd // 2), int(wd // 2) + 1):
+        across = (0,) if thin and wd < 1.6 else range(int(-wd // 2), int(wd // 2) + 1)
+        for j in across:
             col = bark[2] if j < 0 else (bark[3] if j == 0 else bark[4])
             if wd < 1.6:
                 col = bark[3]
-            c.set(int(round(nx - math.sin(a) * j)), int(round(ny + math.cos(a) * j)), col)
+            c.set(int(round2(nx - math.sin(a) * j)), int(round2(ny + math.cos(a) * j)), col)
         px, py = nx, ny
     if tips is not None:
         tips.append((px, py))
@@ -187,7 +287,7 @@ def limb(c, x, y, ang, length, width, bark, depth, rnd, tips=None, droop=0.0):
     for s in (-1, 1):
         if rnd.random() < 0.85:
             limb(c, px, py, ang + s * (0.35 + rnd.random() * 0.45), length * (0.55 + rnd.random() * 0.2),
-                 width * 0.6, bark, depth - 1, rnd, tips, droop)
+                 width * 0.6, bark, depth - 1, rnd, tips, droop, rise, thin)
 
 
 # --- leaves ---------------------------------------------------------------------------------------
@@ -273,8 +373,8 @@ def broadleaf(seed, w, h, crown_frac=0.62, trunk_w=10, lean=0.0, n=34, rmin=7, r
               bark=FL, leaves=VE[1:5], gaps=0.0):
     """An oak-like broadleaf: a short, thick trunk and a wide lumpy crown, with limbs showing in the
     crown's underside where the leaves thin."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + FOOT, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + FOOT)
     base = h - 1
     cx = w // 2
     crown_h = h * crown_frac
@@ -302,8 +402,8 @@ def broadleaf(seed, w, h, crown_frac=0.62, trunk_w=10, lean=0.0, n=34, rmin=7, r
 
 def fir(seed, w, h, tiers=6):
     """A fir: tiers of drooping boughs, dark and narrow. The one tree that is a triangle."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + FOOT, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + FOOT)
     base = h - 1
     cx = w // 2
     shade_pool(c, cx + 3, base, w * 0.34, 6)
@@ -345,8 +445,8 @@ def fir(seed, w, h, tiers=6):
 
 def birch(seed, w, h):
     """A birch: a slender bone-white trunk with dark lenticels and a small airy crown."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + FOOT, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + FOOT)
     base = h - 1
     cx = w // 2 + rnd.randrange(-2, 3)
     c.anchor_x = cx
@@ -367,8 +467,8 @@ def birch(seed, w, h):
 def willow(seed, w, h):
     """A swamp willow: a squat dark trunk under a dome, and a curtain of strands hanging nearly to
     the water. The strands are what make it a willow at a glance; the trunk shows between them."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + FOOT, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + FOOT)
     base = h - 1
     cx = w // 2
     shade_pool(c, cx + 4, base, w * 0.4, 8)
@@ -388,7 +488,7 @@ def willow(seed, w, h):
         ph = rnd.random() * TAU
         lit = sx < cx - w * 0.15
         for j in range(int(ln)):
-            x = int(round(sx + math.sin(ph + j * 0.12) * 1.5 + j * 0.04))
+            x = int(round2(sx + math.sin(ph + j * 0.12) * 1.5 + j * 0.04))
             y = int(sy + j)
             if y >= base - 3:
                 break
@@ -402,8 +502,8 @@ def willow(seed, w, h):
 def snag(seed, w, h, bark, moss=None, hanging=None, depth=3):
     """A dead tree: a trunk and bare forking limbs, no leaves. `moss` patches the bark (swamp);
     `hanging` drops strands of moss from the limbs."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + FOOT, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + FOOT)
     base = h - 1
     cx = w // 2
     contact(c, cx, base + 1, 7)
@@ -442,8 +542,8 @@ def snag(seed, w, h, bark, moss=None, hanging=None, depth=3):
 def gnarled(seed, w, h):
     """A ruin-grown tree: a twisted leaning trunk, one dead limb, and a sparse dark crown in two or
     three separate masses, as if half of it had given up."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + FOOT, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + FOOT)
     base = h - 1
     cx = w // 2 - 4
     c.anchor_x = cx
@@ -473,8 +573,8 @@ def gnarled(seed, w, h):
 # --- bushes ---------------------------------------------------------------------------------------
 
 def leafy_bush(seed, w, h, n, rmin, rmax, tones=None, berry=0):
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + 3, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + 3)
     base = h - 1
     cx = w // 2
     c.disc(cx, base, w * 0.42, 2.2, OCC)
@@ -494,15 +594,35 @@ def leafy_bush(seed, w, h, n, rmin, rmax, tones=None, berry=0):
 
 
 def twig_bush(seed, w, h, wood, tufts=None):
-    """A dead bush or desert scrub: a fan of bare twigs from one root, thinning to their tips."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + 3, None)
+    """A dead bush or desert scrub: a fan of bare twigs from one root, thinning to their tips.
+
+    The fan is drawn to fit its box. Its twigs fork twice and the outer ones lean out past
+    horizontal, so at full length they reached two to three times the bush's width and height and
+    the box sliced them off on three sides - the Sands' "cut off" bushes on 0.9.2. Grown instead of
+    cut, they would be a thicket half the wizard's height and twice his width, drooping below its
+    own root. So no fork points lower than TWIG_RISE above horizontal, and the whole fan is drawn
+    shorter, a step at a time, until every twig ends inside the box with a clear pixel round it:
+    the same fan, the size it was meant to be. Every step draws the same random fan, so only its
+    length changes. Shortened to fit, two-pixel twigs closed up into a smudge, so the forks are
+    drawn a pixel wide (`limb`'s `thin`): a fan of fine twigs over a thicker root."""
     base = h - 1
     cx = w // 2
-    c.disc(cx, base, w * 0.36, 1.8, OCC)
-    for k in range(9):
-        a = -math.pi / 2 + (k - 4) * 0.30 + (rnd.random() - 0.5) * 0.25
-        limb(c, cx + (k - 4) * 0.6, base, a, h * (0.55 + rnd.random() * 0.35), 2, wood, 2, rnd)
+    reach = 1.0
+    while True:
+        rnd = Rng(seed)
+        c = Bleed(w, h + 3)
+        c.disc(cx, base, w * 0.36, 1.8, OCC)
+        for k in range(9):
+            a = -math.pi / 2 + (k - 4) * 0.30 + (rnd.random() - 0.5) * 0.25
+            limb(c, cx + (k - 4) * 0.6, base, a, h * (0.55 + rnd.random() * 0.35) * reach, 2, wood, 2, rnd,
+                 rise=TWIG_RISE, thin=True)
+        ab = c.art_box()
+        # x1 and y1 are exclusive; base + 2 is the foot of the contact shadow under the root.
+        if ab[0] >= MARGIN and ab[1] >= MARGIN and ab[2] <= w - MARGIN and ab[3] <= base + 2:
+            break
+        reach *= 0.95
+        if reach < 0.3:
+            raise ValueError("twig_bush(%d): the fan does not fit %dx%d" % (seed, w, h))
     if tufts:
         for k in range(6):
             x = cx + rnd.randrange(-w // 3, w // 3)
@@ -514,8 +634,8 @@ def twig_bush(seed, w, h, wood, tufts=None):
 
 def reed_tuft(seed, w, h):
     """A swamp tussock: sedge blades and two or three brown cattails."""
-    rnd = random.Random(seed)
-    c = raster.Canvas(w, h + 3, None)
+    rnd = Rng(seed)
+    c = Bleed(w, h + 3)
     base = h - 1
     cx = w // 2
     c.disc(cx, base, w * 0.4, 2, OCC)
@@ -525,7 +645,7 @@ def reed_tuft(seed, w, h):
         lean = (x0 - cx) * 0.06 + (rnd.random() - 0.5) * 0.6
         for j in range(int(ln)):
             t = j / ln
-            x = int(round(x0 + lean * j * t))
+            x = int(round2(x0 + lean * j * t))
             col = VE[2] if j % 4 == 0 else (VE[3] if x < cx else VE[4])
             if t > 0.8:
                 col = LN[2]
@@ -542,7 +662,7 @@ def reed_tuft(seed, w, h):
 
 def bramble(seed, w, h):
     """A ruin bramble: dark leaves on arching thorned canes, with a few dull red hips."""
-    rnd = random.Random(seed)
+    rnd = Rng(seed)
     c = leafy_bush(seed, w, h, 9, 4, 7, tones=[VE[2], VE[3], VE[4], OCC])
     base = h - 1
     cx = w // 2
@@ -557,7 +677,7 @@ def bramble(seed, w, h):
             c.set(int(px), int(py), FL[3])
             if j % 4 == 2:
                 c.set(int(px) + 1, int(py) - 1, FL[4])        # a thorn
-    rr = random.Random(seed + 1)
+    rr = Rng(seed + 1)
     for k in range(3):
         x = cx + rr.randrange(-w // 3, w // 3)
         y = base - rr.randrange(4, h - 3)
@@ -612,35 +732,57 @@ SPRITES = [
 ]
 
 
+def save_grounded(c, sid, kind, foot, footprint, out_dir, res_dir):
+    """Fit a painter's Bleed canvas, check its colours, save it at x2 and return its manifest row -
+    or None, having said why, when it has off-contract colours.
+
+    `foot` is how many authored rows of the box lie below the ground line. The ground line and the
+    anchor column are worked out in the box and carried into the fitted canvas, so growing the
+    canvas above or to the left of the art moves neither the trunk's foot nor its column."""
+    # The trunk's column, in the box: Node2DGame stands this column on the scattered point (and
+    # mirrors it when it flips the sprite), so the collision is under the trunk.
+    anchor_box = getattr(c, "anchor_x", c.w // 2)
+    ground_box = c.h - foot
+    c, ox, oy = fit(c)
+    bad = c.audit()
+    if bad:
+        print("OFF-CONTRACT COLOURS in %s: %s" % (sid, bad[:4]))
+        return None
+    ground = (ground_box + oy) * SCALE          # the contact line, in pixels of the saved PNG
+    anchor = (anchor_box + ox) * SCALE + 1
+    c.scaled(SCALE).save(os.path.join(out_dir, sid + ".png"))
+    print("  %-18s %-4s %3dx%-3d on screen%s" % (sid, kind, c.w * SCALE, c.h * SCALE,
+                                              ", blocks %d px" % footprint if footprint else ""))
+    return ('    {"id": "%s", "kind": "%s", "path": "%s/%s.png", '
+            '"width": %d, "height": %d, "ground": %d, "anchor_x": %d, "trunk": %d}'
+            % (sid, kind, res_dir, sid, c.w * SCALE, c.h * SCALE, ground, anchor, footprint))
+
+
+def write_text(path, text):
+    """UTF-8 with LF line endings, from a str on Python 2 or 3."""
+    if not isinstance(text, type(u"")):
+        text = text.decode("utf-8")
+    io.open(path, "w", encoding="utf-8", newline="\n").write(text)
+
+
 def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
     ok = True
     rows = []
     for (sid, kind, draw, footprint) in SPRITES:
-        c = draw()
-        bad = c.audit()
-        if bad:
+        row = save_grounded(draw(), sid, kind, FOOT if kind == "tree" else 3, footprint, OUT,
+                            "res://assets/bonelight/world/trees")
+        if row is None:
             ok = False
-            print("OFF-CONTRACT COLOURS in %s: %s" % (sid, bad[:4]))
-            continue
-        foot = FOOT if kind == "tree" else 3
-        ground = (c.h - foot) * SCALE              # the contact line, in pixels of the saved PNG
-        # The trunk's column, in pixels of the PNG: Node2DGame stands this column on the scattered
-        # point (and mirrors it when it flips the sprite), so the collision is under the trunk.
-        anchor = getattr(c, "anchor_x", c.w // 2) * SCALE + 1
-        c.scaled(SCALE).save(os.path.join(OUT, sid + ".png"))
-        rows.append('    {"id": "%s", "kind": "%s", "path": "res://assets/bonelight/world/trees/%s.png", '
-                    '"width": %d, "height": %d, "ground": %d, "anchor_x": %d, "trunk": %d}'
-                    % (sid, kind, sid, c.w * SCALE, c.h * SCALE, ground, anchor, footprint))
-        print("  %-16s %-4s %3dx%-3d on screen%s" % (sid, kind, c.w * SCALE, c.h * SCALE,
-                                                  ", trunk %d px" % footprint if footprint else ""))
+        else:
+            rows.append(row)
     manifest = ('{\n'
                 '  "_comment": "Generated by tools/art/trees.py. ground is the contact line and '
                 'anchor_x the trunk column, in pixels of the PNG; trunk is the width in world pixels of the only part that blocks (0: walk '
                 'through it). Node2DGame anchors, sorts and collides each sprite at its ground line.",\n'
                 '  "sprites": [\n%s\n  ]\n}\n' % ",\n".join(rows))
-    io.open(os.path.join(OUT, "trees.json"), "w", encoding="utf-8", newline="\n").write(manifest.decode("utf-8"))
+    write_text(os.path.join(OUT, "trees.json"), manifest)
     print("%d trees and bushes%s" % (len(rows), "" if ok else " - WITH PALETTE ERRORS"))
     return 0 if ok else 1
 

@@ -22,7 +22,7 @@ LoopWhileActive = true
 scale = Vector2(1, 1)
 sprite_frames = ExtResource("2_flameframes")
 animation = &"idle"
-offset = Vector2(0, -1)
+offset = Vector2(0, -13)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_flamevent")

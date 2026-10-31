@@ -1174,6 +1174,21 @@ pool of shade under its crown. `trees.json` gives each sprite's ground line, tru
 width. The four old sprites (`tree-1`, `tree-2`, `bush-1`, `bush-2`) and their painters in
 `world_props.py` are gone.
 
+**Nothing is cut by its box (0.9.3).** Reported on 0.9.2: "the art for the bushes and scorched sands
+all looked like the art got cut off due to box boundaries". `raster.Canvas.set` drops any pixel
+outside the canvas without a word, and 19 of the 31 sprites here drew past theirs: the Sands' dead
+bushes and scrub lost their twigs on three sides, the bleached and dead trees and the swamp snags
+their outer limbs, a gnarled tree the edge of its crown, the oaks, the sapling and the willows the
+foot of their shade pool, the sedge tussocks their outer blades, the widest Forest bush and a
+bramble their tops. Painters now draw on `trees.Bleed`, and `trees.fit` grows each canvas to its art
+plus one clear pixel - growing only, so a sprite that was whole is byte-identical, and the ground
+line and trunk column move with the canvas in `trees.json`, so no footprint moved. The twig bushes
+are the exception: grown, they would have been twice their size, so `twig_bush` shortens its fan
+until it fits its box (and draws its forks a pixel wide, or the shortened fan is a smudge).
+`python tools/art/clip_check.py` checks every set of world art for art touching its cell's edge -
+on 0.9.2 it reports 62 cut edges in 37 files, now none - and `RegressionChecks.ValidateGroundArt`
+warns on a tree or bush with an opaque border pixel.
+
 ### Sorting at the feet
 
 Everything in a chunk sorts by its node's y, and the wizard's node is the middle of his sprite. His

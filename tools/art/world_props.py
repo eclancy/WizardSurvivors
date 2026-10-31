@@ -45,8 +45,15 @@ def ramp(mat):
 
 
 def shadow(c, cx, cy, rx, ry=None):
-    """The contact ellipse. Every prop gets one - without it they hover."""
-    c.disc(cx, cy, rx, ry if ry is not None else rx * 0.42, OCC)
+    """The contact ellipse. Every prop gets one - without it they hover.
+
+    It never runs past the cell's last row: `ry` is held under the distance to the row below the
+    cell. A shadow at row 29 with a 3.6 px radius reached row 32 and was sliced flat along the
+    cell's foot (the brazier, the cage and the sarcophagus, found by tools/art/clip_check.py), so
+    it is now the flatter ellipse that ends on row 31 - symmetric, with a narrow last row."""
+    ry = ry if ry is not None else rx * 0.42
+    ry = min(ry, c.h - cy - 0.01)
+    c.disc(cx, cy, rx, ry, OCC)
 
 
 def mound(c, cx, base, rx, ry, mat, dither=0):
@@ -207,8 +214,12 @@ def fallen_log():
     c.hline(3, 28, 23, OCC)
     for x in range(5, 28, 5):
         c.vline(x, 16, 22, f[4])
-    c.disc(28, 19, 4.2, 4.2, f[2])
-    c.disc(28, 19, 2.4, 2.4, f[4])
+    # The sawn end, a pixel in from the log's end and 3.9 across rather than 4.2: centred on 28 at
+    # 4.2 its rim reached column 32, one past the cell, and the log's end was sliced flat
+    # (tools/art/clip_check.py). Now it ends on column 30. The log's body and its collision stay
+    # where they were.
+    c.disc(27, 19, 3.9, 4.2, f[2])
+    c.disc(27, 19, 2.4, 2.4, f[4])
     return c
 
 

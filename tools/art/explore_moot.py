@@ -51,7 +51,9 @@ W, H = 26, 56
 
 
 def stone(lit):
-    c = raster.Canvas(W, H, None)
+    # On trees.Bleed: the shade pool reaches past the 26 px box on the right, where a plain canvas
+    # sliced it off along the frame's edge (tools/art/clip_check.py). main() fits both frames to one box.
+    c = T.Bleed(W, H)
     base = H - FOOT - 1
     cx = W / 2.0
     T.contact(c, cx + 1, base + 1, 11)
@@ -61,7 +63,7 @@ def stone(lit):
     for y in range(4, base + 1):
         t = (y - 4) / float(base - 4)
         hw = 8.0 + 1.6 * t + (0.6 if t > 0.92 else 0.0)
-        rows.append((y, int(round(cx - hw)), int(round(cx + hw))))
+        rows.append((y, int(T.round2(cx - hw)), int(T.round2(cx + hw))))
     for (y, l, r) in rows:
         a1 = l + 5
         a2 = r - 4
@@ -97,7 +99,7 @@ def stone(lit):
     pts = []
     for k in range(0, 360, 12):
         a = math.radians(k)
-        pts.append((int(round(rx + rr * math.cos(a))), int(round(ry + rr * 1.1 * math.sin(a)))))
+        pts.append((int(T.round2(rx + rr * math.cos(a))), int(T.round2(ry + rr * 1.1 * math.sin(a)))))
     for y in range(ry - 9, ry + 10):
         pts.append((rx, y))
     for (x, y) in ((rx - 3, ry + 8), (rx - 2, ry + 9), (rx + 3, ry + 8), (rx + 2, ry + 9),
@@ -118,7 +120,7 @@ def stone(lit):
                 if (x + dx, y + dy) not in pts and c.get(x + dx, y + dy)[3]:
                     c.set(x + dx, y + dy, LIGHT[2] if (x + dx + y) % 2 else GO[1])
     # Heather at its foot.
-    rnd = random.Random(523)
+    rnd = T.Rng(523)
     for x in range(3, W - 3):
         if rnd.random() < 0.6:
             h = rnd.randrange(1, 4)
@@ -151,7 +153,7 @@ def socket():
         n = max(abs(x1 - x0), abs(y1 - y0))
         for i in range(n + 1):
             t = i / float(n)
-            c.set(int(round(x0 + (x1 - x0) * t)), int(round(y0 + (y1 - y0) * t)), SK[4])
+            c.set(int(T.round2(x0 + (x1 - x0) * t)), int(T.round2(y0 + (y1 - y0) * t)), SK[4])
     for (x, y) in ((3, 9), (26, 8), (8, 15), (21, 15)):
         c.set(x, y, LN[2])
         c.set(x + 1, y, LN[3])
@@ -167,9 +169,16 @@ def main():
         if bad:
             print("OFF-CONTRACT COLOURS in the %s moot stone: %s" % (name, bad[:4]))
             return 1
-    strip = raster.Canvas(W * 2, H, None)
-    strip.img.paste(dark.img, (0, 0))
-    strip.img.paste(lit.img, (W, 0))
+    # Both frames fitted to the one box that holds either (trees.fit grows a box, never shrinks it),
+    # and the manifest's numbers moved with the box, so the foot and the rune stay where they were.
+    fd, oxd, oyd = T.fit(dark)
+    fl, oxl, oyl = T.fit(lit)
+    ox, oy = max(oxd, oxl), max(oyd, oyl)
+    fw = max(fd.w - oxd, fl.w - oxl) + ox
+    fh = max(fd.h - oyd, fl.h - oyl) + oy
+    strip = raster.Canvas(fw * 2, fh, None)
+    strip.img.paste(fd.img, (ox - oxd, oy - oyd))
+    strip.img.paste(fl.img, (fw + ox - oxl, oy - oyl))
     strip.scaled(SCALE).save(os.path.join(OUT, "moot-stone.png"))
     sock = socket()
     bad = sock.audit()
@@ -185,15 +194,15 @@ def main():
         '  "stone": {"path": "res://assets/bonelight/world/heath/moot-stone.png", "frames": 2, '
         '"frame_w": %d, "frame_h": %d, "ground": %d, "anchor_x": %d, "rune_y": %d},\n'
         '  "socket": {"path": "res://assets/bonelight/world/heath/moot-socket.png", "width": %d, "height": %d}\n'
-        '}\n' % (W * SCALE, H * SCALE, (H - FOOT) * SCALE, (W // 2) * SCALE + 1, 20 * SCALE,
+        '}\n' % (fw * SCALE, fh * SCALE, (H - FOOT + oy) * SCALE, (W // 2 + ox) * SCALE + 1, (20 + oy) * SCALE,
                  sock.w * SCALE, sock.h * SCALE))
-    io.open(os.path.join(OUT, "moot.json"), "w", encoding="utf-8", newline="\n").write(manifest.decode("utf-8"))
-    print("  moot-stone   %dx%d a frame on screen, 2 frames" % (W * SCALE, H * SCALE))
+    T.write_text(os.path.join(OUT, "moot.json"), manifest)
+    print("  moot-stone   %dx%d a frame on screen, 2 frames" % (fw * SCALE, fh * SCALE))
     print("  moot-socket  %dx%d on screen" % (sock.w * SCALE, sock.h * SCALE))
     from PIL import Image
-    prev = Image.new("RGBA", (W * 2 + sock.w + 10, H), (34, 28, 51, 255))
+    prev = Image.new("RGBA", (fw * 2 + sock.w + 10, max(fh, sock.h + 4)), (34, 28, 51, 255))
     prev.alpha_composite(strip.img, (0, 0))
-    prev.alpha_composite(sock.img, (W * 2 + 6, H - sock.h - 4))
+    prev.alpha_composite(sock.img, (fw * 2 + 6, max(fh, sock.h + 4) - sock.h - 4))
     prev.resize((prev.size[0] * 6, prev.size[1] * 6), Image.NEAREST).save(os.path.join(HERE, "_heath_moot.png"))
     return 0
 

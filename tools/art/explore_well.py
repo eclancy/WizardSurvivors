@@ -83,8 +83,10 @@ def stone_course(c, y0, y1, salt):
 
 def well(fouled):
     c = raster.Canvas(CELL, CELL, None)
-    # the contact shadow on the last two rows
-    c.disc(CX, CELL - 1.5, 17, 1.8, OCC)
+    # The contact shadow on the last rows. Centred on CELL - 1.5 it reached row CELL, one below
+    # the picture, and was sliced flat along its foot (tools/art/clip_check.py); centred on
+    # CELL - 2 it ends on the last row, narrower than the one above it.
+    c.disc(CX, CELL - 2, 17, 1.8, OCC)
     # THE POSTS behind the drum, up to the windlass.
     for px in (CX - 13, CX + 12):
         for y in range(9, DRUM_FOOT - 2):

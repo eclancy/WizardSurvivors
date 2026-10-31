@@ -115,7 +115,9 @@ def lantern(i, n):
     lit = i < 3
 
     # contact line, then the tussock the pole is driven into
-    c.disc(31, 62.5, 10, 1.6, OCC)
+    # Centred on 62, not 62.5: there it reached row 64, one below the cell, and was sliced flat
+    # along its foot (tools/art/clip_check.py).
+    c.disc(31, 62, 10, 1.6, OCC)
     c.disc(31, 59, 9, 3.6, LICHEN[4])
     c.disc(30, 58, 7, 2.8, LICHEN[3])
     c.hline(25, 33, 56, LICHEN[2])

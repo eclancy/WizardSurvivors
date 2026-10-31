@@ -266,8 +266,16 @@ def spike_frame(phase, i):
 
 
 VENT_CELL = 64              # a large prop: the flame column needs the height
+# Rows added above the 64 cell for the fire. At full eruption the tallest tongues stood 47 art px
+# over the slots and the loose ones broke off at 48, while the grate's slots sat 38 rows down the
+# cell: the top of the sheet of fire was sliced flat along the frame's edge in every active frame
+# (tools/art/clip_check.py, 0.9.3). The frame is VENT_CELL wide and VENT_CELL + VENT_HEADROOM tall,
+# the grate moves down with it, and FlameVent.tscn's sprite offset moves up by the same amount
+# (VENT_HEADROOM art px, half of it at x2 because the frame is centred) so the grate still lies
+# exactly on its collision rectangle - RegressionChecks.ValidateStageHazards holds that to the pixel.
+VENT_HEADROOM = 12
 VENT_X0, VENT_X1 = 13, 50   # the grate, inclusive: 38 art px = the 76 px collision width at x2
-VENT_Y0, VENT_Y1 = 24, 40   # 17 art px = the 34 px collision height
+VENT_Y0, VENT_Y1 = 24 + VENT_HEADROOM, 40 + VENT_HEADROOM   # 17 art px = the 34 px collision height
 VENT_SLOTS = [15 + k * 5 for k in range(7)]   # left column of each 3 px slot
 
 
@@ -371,7 +379,7 @@ def vent_flames(c, i, scale):
 
 
 def vent_frame(phase, i):
-    c = raster.Canvas(VENT_CELL, VENT_CELL, None)
+    c = raster.Canvas(VENT_CELL, VENT_CELL + VENT_HEADROOM, None)
     if phase == "idle":
         # Two frames, slow: an ember breathing at the bottom of the slots - a vent that is warm.
         vent_grate(c, (0.18, 0.26)[i])
@@ -395,9 +403,9 @@ def vent_frame(phase, i):
 # scrubs `tell` and `cool` by its own clock, so their speed is unused; `idle` and the vent's `active`
 # play at it.
 HAZARDS = [
-    ("spike-trap", "SpikeTrapFrames", CELL, spike_frame,
+    ("spike-trap", "SpikeTrapFrames", (CELL, CELL), spike_frame,
      [("idle", 1, 1.0, True), ("tell", 3, 1.0, False), ("active", 2, 1.0, False), ("cool", 3, 1.0, False)]),
-    ("flame-vent", "FlameVentFrames", VENT_CELL, vent_frame,
+    ("flame-vent", "FlameVentFrames", (VENT_CELL, VENT_CELL + VENT_HEADROOM), vent_frame,
      [("idle", 2, 2.5, True), ("tell", 4, 1.0, False), ("active", 4, 12.0, True), ("cool", 3, 1.0, False)]),
 ]
 
@@ -407,8 +415,9 @@ def write_hazard(name, frames_name, cell, painter, anims):
     .tres references the texture by path and has no uid of its own (the scenes load it by path), so
     writing it fresh is safe - see `.ai/art-direction.md`, Don't, on uids."""
     from PIL import Image
+    cw, ch = cell                                   # the frame, art px: (width, height)
     total = sum(n for _, n, _, _ in anims)
-    strip = Image.new("RGBA", (cell * 2 * total, cell * 2), (0, 0, 0, 0))
+    strip = Image.new("RGBA", (cw * 2 * total, ch * 2), (0, 0, 0, 0))
     k = 0
     for anim, n, _, _ in anims:
         for i in range(n):
@@ -419,7 +428,7 @@ def write_hazard(name, frames_name, cell, painter, anims):
                 for h, cnt in bad[:5]:
                     print("   %s  x%d" % (h, cnt))
                 return False
-            strip.alpha_composite(c.scaled(2), (k * cell * 2, 0))
+            strip.alpha_composite(c.scaled(2), (k * cw * 2, 0))
             k += 1
     strip.save(os.path.join(OUT_DIR, "%s.png" % name))
 
@@ -430,7 +439,7 @@ def write_hazard(name, frames_name, cell, painter, anims):
         for i in range(n):
             sid = "Atlas_%s_%d" % (anim, i)
             subs.append('[sub_resource type="AtlasTexture" id="%s"]\natlas = ExtResource("tex_0")\n'
-                        'region = Rect2(%d, 0, %d, %d)\n' % (sid, k * cell * 2, cell * 2, cell * 2))
+                        'region = Rect2(%d, 0, %d, %d)\n' % (sid, k * cw * 2, cw * 2, ch * 2))
             refs.append('{"duration": 1.0, "texture": SubResource("%s")}' % sid)
             k += 1
         anim_json.append('{"frames": [%s], "loop": %s, "name": &"%s", "speed": %s}'
@@ -442,7 +451,8 @@ def write_hazard(name, frames_name, cell, painter, anims):
     path = os.path.join(ROOT, "scenes", "resources", "%s.tres" % frames_name)
     with open(path, "wb") as fh:
         fh.write(tres.encode("utf-8"))
-    print("  %-16s %d frames at %dpx, %s" % (name, total, cell * 2, ", ".join("%s %d" % (a, n) for a, n, _, _ in anims)))
+    print("  %-16s %d frames at %dx%dpx, %s" % (name, total, cw * 2, ch * 2,
+                                                ", ".join("%s %d" % (a, n) for a, n, _, _ in anims)))
     return True
 
 
