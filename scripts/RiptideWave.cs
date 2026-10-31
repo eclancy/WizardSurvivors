@@ -49,6 +49,22 @@ using WizardSurvivors.scripts;
 public partial class RiptideWave : Node2D
 {
 	public const string TitanEvolutionId = "riptide_titan_cataclysm";
+
+	// THE CEILING (2026-10-31). Eric: "fix the tidal wave so it can't get so large that it breaks the game
+	// when ascended on max size." Its width multiplies everything that grows it: the level's Area lines,
+	// Breaker's x1.3, the wall's x3, Spring Tide's x1.15 and the player's Area - the shop's eleven levels
+	// with the found ones (x1.88), Thornseed (x1.12), the Inferno Core (x1.12), Vainamoinen's x1.10. At
+	// x2.6 the wall's hit radius was over 1,000 px, a swath of 2,000 against a view whose short side is
+	// 847 (720 / the camera's 0.85, on a PC and on a phone alike): 67% of the screen at its peak, and the
+	// software-rendered frame three to four times its cost. However it is grown, a crest is never wider
+	// than MaxSwathHalfWidth either side of its line - 760 px, nine tenths of the short side - and the cap
+	// is on the node's scale (ElementalBolt.CapCrest), so the hit and the drawing stop growing together.
+	// A Tidal Wall with no Area at all (Breaker's, 402 either side) and Spring Tide's (461) meet it.
+	public const float MaxSwathHalfWidth = 380f;
+	// A splash per enemy the wave breaks over, but no more than this many a wave: past it the wave is
+	// already the whole picture, and a node each was what a capped wave could still multiply.
+	public const int MaxSplashesPerWave = 24;
+	private int splashes;
 	// Half the short side of an enemy's body box (enemy.tscn, 40.5 x 24.3), in world px: how far
 	// beyond the hit circle an enemy's centre can be and still be struck.
 	public const float BodyAllowance = 12f;
@@ -152,8 +168,10 @@ public partial class RiptideWave : Node2D
 
 	private void OnStruck(Node2D enemy)
 	{
-		if (bolt == null || !IsInstanceValid(enemy) || bolt.GetParent() is not Node world)
+		if (bolt == null || !IsInstanceValid(enemy) || bolt.GetParent() is not Node world
+			|| splashes >= MaxSplashesPerWave)
 			return;
+		splashes++;
 		var splash = new RiptideSplash
 		{
 			Radius = Mathf.Min(MaxSplashRadius, SwathHalfWidth() * bolt.GlobalScale.X),

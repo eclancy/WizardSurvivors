@@ -128,7 +128,22 @@ public partial class ElementalBolt : Area2D
 	/// times its growth. Spring Tide's lane widens with the wave that floods it by this.
 	/// </summary>
 	public float ScaleAt(float runFraction) =>
-		shotScale.X * (groundswell || tidalWall ? Growth(Mathf.Clamp(runFraction, 0f, 1f)) : 1f);
+		CapCrest(shotScale * (groundswell || tidalWall ? Growth(Mathf.Clamp(runFraction, 0f, 1f)) : 1f)).X;
+
+	// A crest (Riptide's wave) is never wider than RiptideWave.MaxSwathHalfWidth either side of its line,
+	// however it was grown: its hit radius at this scale plus a body. Every scale a crest is given goes
+	// through here, so the hit and the drawing stop at the same width. Any other bolt passes unchanged.
+	private Vector2 CapCrest(Vector2 s)
+	{
+		if (CrestDepthFraction <= 0f || areaRadius <= 0f || s.X <= 0f)
+			return s;
+		float most = (RiptideWave.MaxSwathHalfWidth - RiptideWave.BodyAllowance) / areaRadius;
+		return s.X > most ? s * (most / s.X) : s;
+	}
+
+	// A crest's pierce grows with its width, but no wave breaks over more than the field holds: the enemy
+	// cap is 140, and a pierce in the thousands (Tidal Wall at the Area ceiling) only meant "never spent".
+	private const int MaxCrestPierce = 150;
 
 	// How much of the size it was shot at a growing wave is, at this fraction of its run. Groundswell
 	// builds from 60% to 180%. Tidal Wall rises from the wave it would have been without the card - the
@@ -307,7 +322,9 @@ public partial class ElementalBolt : Area2D
 		// A wave that builds as it runs starts at its starting size on the frame it is fired, never at
 		// the full height it was scaled to (Tidal Wall's would flash a wall at the hand for a frame).
 		if (groundswell || tidalWall)
-			Scale = shotScale * Growth(0f);
+			Scale = CapCrest(shotScale * Growth(0f));
+		else
+			Scale = CapCrest(Scale);
 		if (Returning)
 		{
 			outboundDistance = MathF.Max(MinThrowDistance * AreaMultiplier, from.DistanceTo(to) + ReturnOvershoot);
@@ -411,7 +428,7 @@ public partial class ElementalBolt : Area2D
 		// Groundswell and Tidal Wall: the wave leaves the hand narrow and builds to its full width by the
 		// end of its run. The node's scale is the hit and the drawing alike (RiptideWave), so it widens as one.
 		if (groundswell || tidalWall)
-			Scale = shotScale * Growth(Mathf.Clamp(travelled / MathF.Max(1f, range), 0f, 1f));
+			Scale = CapCrest(shotScale * Growth(Mathf.Clamp(travelled / MathF.Max(1f, range), 0f, 1f)));
 
 		Position += direction * speed * (float)delta;
 		// The slag is laid along the shard's flight at the pack, its cast range; a shard that pierced
@@ -1106,7 +1123,7 @@ public partial class ElementalBolt : Area2D
 		// 224 px across and meets a whole rank at once, so on 6 it would be gone within a body of
 		// reaching the pack and the swath it grew into would never sweep anything (75 at level 8).
 		if (CrestDepthFraction > 0f)
-			pierce = Mathf.RoundToInt(pierce * MathF.Max(1f, areaRadius / BaseHitRadius));
+			pierce = Math.Min(MaxCrestPierce, Mathf.RoundToInt(pierce * MathF.Max(1f, areaRadius / BaseHitRadius)));
 		// The milestones' KnockbackBonus, through the one conversion every spell's shove goes through.
 		knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
 
